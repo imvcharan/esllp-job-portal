@@ -1,0 +1,1398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6f8">
+  <meta name="description" content="esllp job portal administration dashboard">
+  <title>Admin workspace — esllp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1b2638;
+      --muted: #798394;
+      --muted-dark: #586477;
+      --paper: #f4f6f8;
+      --white: #fff;
+      --line: #e8ebf0;
+      --navy: #172538;
+      --navy-2: #20354a;
+      --teal: #117b78;
+      --teal-dark: #0c6968;
+      --mint: #e5f5ef;
+      --lime: #c7f075;
+      --blue: #6585f5;
+      --amber: #eda83d;
+      --rose: #e8798c;
+      --shadow: 0 8px 30px rgba(23, 37, 56, .055);
+      font-family: "DM Sans", "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; text-decoration: none; }
+    .app { display: none; min-height: 100vh; }
+    .app.authenticated { display: block; }
+    .auth-gate { display: grid; min-height: 100vh; place-items: center; padding: 22px; background: radial-gradient(ellipse at 85% 8%, #e1f2ed 0, transparent 34%), var(--paper); }
+    .auth-gate[hidden] { display: none; }
+    .auth-card { width: min(460px, 100%); padding: 34px; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: 0 18px 60px rgba(23, 37, 56, .1); }
+    .auth-brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font: 800 20px "Manrope", sans-serif; letter-spacing: -.06em; }
+    .auth-brand .brand-mark { color: var(--navy); }
+    .auth-brand > span:last-child { color: #647084 !important; font: 600 11px "DM Sans", sans-serif !important; letter-spacing: .06em !important; }
+    .auth-card h1 { margin: 22px 0 8px; font: 800 29px/1.2 "Manrope", sans-serif; letter-spacing: -.04em; }
+    .auth-card > p { margin-bottom: 18px; color: var(--muted-dark); font-size: 14px; line-height: 1.6; }
+    .auth-card .form-row { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 8px 0; border: 0; }
+    .auth-card .form-row label { color: #354257; font-size: 13px; font-weight: 700; }
+    .auth-card .form-row input { max-width: none; min-height: 46px; padding: 0 13px; border: 1px solid #d9dfe7; border-radius: 8px; color: var(--ink); background: #fff; font-size: 14px; }
+    .auth-card .form-row input::placeholder { color: #8a94a3; opacity: 1; }
+    .auth-card .form-row input:focus { border-color: var(--teal); outline: 3px solid rgba(17, 123, 120, .13); }
+    .auth-card .auth-submit { width: 100%; min-height: 48px; margin-top: 12px; font-size: 14px; font-weight: 700; }
+    .auth-error { min-height: 20px; margin: 10px 0 0; color: #be4658; font-size: 13px; }
+    .auth-footnote { margin-top: 18px; padding-top: 14px; border-top: 1px solid #f0f2f5; color: #667286; font-size: 12px; line-height: 1.6; }
+    .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; display: flex; width: 248px; flex-direction: column; padding: 24px 16px 17px; color: #d9e2ec; background: var(--navy); }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 11px 26px; color: #fff; font: 800 21px/1 "Manrope", sans-serif; letter-spacing: -.07em; }
+    .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px 11px 11px 4px; color: var(--navy); background: var(--lime); font-size: 18px; }
+    .brand small { display: block; margin-top: 4px; color: #92a2b5; font: 500 9px "DM Sans", sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+    .nav-label { margin: 0 11px 9px; color: #8292a5; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .nav-list { display: grid; gap: 4px; }
+    .nav-link { position: relative; display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 11px; border-radius: 8px; color: #acb9c8; font-size: 12px; font-weight: 600; transition: .18s ease; }
+    .nav-link[hidden] { display: none; }
+    .nav-link:hover { color: #fff; background: rgba(255,255,255,.06); }
+    .nav-link.active { color: #fff; background: #263c4e; box-shadow: inset 3px 0 var(--lime); }
+    .nav-icon { display: grid; width: 19px; place-items: center; color: #9eafc1; font-size: 16px; }
+    .nav-link.active .nav-icon { color: var(--lime); }
+    .nav-count { margin-left: auto; padding: 3px 6px; border-radius: 12px; color: #d8f5e9; background: rgba(53, 175, 139, .2); font-size: 9px; }
+    .sidebar-spacer { flex: 1; }
+    .support-card { margin: 0 3px 16px; padding: 14px; border: 1px solid rgba(255,255,255,.08); border-radius: 11px; background: linear-gradient(135deg, rgba(29, 117, 113, .34), rgba(45, 70, 97, .45)); }
+    .support-card strong { display: block; color: #fff; font-size: 11px; }
+    .support-card p { margin: 7px 0 11px; color: #adbdc9; font-size: 10px; line-height: 1.5; }
+    .support-card a { display: inline-flex; gap: 6px; color: var(--lime); font-size: 10px; font-weight: 700; }
+    .profile-mini { display: flex; align-items: center; gap: 10px; padding: 14px 6px 0; border-top: 1px solid rgba(255,255,255,.1); }
+    .profile-initials { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; color: var(--navy); background: var(--lime); font-size: 10px; font-weight: 800; }
+    .profile-mini strong { display: block; color: #f3f6f8; font-size: 10px; }
+    .profile-mini small { display: block; margin-top: 3px; color: #95a5b6; font-size: 9px; }
+    .profile-more { margin-left: auto; color: #97a8ba; }
+    .main { min-height: 100vh; margin-left: 248px; }
+    .topbar { position: sticky; z-index: 20; top: 0; display: flex; height: 68px; align-items: center; justify-content: space-between; gap: 24px; padding: 0 34px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.92); backdrop-filter: blur(16px); }
+    .crumb { color: #9aa3b0; font-size: 11px; }.crumb strong { color: #4e5a6d; font-weight: 600; }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .global-search { display: flex; width: 235px; height: 35px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: #8791a0; background: #fafbfc; }
+    .global-search span { font-size: 14px; }
+    .global-search input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 10px; }
+    .global-search input::placeholder { color: #9aa3b0; }
+    .key-hint { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #e7eaf0; border-radius: 4px; color: #8d97a5; background: #fff; font-size: 8px; }
+    .icon-button { position: relative; display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid var(--line); border-radius: 8px; color: #647084; background: #fff; font-size: 15px; }
+    .notify-dot { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border: 1px solid #fff; border-radius: 50%; background: #ef6e72; }
+    .top-avatar { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 50%; color: var(--navy); background: var(--lime); font-size: 9px; font-weight: 800; }
+    .mobile-menu { display: none; }
+    .content { max-width: 1500px; margin: 0 auto; padding: 31px 34px 48px; }
+    .view { display: none; animation: fade-in .24s ease both; }
+    .view.active { display: block; }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 23px; }
+    .page-eyebrow { margin-bottom: 8px; color: var(--teal); font-size: 9px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 6px; color: var(--ink); font: 800 26px/1.2 "Manrope", sans-serif; letter-spacing: -.055em; }
+    .page-heading p { margin: 0; color: var(--muted); font-size: 11px; }
+    .heading-actions { display: flex; align-items: center; gap: 9px; }
+    .button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; color: #526074; background: #fff; font-size: 10px; font-weight: 700; transition: .18s ease; }
+    .button:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(30, 50, 70, .08); }
+    .button-primary { border-color: var(--teal); color: #fff; background: var(--teal); }
+    .button-primary:hover { border-color: var(--teal-dark); background: var(--teal-dark); }
+    .button-green { color: #233c32; border-color: #d7eeb9; background: var(--lime); }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
+    .stat-card { min-height: 112px; padding: 15px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); box-shadow: 0 2px 8px rgba(30, 50, 70, .02); }
+    .stat-top { display: flex; align-items: center; justify-content: space-between; color: #717d8f; font-size: 10px; font-weight: 600; }
+    .stat-icon { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 8px; color: var(--teal); background: #e9f5f2; font-size: 14px; }
+    .stat-card:nth-child(2) .stat-icon { color: #5e77dc; background: #edf0ff; }
+    .stat-card:nth-child(3) .stat-icon { color: #c4862e; background: #fff4df; }
+    .stat-card:nth-child(4) .stat-icon { color: #c9637a; background: #fff0f3; }
+    .stat-value { display: flex; align-items: baseline; gap: 9px; margin-top: 9px; font: 800 25px/1 "Manrope", sans-serif; letter-spacing: -.06em; }
+    .stat-change { display: inline-flex; align-items: center; gap: 3px; color: #268a6f; font: 700 9px "DM Sans", sans-serif; letter-spacing: 0; }
+    .stat-change.down { color: #cd6d62; }
+    .stat-note { margin-top: 6px; color: #9aa3af; font-size: 9px; }
+    .analytics-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(240px, .9fr); gap: 14px; margin-top: 15px; }
+    .panel { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgba(30, 50, 70, .02); }
+    .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 17px 18px 0; }
+    .panel-head h2 { margin: 0; font: 700 12px "Manrope", sans-serif; letter-spacing: -.02em; }
+    .panel-head p { margin: 5px 0 0; color: #98a1ad; font-size: 9px; }
+    .select { min-height: 29px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; color: #647084; background: #fff; font-size: 9px; }
+    .chart-legend { display: flex; align-items: center; gap: 14px; padding: 14px 19px 0; color: #748092; font-size: 9px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+    .legend-dot.blue { background: #91a5fb; }
+    .line-chart { display: block; width: 100%; height: 192px; padding: 8px 13px 10px; overflow: visible; }
+    .gridline { stroke: #edf0f4; stroke-width: 1; }
+    .axis-label { fill: #9aa3af; font: 9px "DM Sans", sans-serif; }
+    .chart-area { fill: url(#areaFill); }
+    .chart-line { fill: none; stroke: #16877f; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.8; }
+    .chart-line-two { fill: none; stroke: #91a5fb; stroke-dasharray: 4 5; stroke-linecap: round; stroke-width: 2; }
+    .chart-point { fill: #fff; stroke: #16877f; stroke-width: 2.3; }
+    .chart-bottom { display: flex; justify-content: space-between; padding: 0 18px 16px; color: #98a1ad; font-size: 8px; }
+    .source-panel { padding-bottom: 15px; }
+    .donut-wrap { display: flex; align-items: center; justify-content: center; gap: 19px; padding: 23px 10px 19px; }
+    .donut { position: relative; display: grid; width: 132px; height: 132px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: conic-gradient(#117b78 0 39%, #6787f0 39% 66%, #efb448 66% 83%, #e97d91 83% 94%, #dce3e9 94% 100%); }
+    .donut::before { position: absolute; width: 91px; height: 91px; border-radius: 50%; background: #fff; content: ""; }
+    .donut-center { position: relative; z-index: 1; text-align: center; }
+    .donut-center strong { display: block; font: 800 22px "Manrope", sans-serif; letter-spacing: -.07em; }
+    .donut-center small { color: #99a2af; font-size: 8px; }
+    .source-legend { display: grid; gap: 9px; }
+    .source-row { display: flex; min-width: 106px; align-items: center; gap: 6px; color: #758092; font-size: 8px; }
+    .source-row strong { margin-left: auto; color: #344256; font-size: 9px; }
+    .source-row .legend-dot { width: 6px; height: 6px; }
+    .source-row .s2 { background: #6787f0; }.source-row .s3 { background: #efb448; }.source-row .s4 { background: #e97d91; }.source-row .s5 { background: #dce3e9; }
+    .lower-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(245px, .85fr); gap: 14px; margin-top: 15px; }
+    .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 18px 13px; }
+    .panel-title-row h2 { margin: 0; font: 700 12px "Manrope", sans-serif; }
+    .panel-title-row a { color: var(--teal); font-size: 9px; font-weight: 700; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
+    th { padding: 9px 15px; border-top: 1px solid #f0f2f5; border-bottom: 1px solid #f0f2f5; color: #9aa3af; background: #fbfcfd; font-size: 8px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    td { padding: 11px 15px; border-bottom: 1px solid #f1f3f6; color: #657185; font-size: 9px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .role-name { color: #2b384c; font-size: 9px; font-weight: 700; }
+    .role-company { display: block; margin-top: 4px; color: #99a2af; font-size: 8px; }
+    .status { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 20px; color: #277b67; background: #eaf6f1; font-size: 8px; font-weight: 700; }
+    .status::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ""; }
+    .status.review { color: #a97725; background: #fff5e1; }
+    .status.closed { color: #778394; background: #eff2f5; }
+    .table-search { width: 130px; min-height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; font-size: 9px; }
+    .activity-list { padding: 0 17px 9px; }
+    .activity { display: grid; grid-template-columns: 28px 1fr; gap: 9px; padding: 11px 0; border-bottom: 1px solid #f0f2f5; }
+    .activity:last-child { border-bottom: 0; }
+    .activity-icon { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 8px; color: var(--teal); background: #e8f5f1; font-size: 11px; }
+    .activity:nth-child(2) .activity-icon { color: #5c76d7; background: #edf0ff; }
+    .activity:nth-child(3) .activity-icon { color: #bd7f26; background: #fff4df; }
+    .activity:nth-child(4) .activity-icon { color: #ca6478; background: #fff0f3; }
+    .activity p { margin: 0; color: #647084; font-size: 9px; line-height: 1.5; }
+    .activity p strong { color: #344256; font-weight: 700; }
+    .activity small { display: block; margin-top: 4px; color: #a0a8b3; font-size: 8px; }
+    .demo-note { display: flex; align-items: center; gap: 8px; margin-top: 15px; padding: 10px 12px; border: 1px solid #e6eee9; border-radius: 8px; color: #758477; background: #f7faf7; font-size: 9px; }
+    .demo-note span { color: #4c936f; font-size: 13px; }
+
+    .table-panel { overflow: hidden; }
+    .table-toolbar { display: flex; align-items: center; gap: 8px; padding: 0 18px 14px; }
+    .table-toolbar .table-search { width: min(270px, 45%); min-height: 33px; padding-inline: 10px; }
+    .table-toolbar .select { min-height: 33px; }
+    .jobs-table td { padding-block: 14px; }
+    .candidate-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin: 5px 0 16px; }
+    .candidate-stat { padding: 15px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+    .candidate-stat span { color: #7d899a; font-size: 9px; }
+    .candidate-stat strong { display: block; margin-top: 8px; font: 800 22px "Manrope", sans-serif; letter-spacing: -.06em; }
+    .candidate-columns { display: grid; grid-template-columns: repeat(4,minmax(170px,1fr)); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+    .pipeline-column { min-height: 280px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #edf1f4; }
+    .pipeline-head { display: flex; justify-content: space-between; margin-bottom: 10px; color: #47566a; font-size: 10px; font-weight: 700; }
+    .pipeline-head span { color: #8b96a5; }
+    .person-card { margin-bottom: 8px; padding: 12px; border: 1px solid #edf0f3; border-radius: 8px; background: #fff; box-shadow: 0 2px 5px rgba(30,50,70,.025); }
+    .person-name { display: flex; align-items: center; gap: 8px; color: #344256; font-size: 9px; font-weight: 700; }
+    .person-avatar { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; color: #426c66; background: #dff0e9; font-size: 8px; }
+    .person-card p { margin: 8px 0 0 33px; color: #8792a1; font-size: 8px; }
+    .company-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+    .company-card { padding: 16px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+    .company-head { display: flex; align-items: center; gap: 10px; }
+    .company-logo { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 9px; color: #fff; background: #3475b8; font: 800 13px "Manrope",sans-serif; }
+    .company-card:nth-child(3n + 2) .company-logo { background: #202c3c; }.company-card:nth-child(3n) .company-logo { background: #e77453; }
+    .company-head strong { display: block; font-size: 10px; }.company-head small { display: block; margin-top: 3px; color: #8b96a5; font-size: 8px; }
+    .company-meta { display: flex; justify-content: space-between; margin-top: 17px; padding-top: 11px; border-top: 1px solid #f0f2f5; color: #8390a0; font-size: 8px; }
+    .company-meta strong { color: #344256; font-size: 10px; }
+    .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .bars { display: flex; height: 190px; align-items: end; justify-content: space-around; gap: 12px; padding: 22px 20px 9px; }
+    .bar-group { display: flex; height: 100%; flex: 1; align-items: end; justify-content: center; gap: 4px; border-bottom: 1px solid #edf0f4; }
+    .bar { width: min(20px, 38%); min-height: 5px; border-radius: 4px 4px 0 0; background: #1b8a81; }
+    .bar.secondary { background: #bac6fa; }
+    .bar-labels { display: flex; justify-content: space-around; padding: 0 20px 15px; color: #9aa3af; font-size: 8px; }
+    .settings-grid { display: grid; grid-template-columns: 200px minmax(0,1fr); gap: 16px; }
+    .settings-menu { display: grid; align-content: start; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+    .settings-menu a { padding: 10px; border-radius: 6px; color: #697588; font-size: 9px; font-weight: 600; }
+    .settings-menu a.active, .settings-menu a:hover { color: var(--teal); background: #edf7f4; }
+    .settings-content { padding: 19px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+    .settings-content h2 { margin-bottom: 5px; font: 700 13px "Manrope",sans-serif; }
+    .settings-content > p { margin-bottom: 18px; color: #8c97a5; font-size: 9px; }
+    .form-row { display: grid; grid-template-columns: 150px minmax(0,1fr); align-items: center; gap: 15px; padding: 13px 0; border-top: 1px solid #f0f2f5; }
+    .form-row label { color: #586477; font-size: 9px; font-weight: 600; }
+    .form-row input, .form-row select { width: 100%; max-width: 380px; min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; color: #465469; background: #fff; font-size: 9px; }
+    .form-row .toggle { width: 31px; height: 17px; accent-color: var(--teal); }
+    .toast { position: fixed; z-index: 80; right: 24px; bottom: 24px; padding: 12px 16px; border-radius: 8px; color: #fff; background: #20354a; box-shadow: 0 9px 30px rgba(23,37,56,.2); font-size: 11px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s ease; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .modal-backdrop { position: fixed; z-index: 70; inset: 0; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(18, 32, 48, .45); backdrop-filter: blur(3px); }
+    .modal-backdrop.open { display: flex; }
+    .modal { width: min(440px, 100%); padding: 22px; border-radius: 12px; background: #fff; box-shadow: 0 20px 70px rgba(18,32,48,.24); }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 17px; }
+    .modal-head h2 { margin: 0; font: 800 17px "Manrope",sans-serif; letter-spacing: -.04em; }
+    .modal-close { border: 0; color: #7a8798; background: none; font-size: 20px; }
+    .modal .form-row { display: grid; grid-template-columns: 1fr; gap: 7px; }
+    .modal .form-row input, .modal .form-row select { max-width: none; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 17px; }
+    @media (max-width: 1120px) {
+      .sidebar { width: 218px; }.main { margin-left: 218px; }.topbar { padding-inline: 24px; }.content { padding-inline: 24px; }
+      .stats-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.analytics-grid { grid-template-columns: minmax(0,1.4fr) minmax(220px,.9fr); }
+      .donut-wrap { gap: 12px; }.donut { width: 112px; height: 112px; }.donut::before { width: 77px; height: 77px; }
+    }
+    @media (max-width: 820px) {
+      .sidebar { width: 72px; align-items: center; padding-inline: 10px; }
+      .brand { padding-inline: 0; }.brand > span:last-child, .nav-label, .nav-link .nav-text, .nav-count, .support-card, .profile-mini > span:not(.profile-initials), .profile-more { display: none; }
+      .nav-link { width: 48px; justify-content: center; padding: 0; }.nav-icon { font-size: 17px; }
+      .profile-mini { justify-content: center; padding-inline: 0; }.main { margin-left: 72px; }
+      .analytics-grid, .lower-grid { grid-template-columns: 1fr; }.source-panel { min-height: auto; }
+      .donut-wrap { justify-content: flex-start; padding-left: 25px; }.donut { width: 125px; height: 125px; }.donut::before { width: 86px; height: 86px; }
+      .source-legend { width: min(250px, 60%); }
+    }
+    @media (max-width: 560px) {
+      .sidebar { width: 0; overflow: hidden; padding: 0; border: 0; transition: width .2s ease, padding .2s ease; }
+      .sidebar.open { width: 248px; align-items: stretch; padding: 20px 16px 16px; }
+      .sidebar.open .brand { padding: 0 11px 22px; }.sidebar.open .brand > span:last-child, .sidebar.open .nav-label, .sidebar.open .nav-link .nav-text, .sidebar.open .nav-count, .sidebar.open .support-card, .sidebar.open .profile-mini > span:not(.profile-initials), .sidebar.open .profile-more { display: initial; }
+      .sidebar.open .nav-label { display: block; }.sidebar.open .nav-link { width: auto; justify-content: flex-start; padding: 0 11px; }.sidebar.open .nav-text { display: inline; }.sidebar.open .nav-count { display: inline; }.sidebar.open .support-card { display: block; }.sidebar.open .profile-mini { justify-content: flex-start; }.sidebar.open .profile-mini > span:not(.profile-initials) { display: block; }
+      .main { margin-left: 0; }.topbar { height: 60px; padding-inline: 14px; }.mobile-menu { display: grid; width: 32px; height: 32px; place-items: center; margin-right: 8px; border: 1px solid var(--line); border-radius: 7px; color: #526074; background: #fff; }
+      .topbar-left { display: flex; align-items: center; }.crumb { font-size: 9px; }.global-search { width: 35px; padding-inline: 9px; border: 0; background: transparent; }.global-search input, .key-hint { display: none; }
+      .top-actions { gap: 7px; }.content { padding: 23px 14px 38px; }.page-heading { align-items: flex-start; flex-direction: column; gap: 13px; margin-bottom: 18px; }.page-heading h1 { font-size: 23px; }.heading-actions { width: 100%; }.heading-actions .button { flex: 1; }
+      .stats-grid { gap: 9px; }.stat-card { min-height: 104px; padding: 12px; }.stat-top { font-size: 9px; }.stat-value { font-size: 22px; }.analytics-grid, .lower-grid, .report-grid { gap: 10px; margin-top: 10px; }
+      .panel-head { padding-inline: 14px; }.chart-legend { padding-inline: 14px; }.line-chart { height: 172px; padding-inline: 6px; }.chart-bottom { padding-inline: 14px; }.donut-wrap { justify-content: center; padding-inline: 12px; }.donut { width: 112px; height: 112px; }.donut::before { width: 77px; height: 77px; }.source-legend { width: auto; }
+      .table-search { width: 105px; }.panel-title-row { padding-inline: 14px; }.table-toolbar { padding-inline: 14px; }.company-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.company-card { padding: 12px; }.company-head { gap: 7px; }
+      .candidate-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.candidate-columns { grid-template-columns: repeat(4,190px); }.settings-grid { grid-template-columns: 1fr; }.settings-menu { grid-template-columns: repeat(2,1fr); }.form-row { grid-template-columns: 105px minmax(0,1fr); gap: 8px; }
+    }
+    .nav-label { font-size: 10px; }
+    .nav-link { font-size: 13px; }
+    .support-card strong, .profile-mini strong { font-size: 12px; }
+    .support-card p, .profile-mini small { font-size: 11px; }
+    .crumb { font-size: 12px; }
+    .global-search input, .table-search, .select { font-size: 12px; }
+    .key-hint { font-size: 10px; }
+    .top-avatar { font-size: 10px; }
+    .page-eyebrow { font-size: 10px; }
+    .page-heading p { color: #667286; font-size: 14px; }
+    .button { font-size: 12px; }
+    .stat-top { font-size: 12px; }
+    .stat-change { font-size: 11px; }
+    .stat-note { color: #667286; font-size: 11px; }
+    .panel-head h2, .panel-title-row h2 { font-size: 14px; }
+    .panel-head p { color: #667286; font-size: 12px; }
+    .chart-legend { font-size: 12px; }
+    .axis-label { fill: #667286; font-size: 11px; }
+    .chart-bottom { color: #667286; font-size: 11px; }
+    .donut-center small { color: #667286; font-size: 10px; }
+    .source-row, .source-row strong { color: #586477; font-size: 11px; }
+    .panel-title-row a { font-size: 11px; }
+    th { color: #586477; font-size: 10px; }
+    td { color: #465469; font-size: 12px; }
+    .role-name { color: #253349; font-size: 12px; }
+    .role-company { color: #667286; font-size: 11px; }
+    .status { font-size: 11px; }
+    .activity p { color: #465469; font-size: 12px; }
+    .activity small { color: #667286; font-size: 11px; }
+    .demo-note { color: #53665a; font-size: 11px; }
+    .candidate-stat span, .pipeline-head { font-size: 12px; }
+    .pipeline-head span { color: #667286; }
+    .person-name, .company-head strong { font-size: 12px; }
+    .person-card p, .company-head small { color: #667286; font-size: 11px; }
+    .company-meta, .bar-labels { color: #586477; font-size: 11px; }
+    .company-meta strong { font-size: 12px; }
+    .settings-menu a { font-size: 12px; }
+    .settings-content h2 { font-size: 16px; }
+    .settings-content > p { color: #667286; font-size: 12px; }
+    .form-row label { color: #465469; font-size: 12px; }
+    .form-row input, .form-row select { color: #344256; font-size: 12px; }
+    .toast { font-size: 13px; }
+    .modal .form-row label { font-size: 12px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-gate" id="auth-gate">
+    <form class="auth-card" id="admin-login-form">
+      <a class="auth-brand" href="/"><span class="brand-mark">e.</span> esllp <span style="color:#8994a3;font:500 10px 'DM Sans',sans-serif;letter-spacing:0">ADMIN</span></a>
+      <h1>Welcome back</h1>
+      <p>Sign in with an admin or superadmin account to open your hiring workspace.</p>
+      <div class="form-row"><label for="admin-email">Email address</label><input id="admin-email" type="email" name="email" autocomplete="username" required maxlength="254" placeholder="you@company.com"></div>
+      <div class="form-row"><label for="admin-password">Password</label><input id="admin-password" type="password" name="password" autocomplete="current-password" required maxlength="128" placeholder="Your password"></div>
+      <button class="button button-primary auth-submit" type="submit">Sign in to admin <span aria-hidden="true">→</span></button>
+      <p class="auth-error" id="auth-error" role="alert"></p>
+      <div class="auth-footnote">For first-time setup, create the superadmin through the one-time CLI bootstrap. Admin dashboard figures shown after sign-in are currently preview data.</div>
+    </form>
+  </div>
+  <div class="app" id="admin-app">
+    <aside class="sidebar" id="sidebar" aria-label="Admin sidebar">
+      <a class="brand" href="#overview" aria-label="esllp admin home"><span class="brand-mark">e.</span><span>esllp<small>talent workspace</small></span></a>
+      <div class="nav-label">Workspace</div>
+      <nav class="nav-list" aria-label="Workspace pages">
+        <a class="nav-link active" href="#overview" data-view="overview"><span class="nav-icon">▦</span><span class="nav-text">Overview</span></a>
+        <a class="nav-link" href="#jobs" data-view="jobs"><span class="nav-icon">▤</span><span class="nav-text">Job listings</span></a>
+        <a class="nav-link" href="#candidates" data-view="candidates"><span class="nav-icon">♙</span><span class="nav-text">Candidates</span></a>
+        <a class="nav-link" href="#companies" data-view="companies"><span class="nav-icon">▣</span><span class="nav-text">Companies</span></a>
+        <a class="nav-link" href="#analytics" data-view="analytics"><span class="nav-icon">⌁</span><span class="nav-text">Analytics</span></a>
+      </nav>
+      <div class="nav-label" style="margin-top:26px">Manage</div>
+      <nav class="nav-list" aria-label="Management pages">
+        <a class="nav-link superadmin-only" href="#users" data-view="users" hidden><span class="nav-icon">♙</span><span class="nav-text">User accounts</span></a>
+        <a class="nav-link superadmin-only" href="#audit" data-view="audit" hidden><span class="nav-icon">◷</span><span class="nav-text">Audit log</span></a>
+        <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></a>
+        <a class="nav-link" href="mailto:hello@esllp.com?subject=esllp%20portal%20support"><span class="nav-icon">?</span><span class="nav-text">Help center</span></a>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="support-card"><strong>Need a hand?</strong><p>Our team is here to help you make hiring easier.</p><a href="mailto:hello@esllp.com?subject=esllp%20portal%20support">Contact support <span>↗</span></a></div>
+      <div class="profile-mini"><span class="profile-initials">AS</span><span><strong>Arjun Sharma</strong><small>Workspace admin</small></span><span class="profile-more">···</span></div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-left"><button class="mobile-menu" id="mobile-menu" type="button" aria-label="Open sidebar" aria-expanded="false">☰</button><div class="crumb">Workspace&nbsp; / &nbsp;<strong id="breadcrumb">Overview</strong></div></div>
+        <div class="top-actions">
+          <label class="global-search"><span>⌕</span><input id="global-search" type="search" placeholder="Search this page…" aria-label="Search current page"><span class="key-hint">/</span></label>
+          <button class="icon-button" type="button" id="notifications-button" aria-label="Notifications">♧<span class="notify-dot"></span></button>
+          <button class="icon-button" type="button" aria-label="Log out" data-logout title="Log out">⇥</button>
+          <button class="top-avatar" type="button" aria-label="Admin profile" data-toast="Signed in as Arjun Sharma.">AS</button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="view active" id="view-overview" data-title="Overview">
+          <div class="page-heading">
+            <div><div class="page-eyebrow" id="overview-date"></div><h1 id="overview-greeting">Welcome to your workspace <span aria-hidden="true">✦</span></h1><p>Here’s what’s happening across your hiring workspace.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-export>↓&nbsp; Export jobs CSV</button><button class="button button-primary" type="button" data-modal-open>＋&nbsp; Create a job</button></div>
+          </div>
+          <div class="stats-grid">
+            <article class="stat-card"><div class="stat-top"><span>Active job listings</span><span class="stat-icon">▤</span></div><div class="stat-value" data-metric="active-jobs">24</div><div class="stat-note" data-metric-note="active-jobs">Sample preview</div></article>
+            <article class="stat-card"><div class="stat-top"><span>Registered accounts</span><span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-users">1,284</div><div class="stat-note" data-metric-note="total-users">Sample preview until accounts are loaded</div></article>
+            <article class="stat-card"><div class="stat-top"><span>Interviews this week · preview</span><span class="stat-icon">◷</span></div><div class="stat-value">38</div><div class="stat-note">Sample until hiring pipeline exists</div></article>
+            <article class="stat-card"><div class="stat-top"><span>Time to hire · preview</span><span class="stat-icon">⌁</span></div><div class="stat-value">18.4</div><div class="stat-note">Sample until hiring analytics exist</div></article>
+          </div>
+          <div class="analytics-grid">
+            <article class="panel">
+              <div class="panel-head"><div><h2>Hiring activity</h2><p>Applications and interviews over time</p></div><select class="select" id="chart-range" aria-label="Chart range"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></div>
+              <div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i> Applications</span><span class="legend-item"><i class="legend-dot blue"></i> Interviews</span></div>
+              <svg class="line-chart" viewBox="0 0 620 190" role="img" aria-label="Hiring activity line chart">
+                <defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#16877f" stop-opacity=".16"/><stop offset="100%" stop-color="#16877f" stop-opacity="0"/></linearGradient></defs>
+                <line class="gridline" x1="45" y1="20" x2="608" y2="20"/><line class="gridline" x1="45" y1="57" x2="608" y2="57"/><line class="gridline" x1="45" y1="94" x2="608" y2="94"/><line class="gridline" x1="45" y1="131" x2="608" y2="131"/><line class="gridline" x1="45" y1="168" x2="608" y2="168"/>
+                <text class="axis-label" x="8" y="23">160</text><text class="axis-label" x="13" y="60">120</text><text class="axis-label" x="18" y="97">80</text><text class="axis-label" x="18" y="134">40</text><text class="axis-label" x="24" y="171">0</text>
+                <path class="chart-area" d="M50 139 C78 132 87 117 112 123 S155 101 177 109 S214 81 239 91 S275 65 301 76 S344 53 365 68 S410 36 432 51 S474 33 495 48 S540 23 560 38 S589 20 604 30 L604 168 L50 168 Z"/>
+                <path class="chart-line" d="M50 139 C78 132 87 117 112 123 S155 101 177 109 S214 81 239 91 S275 65 301 76 S344 53 365 68 S410 36 432 51 S474 33 495 48 S540 23 560 38 S589 20 604 30"/>
+                <path class="chart-line-two" d="M50 155 C78 150 90 143 112 147 S154 137 177 141 S217 125 239 130 S279 114 301 120 S342 104 365 110 S407 89 432 98 S473 84 495 91 S540 71 560 82 S586 66 604 72"/>
+                <circle class="chart-point" cx="301" cy="76" r="4"/><circle class="chart-point" cx="432" cy="51" r="4"/><circle class="chart-point" cx="560" cy="38" r="4"/>
+              </svg>
+              <div class="chart-bottom"><span>Sep 16</span><span>Sep 22</span><span>Sep 28</span><span>Oct 4</span><span>Oct 10</span><span>Oct 15</span></div>
+            </article>
+            <article class="panel source-panel">
+              <div class="panel-head"><div><h2>Application sources · preview</h2><p>Sample attribution until applications are tracked</p></div><a class="button" href="#analytics" data-view-link="analytics">View analytics</a></div>
+              <div class="donut-wrap"><div class="donut" role="img" aria-label="Application source distribution"><div class="donut-center"><strong>1,284</strong><small>applications</small></div></div>
+                <div class="source-legend"><div class="source-row"><i class="legend-dot"></i> Direct <strong>39%</strong></div><div class="source-row"><i class="legend-dot s2"></i> LinkedIn <strong>27%</strong></div><div class="source-row"><i class="legend-dot s3"></i> Referrals <strong>17%</strong></div><div class="source-row"><i class="legend-dot s4"></i> Other <strong>11%</strong></div><div class="source-row"><i class="legend-dot s5"></i> Boards <strong>6%</strong></div></div>
+              </div>
+            </article>
+          </div>
+          <div class="lower-grid">
+            <article class="panel">
+              <div class="panel-title-row"><h2>Top performing jobs</h2><a href="#jobs" data-view-link="jobs">View all jobs&nbsp; →</a></div>
+              <div class="table-wrap"><table><thead><tr><th>Role</th><th>Applications</th><th>Status</th><th>Posted</th></tr></thead><tbody id="overview-jobs-body" class="filterable">
+                <tr><td><span class="role-name">Senior Product Designer</span><span class="role-company">goodspace · Bengaluru</span></td><td>186</td><td><span class="status">Active</span></td><td>2 days ago</td></tr>
+                <tr><td><span class="role-name">Backend Engineer</span><span class="role-company">Northstar · Remote</span></td><td>142</td><td><span class="status">Active</span></td><td>5 days ago</td></tr>
+                <tr><td><span class="role-name">Growth Marketing Lead</span><span class="role-company">Brightloop · Mumbai</span></td><td>98</td><td><span class="status review">Reviewing</span></td><td>1 week ago</td></tr>
+              </tbody></table></div>
+            </article>
+            <article class="panel">
+              <div class="panel-title-row"><h2>Recent activity</h2><a href="#candidates" data-view-link="candidates">See candidates&nbsp; →</a></div>
+              <div class="activity-list" id="overview-activity-list">
+                <div class="activity"><span class="activity-icon">♙</span><div><p><strong>Priya S.</strong> applied for Product Designer</p><small>12 minutes ago · New application</small></div></div>
+                <div class="activity"><span class="activity-icon">✓</span><div><p><strong>Rahul M.</strong> moved to interview</p><small>38 minutes ago · Backend Engineer</small></div></div>
+                <div class="activity"><span class="activity-icon">＋</span><div><p><strong>Brightloop</strong> posted a new role</p><small>2 hours ago · Growth Marketing Lead</small></div></div>
+                <div class="activity"><span class="activity-icon">☆</span><div><p><strong>Ananya K.</strong> saved a candidate</p><small>Yesterday · Product Designer</small></div></div>
+              </div>
+            </article>
+          </div>
+          <div class="demo-note" id="overview-data-note"><span>✦</span> Active job counts and listings come from the database when present. Application, interview, source, and historical analytics are sample previews until those backend modules exist.</div>
+        </section>
+
+        <section class="view" id="view-jobs" data-title="Job listings">
+          <div class="page-heading"><div><div class="page-eyebrow">Hiring workspace</div><h1>Job listings</h1><p>Manage openings and keep your hiring pipeline moving.</p></div><div class="heading-actions"><button class="button" type="button" data-export>↓&nbsp; Export</button><button class="button button-primary" type="button" data-modal-open>＋&nbsp; Create a job</button></div></div>
+          <div class="stats-grid">
+            <article class="stat-card"><div class="stat-top">Total listings <span class="stat-icon">▤</span></div><div class="stat-value" data-job-metric="total">32</div><div class="stat-note">Across all job listings</div></article>
+            <article class="stat-card"><div class="stat-top">Active now <span class="stat-icon">●</span></div><div class="stat-value" data-job-metric="active">24</div><div class="stat-note">Visible to candidates</div></article>
+            <article class="stat-card"><div class="stat-top">Drafts <span class="stat-icon">✎</span></div><div class="stat-value" data-job-metric="drafts">5</div><div class="stat-note">Ready when you are</div></article>
+            <article class="stat-card"><div class="stat-top">Applications · preview <span class="stat-icon">♙</span></div><div class="stat-value">1,284</div><div class="stat-note">Sample until applications API exists</div></article>
+          </div>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>All listings</h2><button class="button" type="button" data-export>↓&nbsp; Export CSV</button></div>
+            <div class="table-toolbar"><input class="table-search page-filter" type="search" placeholder="⌕  Search jobs…" aria-label="Search jobs"><select class="select" id="jobs-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="draft">Draft</option></select><select class="select" id="jobs-company-filter"><option value="all">All companies</option></select></div>
+            <div class="table-wrap"><table class="jobs-table"><thead><tr><th>Job title</th><th>Company</th><th>Location</th><th>Applications</th><th>Status</th><th>Posted</th><th>Actions</th></tr></thead><tbody class="filterable" id="jobs-table-body"></tbody></table></div>
+          </article>
+          <div class="demo-note" id="jobs-data-note" hidden></div>
+        </section>
+
+        <section class="view" id="view-candidates" data-title="Candidates">
+          <div class="page-heading"><div><div class="page-eyebrow">Talent pipeline</div><h1>Candidates</h1><p>A clear view of every person moving through your hiring process.</p></div><div class="heading-actions"><button class="button" type="button" data-export-candidates>↓&nbsp; Export accounts</button><button class="button button-primary" type="button" disabled title="Invitation workflow is not implemented yet">＋&nbsp; Invite candidate</button></div></div>
+          <div class="candidate-grid"><div class="candidate-stat"><span>Total candidates · preview</span><strong>1,284</strong></div><div class="candidate-stat"><span>New this week · preview</span><strong>186</strong></div><div class="candidate-stat"><span>In interviews · preview</span><strong>38</strong></div><div class="candidate-stat"><span>Offers out · preview</span><strong>12</strong></div></div>
+          <div class="candidate-columns">
+            <div class="pipeline-column"><div class="pipeline-head">New <span>12</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">PS</span>Priya Sharma</div><p>Product Designer · 12m ago</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">AK</span>Ananya Kumar</div><p>Product Designer · 1h ago</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">VR</span>Vikram Rao</div><p>Backend Engineer · 3h ago</p></div></div>
+            <div class="pipeline-column"><div class="pipeline-head">Screening <span>8</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">RM</span>Rahul Mehta</div><p>Backend Engineer · Today</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">NP</span>Neha Patel</div><p>Growth Marketing · Today</p></div></div>
+            <div class="pipeline-column"><div class="pipeline-head">Interview <span>6</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">SG</span>Sana Gupta</div><p>Data Analyst · Today</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">AK</span>Arjun Kapoor</div><p>Product Designer · Yesterday</p></div></div>
+            <div class="pipeline-column"><div class="pipeline-head">Offer <span>3</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">DM</span>Dev Malhotra</div><p>Backend Engineer · Yesterday</p></div></div>
+          </div>
+          <div class="demo-note"><span>✦</span> Pipeline examples below are preview-only: applications and hiring stages do not have a backend module yet.</div>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Candidate accounts</h2><button class="button" type="button" data-export-candidates>↓&nbsp; Export accounts</button></div>
+            <div class="table-toolbar"><input class="table-search" id="candidate-search" type="search" placeholder="Search candidate accounts…" aria-label="Search candidate accounts"></div>
+            <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Account status</th><th>Email verification</th><th>Joined</th></tr></thead><tbody id="candidate-accounts-body"></tbody></table></div>
+          </article>
+          <div class="demo-note" id="candidate-data-note">Candidate account records are shown when available to a superadmin; otherwise sample pipeline cards remain preview-only.</div>
+        </section>
+
+        <section class="view" id="view-companies" data-title="Companies">
+          <div class="page-heading"><div><div class="page-eyebrow">Employer network</div><h1>Companies</h1><p>Get a pulse on the teams hiring through esllp.</p></div><div class="heading-actions"><button class="button button-primary" type="button" disabled title="Company onboarding requires an employer organizations API">＋&nbsp; Add company</button></div></div>
+          <div class="stats-grid"><article class="stat-card"><div class="stat-top">Partner companies · preview <span class="stat-icon">▣</span></div><div class="stat-value">86 <span class="stat-change">↗ 9.4%</span></div><div class="stat-note">Sample until company API exists</div></article><article class="stat-card"><div class="stat-top">Hiring this month · preview <span class="stat-icon">↗</span></div><div class="stat-value">42</div><div class="stat-note">Sample company data</div></article><article class="stat-card"><div class="stat-top">Open positions · preview <span class="stat-icon">▤</span></div><div class="stat-value">214</div><div class="stat-note">Sample company data</div></article><article class="stat-card"><div class="stat-top">Pending review · preview <span class="stat-icon">◷</span></div><div class="stat-value">7</div><div class="stat-note">Sample company data</div></article></div>
+          <div class="company-grid" style="margin-top:15px">
+            <article class="company-card"><div class="company-head"><span class="company-logo">g</span><span><strong>goodspace</strong><small>Technology · Bengaluru</small></span></div><div class="company-meta"><span><strong>12</strong> open roles</span><span class="status">Verified</span></div></article>
+            <article class="company-card"><div class="company-head"><span class="company-logo">n</span><span><strong>Northstar</strong><small>Software · Pune</small></span></div><div class="company-meta"><span><strong>8</strong> open roles</span><span class="status">Verified</span></div></article>
+            <article class="company-card"><div class="company-head"><span class="company-logo">b</span><span><strong>Brightloop</strong><small>Consumer tech · Mumbai</small></span></div><div class="company-meta"><span><strong>6</strong> open roles</span><span class="status review">Reviewing</span></div></article>
+            <article class="company-card"><div class="company-head"><span class="company-logo">s</span><span><strong>Studio North</strong><small>Design · Remote</small></span></div><div class="company-meta"><span><strong>4</strong> open roles</span><span class="status">Verified</span></div></article>
+            <article class="company-card"><div class="company-head"><span class="company-logo">p</span><span><strong>PeopleFirst</strong><small>HR tech · Hyderabad</small></span></div><div class="company-meta"><span><strong>3</strong> open roles</span><span class="status">Verified</span></div></article>
+            <article class="company-card"><div class="company-head"><span class="company-logo">m</span><span><strong>Monsoon Labs</strong><small>Climate tech · Delhi</small></span></div><div class="company-meta"><span><strong>5</strong> open roles</span><span class="status">Verified</span></div></article>
+          </div>
+          <div class="demo-note"><span>✦</span> Company cards and metrics are sample previews. Company organizations and memberships are not in the backend yet, so these are not real employer records.</div>
+        </section>
+
+        <section class="view" id="view-analytics" data-title="Analytics">
+          <div class="page-heading"><div><div class="page-eyebrow">Insights & performance</div><h1>Analytics</h1><p>Understand what’s working across your hiring funnel.</p></div><div class="heading-actions"><select class="select" disabled aria-label="Analytics range (preview only)"><option>Last 30 days · preview</option></select><button class="button" type="button" data-export>↓&nbsp; Export jobs CSV</button></div></div>
+          <div class="stats-grid"><article class="stat-card"><div class="stat-top">Applications <span class="stat-icon">♙</span></div><div class="stat-value">1,284 <span class="stat-change">↗ 8.2%</span></div><div class="stat-note">vs previous period</div></article><article class="stat-card"><div class="stat-top">Interviews <span class="stat-icon">◷</span></div><div class="stat-value">186 <span class="stat-change">↗ 12.4%</span></div><div class="stat-note">vs previous period</div></article><article class="stat-card"><div class="stat-top">Hire rate <span class="stat-icon">✓</span></div><div class="stat-value">4.8% <span class="stat-change">↗ 0.6%</span></div><div class="stat-note">Applications to hires</div></article><article class="stat-card"><div class="stat-top">Avg. time to hire <span class="stat-icon">⌁</span></div><div class="stat-value">18.4d <span class="stat-change">↓ 2.1d</span></div><div class="stat-note">vs previous period</div></article></div>
+          <div class="report-grid" style="margin-top:15px">
+            <article class="panel"><div class="panel-head"><div><h2>Applications by week</h2><p>Application volume compared to interviews</p></div></div><div class="bars" aria-label="Weekly application bar chart"><div class="bar-group"><i class="bar" style="height:39%"></i><i class="bar secondary" style="height:20%"></i></div><div class="bar-group"><i class="bar" style="height:54%"></i><i class="bar secondary" style="height:29%"></i></div><div class="bar-group"><i class="bar" style="height:47%"></i><i class="bar secondary" style="height:25%"></i></div><div class="bar-group"><i class="bar" style="height:70%"></i><i class="bar secondary" style="height:38%"></i></div><div class="bar-group"><i class="bar" style="height:62%"></i><i class="bar secondary" style="height:33%"></i></div><div class="bar-group"><i class="bar" style="height:86%"></i><i class="bar secondary" style="height:44%"></i></div><div class="bar-group"><i class="bar" style="height:76%"></i><i class="bar secondary" style="height:41%"></i></div><div class="bar-group"><i class="bar" style="height:96%"></i><i class="bar secondary" style="height:51%"></i></div></div><div class="bar-labels"><span>Wk 1</span><span>Wk 2</span><span>Wk 3</span><span>Wk 4</span><span>Wk 5</span><span>Wk 6</span><span>Wk 7</span><span>Wk 8</span></div><div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i> Applications</span><span class="legend-item"><i class="legend-dot blue"></i> Interviews</span></div></article>
+            <article class="panel source-panel"><div class="panel-head"><div><h2>Application sources</h2><p>Source mix across all applications</p></div></div><div class="donut-wrap"><div class="donut" role="img" aria-label="Application source distribution"><div class="donut-center"><strong>1,284</strong><small>applications</small></div></div><div class="source-legend"><div class="source-row"><i class="legend-dot"></i> Direct <strong>39%</strong></div><div class="source-row"><i class="legend-dot s2"></i> LinkedIn <strong>27%</strong></div><div class="source-row"><i class="legend-dot s3"></i> Referrals <strong>17%</strong></div><div class="source-row"><i class="legend-dot s4"></i> Other <strong>11%</strong></div><div class="source-row"><i class="legend-dot s5"></i> Boards <strong>6%</strong></div></div></div></article>
+          </div>
+          <div class="demo-note"><span>✦</span> Charts and non-job metrics are illustrative previews until application, interview, and analytics data are implemented in the backend.</div>
+        </section>
+
+        <section class="view" id="view-settings" data-title="Settings">
+          <div class="page-heading"><div><div class="page-eyebrow">Workspace preferences</div><h1>Settings</h1><p>Manage your workspace details and how your team works.</p></div><div class="heading-actions"><button class="button button-primary" type="button" data-save-settings>Save changes</button></div></div>
+          <div class="settings-grid">
+            <nav class="settings-menu" aria-label="Settings sections"><a class="active" href="#profile-settings">Workspace profile</a><a href="#notifications-settings">Notifications</a><a href="#team-settings">Team members</a><a href="#security-settings">Security</a></nav>
+            <article class="settings-content" id="profile-settings"><h2>Workspace profile</h2><p>This information helps candidates and employers recognize your workspace.</p>
+              <div class="form-row"><label for="workspace-name">Workspace name</label><input id="workspace-name" value="esllp careers"></div>
+              <div class="form-row"><label for="workspace-url">Website</label><input id="workspace-url" value="https://esllp.com"></div>
+              <div class="form-row"><label for="workspace-email">Contact email</label><input id="workspace-email" type="email" value="hello@esllp.com"></div>
+              <div class="form-row"><label for="workspace-timezone">Timezone</label><select id="workspace-timezone"><option>India Standard Time (IST)</option><option>UTC</option></select></div>
+              <div class="form-row"><label for="email-notifications">Email notifications</label><input class="toggle" id="email-notifications" type="checkbox" checked></div>
+            </article>
+          </div>
+          <div class="demo-note"><span>✦</span> These preferences are saved in this browser only; portal-wide settings need a settings API.</div>
+        </section>
+
+        <section class="view" id="view-users" data-title="User accounts">
+          <div class="page-heading"><div><div class="page-eyebrow">Superadmin controls</div><h1>User accounts</h1><p>Review accounts and manage roles or access status.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-users>↻&nbsp; Refresh</button></div></div>
+          <div class="table-toolbar"><input class="table-search" id="user-search" type="search" placeholder="Search name or email…" aria-label="Search users"><select class="select" id="user-role-filter"><option value="all">All roles</option><option value="candidate">Candidate</option><option value="employer">Employer</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select><select class="select" id="user-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Verification</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="users-table-body" class="filterable"></tbody></table></div></article>
+          <div class="table-toolbar"><span id="users-page-summary">Loading accounts…</span><button class="button" id="users-prev" type="button">← Previous</button><button class="button" id="users-next" type="button">Next →</button></div>
+          <div class="demo-note" id="users-data-note" hidden></div>
+        </section>
+
+        <section class="view" id="view-audit" data-title="Audit log">
+          <div class="page-heading"><div><div class="page-eyebrow">Superadmin controls</div><h1>Audit log</h1><p>Review security-sensitive account and job changes.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-audit>↻&nbsp; Refresh</button></div></div>
+          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody id="audit-table-body" class="filterable"></tbody></table></div></article>
+          <div class="table-toolbar"><span id="audit-page-summary">Loading audit history…</span><button class="button" id="audit-prev" type="button">← Previous</button><button class="button" id="audit-next" type="button">Next →</button></div>
+          <div class="demo-note" id="audit-data-note" hidden></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="job-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <form class="modal" id="create-job-form">
+      <div class="modal-head"><h2 id="modal-title">Create a job listing</h2><button class="modal-close" type="button" aria-label="Close dialog">×</button></div>
+      <div class="form-row"><label for="new-job-title">Job title</label><input id="new-job-title" name="title" required placeholder="e.g. Product Designer"></div>
+      <div class="form-row"><label for="new-job-company">Company</label><input id="new-job-company" name="company" required placeholder="Company name"></div>
+      <div class="form-row"><label for="new-job-location">Location</label><input id="new-job-location" name="location" required placeholder="City or remote"></div>
+      <div class="form-row"><label for="new-job-type">Workplace</label><select id="new-job-type" name="workplaceType"><option value="hybrid">Hybrid</option><option value="remote">Remote</option><option value="onsite">On-site</option></select></div>
+      <div class="modal-actions"><button class="button modal-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save as draft</button></div>
+    </form>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const navLinks = [...document.querySelectorAll("[data-view]")];
+    const views = [...document.querySelectorAll(".view")];
+    const breadcrumb = document.querySelector("#breadcrumb");
+    const sidebar = document.querySelector("#sidebar");
+    const mobileMenu = document.querySelector("#mobile-menu");
+    const toastElement = document.querySelector("#toast");
+    const jobModal = document.querySelector("#job-modal");
+    const authGate = document.querySelector("#auth-gate");
+    const adminApp = document.querySelector("#admin-app");
+    const authError = document.querySelector("#auth-error");
+    let adminAccessToken = null;
+    let currentAdminUser = null;
+    let adminJobs = [];
+    let adminUsers = [];
+    let usersPage = 1;
+    let usersTotal = 0;
+    let auditPage = 1;
+    let auditTotal = 0;
+    let authResolved = false;
+    let toastTimer;
+    const previewJobs = [
+      { title: "Senior Product Designer", company: "goodspace", location: "Bengaluru", workplaceType: "hybrid", isActive: true, createdAt: "2026-10-13T09:00:00Z" },
+      { title: "Backend Engineer", company: "Northstar", location: "Pune", workplaceType: "remote", isActive: true, createdAt: "2026-10-10T09:00:00Z" },
+      { title: "Growth Marketing Lead", company: "Brightloop", location: "Mumbai", workplaceType: "onsite", isActive: true, createdAt: "2026-10-08T09:00:00Z" },
+      { title: "Data Analyst", company: "goodspace", location: "Hyderabad", workplaceType: "hybrid", isActive: true, createdAt: "2026-10-06T09:00:00Z" },
+      { title: "People Operations Partner", company: "Northstar", location: "Remote · India", workplaceType: "remote", isActive: false, createdAt: "2026-10-01T09:00:00Z" },
+      { title: "Finance Associate", company: "Brightloop", location: "Delhi", workplaceType: "onsite", isActive: true, createdAt: "2026-09-28T09:00:00Z" }
+    ];
+
+    function formatDate(value, options = { dateStyle: "medium" }) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, options).format(date);
+    }
+
+    function setText(selector, value) {
+      const element = document.querySelector(selector);
+      if (element) element.textContent = String(value);
+    }
+
+    function updateOverviewHeader(user) {
+      const now = new Date();
+      document.querySelector("#overview-date").textContent = new Intl.DateTimeFormat(undefined, {
+        weekday: "long", year: "numeric", month: "long", day: "numeric"
+      }).format(now);
+      const hour = now.getHours();
+      const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+      document.querySelector("#overview-greeting").replaceChildren(
+        document.createTextNode(`${greeting}, ${user.displayName}`),
+        document.createTextNode(" ✦")
+      );
+    }
+
+    function updateJobMetrics(jobs, isPreview = false) {
+      const active = jobs.filter((job) => job.isActive).length;
+      const drafts = jobs.length - active;
+      document.querySelector('[data-job-metric="total"]').textContent = String(jobs.length);
+      document.querySelector('[data-job-metric="active"]').textContent = String(active);
+      document.querySelector('[data-job-metric="drafts"]').textContent = String(drafts);
+      document.querySelector('[data-job-metric="total"]').nextElementSibling.textContent = isPreview ? "Sample listings · preview" : "Live records from the jobs API";
+      document.querySelector('[data-job-metric="active"]').nextElementSibling.textContent = isPreview ? "Sample data · preview" : "Live published listings";
+      document.querySelector('[data-job-metric="drafts"]').nextElementSibling.textContent = isPreview ? "Sample data · preview" : "Live unpublished listings";
+      document.querySelector('[data-metric="active-jobs"]').textContent = String(active);
+      document.querySelector('[data-metric-note="active-jobs"]').textContent = isPreview ? "Sample data · preview" : "Live published listings";
+    }
+
+    function renderOverviewJobs(jobs, isPreview) {
+      const body = document.querySelector("#overview-jobs-body");
+      body.replaceChildren();
+      jobs.slice(0, 3).forEach((job, index) => {
+        const row = document.createElement("tr");
+        const roleCell = document.createElement("td");
+        const role = document.createElement("span");
+        role.className = "role-name";
+        role.textContent = job.title;
+        const company = document.createElement("span");
+        company.className = "role-company";
+        company.textContent = `${job.company} · ${job.location}`;
+        roleCell.append(role, company);
+        const applications = document.createElement("td");
+        applications.textContent = isPreview ? String([186, 142, 98][index]) : "—";
+        const statusCell = document.createElement("td");
+        const status = document.createElement("span");
+        status.className = `status${job.isActive ? "" : " closed"}`;
+        status.textContent = job.isActive ? "Active" : "Draft";
+        statusCell.append(status);
+        const posted = document.createElement("td");
+        posted.textContent = isPreview ? ["2 days ago", "5 days ago", "1 week ago"][index] : formatDate(job.createdAt);
+        row.append(roleCell, applications, statusCell, posted);
+        body.append(row);
+      });
+      if (!jobs.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = "No jobs have been created yet.";
+        row.append(cell);
+        body.append(row);
+      }
+    }
+
+    function renderPreviewJobs() {
+      renderJobsTable(previewJobs, true);
+      updateJobMetrics(previewJobs, true);
+      renderOverviewJobs(previewJobs, true);
+      const note = document.querySelector("#jobs-data-note");
+      note.hidden = false;
+      note.replaceChildren(document.createTextNode("✦ These are read-only sample listings because there are no job records in the database. Create a job to start managing real listings."));
+    }
+
+    function renderJobsTable(jobs, isPreview = false) {
+      const body = document.querySelector("#jobs-table-body");
+      const companyFilter = document.querySelector("#jobs-company-filter");
+      body.replaceChildren();
+      const companies = [...new Set(jobs.map((job) => job.company))].sort((a, b) => a.localeCompare(b));
+      const selectedCompany = companyFilter.value;
+      companyFilter.replaceChildren(new Option("All companies", "all"));
+      companies.forEach((company) => companyFilter.add(new Option(company, company)));
+      companyFilter.value = companies.includes(selectedCompany) ? selectedCompany : "all";
+      jobs.forEach((job) => {
+        const row = document.createElement("tr");
+        row.dataset.status = job.isActive ? "active" : "draft";
+        row.dataset.company = job.company;
+        [job.title, job.company, `${job.location} · ${job.workplaceType}`, "—"].forEach((value, index) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          if (index === 0) cell.className = "role-name";
+          row.append(cell);
+        });
+        const statusCell = document.createElement("td");
+        const status = document.createElement("span");
+        status.className = `status${job.isActive ? "" : " closed"}`;
+        status.textContent = job.isActive ? "Active" : "Draft";
+        statusCell.append(status);
+        const posted = document.createElement("td");
+        posted.textContent = formatDate(job.createdAt);
+        const actions = document.createElement("td");
+        if (isPreview) {
+          actions.textContent = "Preview only";
+        } else {
+          const toggleButton = document.createElement("button");
+          toggleButton.className = "button";
+          toggleButton.type = "button";
+          toggleButton.textContent = job.isActive ? "Pause" : "Publish";
+          toggleButton.addEventListener("click", async () => {
+            toggleButton.disabled = true;
+            try {
+              await authRequest(`/api/admin/jobs/${job.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ isActive: !job.isActive })
+              });
+              showToast(job.isActive ? "Job paused." : "Job published.");
+              await loadAdminJobs();
+              await refreshOverviewData();
+            } catch (error) {
+              showToast(error instanceof Error ? error.message : "Unable to update the job.");
+              toggleButton.disabled = false;
+            }
+          });
+          const archiveButton = document.createElement("button");
+          archiveButton.className = "button";
+          archiveButton.type = "button";
+          archiveButton.style.marginLeft = "5px";
+          archiveButton.textContent = "Archive";
+          archiveButton.addEventListener("click", async () => {
+            if (!window.confirm(`Archive "${job.title}"? It will no longer appear in public job listings.`)) return;
+            archiveButton.disabled = true;
+            try {
+              await authRequest(`/api/admin/jobs/${job.id}`, { method: "DELETE" });
+              showToast("Job archived.");
+              await loadAdminJobs();
+              await refreshOverviewData();
+            } catch (error) {
+              showToast(error instanceof Error ? error.message : "Unable to archive the job.");
+              archiveButton.disabled = false;
+            }
+          });
+          actions.append(toggleButton, archiveButton);
+        }
+        row.append(statusCell, posted, actions);
+        body.append(row);
+      });
+      if (!jobs.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 7;
+        cell.textContent = "No jobs have been created yet.";
+        row.append(cell);
+        body.append(row);
+      }
+      applyJobFilters();
+    }
+
+    function applyJobFilters() {
+      const status = document.querySelector("#jobs-status-filter").value;
+      const company = document.querySelector("#jobs-company-filter").value;
+      const query = `${document.querySelector("#view-jobs .page-filter").value} ${document.querySelector("#global-search").value}`.trim().toLowerCase();
+      document.querySelectorAll("#jobs-table-body tr").forEach((row) => {
+        row.hidden = (status !== "all" && row.dataset.status !== status)
+          || (company !== "all" && row.dataset.company !== company)
+          || (query.length > 0 && !row.innerText.toLowerCase().includes(query));
+      });
+    }
+
+    async function loadAdminJobs() {
+      const jobs = await authRequest("/api/admin/jobs");
+      if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
+      adminJobs = jobs;
+      if (jobs.length === 0) {
+        renderPreviewJobs();
+        return;
+      }
+      updateJobMetrics(jobs);
+      renderJobsTable(jobs);
+      renderOverviewJobs(jobs, false);
+      document.querySelector("#jobs-data-note").hidden = true;
+    }
+
+    async function loadAdminUsers(page = 1, limit = 25) {
+      const result = await authRequest(`/api/admin/users?page=${page}&limit=${limit}`);
+      if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+        throw new Error("The users API returned an unexpected response.");
+      }
+      usersPage = result.page;
+      usersTotal = result.total;
+      adminUsers = result.items;
+      renderUsersTable(result.items);
+      setText("#users-page-summary", `${result.total === 0 ? 0 : (result.page - 1) * result.limit + 1}–${Math.min(result.page * result.limit, result.total)} of ${result.total} accounts`);
+      document.querySelector("#users-prev").disabled = result.page <= 1;
+      document.querySelector("#users-next").disabled = result.page * result.limit >= result.total;
+      const note = document.querySelector("#users-data-note");
+      note.hidden = result.total !== 0;
+      if (result.total === 0) {
+        note.textContent = "No real accounts are in the database yet. Sample rows are shown read-only; role and status controls are disabled.";
+        renderUsersTable([], true);
+        renderCandidateAccounts([], true);
+      }
+      return result;
+    }
+
+    const previewUsers = [
+      { id: null, displayName: "Priya Sharma", email: "priya.preview@example.test", role: "candidate", emailVerified: true, isActive: true, createdAt: "2026-10-14T08:00:00Z" },
+      { id: null, displayName: "Rahul Mehta", email: "rahul.preview@example.test", role: "employer", emailVerified: false, isActive: true, createdAt: "2026-10-12T08:00:00Z" },
+      { id: null, displayName: "Portal Admin", email: "admin.preview@example.test", role: "admin", emailVerified: true, isActive: true, createdAt: "2026-10-10T08:00:00Z" }
+    ];
+
+    function renderUsersTable(users, isPreview = false) {
+      const body = document.querySelector("#users-table-body");
+      body.replaceChildren();
+      const rows = isPreview ? previewUsers : users;
+      rows.forEach((user) => {
+        const row = document.createElement("tr");
+        const name = document.createElement("td");
+        name.textContent = user.displayName;
+        const email = document.createElement("td");
+        email.textContent = user.email;
+        const roleCell = document.createElement("td");
+        if (isPreview) {
+          roleCell.textContent = user.role;
+        } else {
+          const role = document.createElement("select");
+          role.className = "select user-role";
+          ["candidate", "employer", "admin", "superadmin"].forEach((value) => role.add(new Option(value, value)));
+          role.value = user.role;
+          role.disabled = user.id === currentAdminUser.id;
+          role.setAttribute("aria-label", `Role for ${user.displayName}`);
+          role.addEventListener("change", async () => {
+            const nextRole = role.value;
+            if (!window.confirm(`Change ${user.displayName}'s role from ${user.role} to ${nextRole}?`)) {
+              role.value = user.role;
+              return;
+            }
+            role.disabled = true;
+            try {
+              await authRequest(`/api/admin/users/${user.id}/role`, {
+                method: "PATCH",
+                body: JSON.stringify({ role: nextRole })
+              });
+              showToast("User role updated.");
+              await loadAdminUsers(usersPage);
+              await loadAuditLogs(1);
+            } catch (error) {
+              role.value = user.role;
+              role.disabled = user.id === currentAdminUser.id;
+              showToast(error instanceof Error ? error.message : "Unable to update the user role.");
+            }
+          });
+          roleCell.append(role);
+        }
+        const verified = document.createElement("td");
+        verified.textContent = user.emailVerified ? "Verified" : "Not verified";
+        const status = document.createElement("td");
+        const statusBadge = document.createElement("span");
+        statusBadge.className = `status${user.isActive ? "" : " closed"}`;
+        statusBadge.textContent = user.isActive ? "Active" : "Inactive";
+        status.append(statusBadge);
+        const joined = document.createElement("td");
+        joined.textContent = formatDate(user.createdAt);
+        const actions = document.createElement("td");
+        const statusButton = document.createElement("button");
+        statusButton.className = "button";
+        statusButton.type = "button";
+        statusButton.textContent = user.isActive ? "Deactivate" : "Activate";
+        statusButton.disabled = isPreview || user.id === currentAdminUser?.id;
+        statusButton.addEventListener("click", async () => {
+          const nextStatus = !user.isActive;
+          if (!window.confirm(`${nextStatus ? "Activate" : "Deactivate"} ${user.displayName}'s account?`)) return;
+          statusButton.disabled = true;
+          try {
+            await authRequest(`/api/admin/users/${user.id}/status`, {
+              method: "PATCH",
+              body: JSON.stringify({ isActive: nextStatus })
+            });
+            showToast(`Account ${nextStatus ? "activated" : "deactivated"}.`);
+            await loadAdminUsers(usersPage);
+            await loadAuditLogs(1);
+          } catch (error) {
+            statusButton.disabled = false;
+            showToast(error instanceof Error ? error.message : "Unable to update account status.");
+          }
+        });
+        if (isPreview) statusButton.title = "Preview rows cannot be changed.";
+        actions.append(statusButton);
+        row.append(name, email, roleCell, verified, status, joined, actions);
+        body.append(row);
+      });
+      if (!rows.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 7;
+        cell.textContent = "No user accounts found.";
+        row.append(cell);
+        body.append(row);
+      }
+      filterUsers();
+    }
+
+    function filterUsers(globalQuery = document.querySelector("#global-search").value) {
+      const query = `${document.querySelector("#user-search").value} ${globalQuery}`.trim().toLowerCase();
+      const role = document.querySelector("#user-role-filter").value;
+      const status = document.querySelector("#user-status-filter").value;
+      document.querySelectorAll("#users-table-body tr").forEach((row) => {
+        row.hidden = (query && !row.innerText.toLowerCase().includes(query))
+          || (role !== "all" && row.children[2].innerText.toLowerCase() !== role)
+          || (status !== "all" && row.children[4].innerText.toLowerCase() !== status);
+      });
+    }
+
+    async function loadCandidateAccounts() {
+      const result = await authRequest("/api/admin/users?page=1&limit=100");
+      if (!result || !Array.isArray(result.items)) throw new Error("The users API returned an unexpected response.");
+      const candidates = result.items.filter((user) => user.role === "candidate");
+      renderCandidateAccounts(candidates, candidates.length === 0);
+      document.querySelector("#candidate-data-note").textContent = candidates.length
+        ? `Showing ${candidates.length} real candidate account${candidates.length === 1 ? "" : "s"} from the first 100 accounts${result.total > 100 ? ` of ${result.total} total accounts` : ""}. Application records, resumes, and hiring stages are not available yet; the pipeline above is preview data.`
+        : "No candidate accounts are in the database yet. Sample pipeline cards above are preview-only.";
+    }
+
+    function renderCandidateAccounts(candidates, isPreview = false) {
+      const body = document.querySelector("#candidate-accounts-body");
+      body.replaceChildren();
+      const rows = isPreview ? previewUsers.filter((user) => user.role === "candidate") : candidates;
+      rows.forEach((user) => {
+        const row = document.createElement("tr");
+        [user.displayName, user.email, user.isActive ? "Active" : "Inactive", user.emailVerified ? "Verified" : "Not verified", formatDate(user.createdAt)].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        body.append(row);
+      });
+      if (!rows.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = "No candidate accounts found.";
+        row.append(cell);
+        body.append(row);
+      }
+    }
+
+    async function exportCandidateAccounts() {
+      if (currentAdminUser?.role !== "superadmin") {
+        showToast("Candidate account export is available to superadmins only.");
+        return;
+      }
+      try {
+        const candidates = [];
+        let page = 1;
+        let total = 0;
+        do {
+          const result = await authRequest(`/api/admin/users?page=${page}&limit=100`);
+          if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+            throw new Error("The users API returned an unexpected response.");
+          }
+          total = result.total;
+          candidates.push(...result.items.filter((user) => user.role === "candidate"));
+          page += 1;
+        } while ((page - 1) * 100 < total);
+        downloadCsv("esllp-candidate-accounts.csv", ["Name", "Email", "Status", "Email verified", "Joined"], candidates.map((user) => [
+          user.displayName, user.email, user.isActive ? "Active" : "Inactive", user.emailVerified ? "Yes" : "No", formatDate(user.createdAt)
+        ]));
+        showToast("Candidate account export downloaded.");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to export candidate accounts.");
+      }
+    }
+
+    const previewAudit = [
+      { actorUserId: null, action: "job.created", targetType: "job", targetId: "demo", details: '{"title":"Senior Product Designer"}', createdAt: "2026-10-14T08:00:00Z" },
+      { actorUserId: null, action: "user.activated", targetType: "user", targetId: "demo", details: '{"isActive":true}', createdAt: "2026-10-13T08:00:00Z" }
+    ];
+
+    async function loadAuditLogs(page = auditPage) {
+      const result = await authRequest(`/api/admin/audit-logs?page=${page}&limit=50`);
+      if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+        throw new Error("The audit API returned an unexpected response.");
+      }
+      auditPage = result.page;
+      auditTotal = result.total;
+      renderAuditLogs(result.items, result.total === 0);
+      setText("#audit-page-summary", `${result.total === 0 ? 0 : (result.page - 1) * result.limit + 1}–${Math.min(result.page * result.limit, result.total)} of ${result.total} events`);
+      document.querySelector("#audit-prev").disabled = result.page <= 1;
+      document.querySelector("#audit-next").disabled = result.page * result.limit >= result.total;
+      return result;
+    }
+
+    function renderAuditLogs(logs, isPreview = false) {
+      const body = document.querySelector("#audit-table-body");
+      body.replaceChildren();
+      const userNames = new Map(adminUsers.map((user) => [user.id, `${user.displayName} (${user.email})`]));
+      const rows = isPreview ? previewAudit : logs;
+      rows.forEach((entry) => {
+        const row = document.createElement("tr");
+        const details = document.createElement("td");
+        if (entry.details) {
+          try {
+            const parsed = JSON.parse(entry.details);
+            details.textContent = Object.entries(parsed).map(([key, value]) => `${key}: ${value}`).join(" · ");
+          } catch {
+            details.textContent = "Details unavailable";
+          }
+        } else {
+          details.textContent = "—";
+        }
+        [formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" }),
+          entry.actorUserId === null ? "Preview user" : userNames.get(entry.actorUserId) || `Account #${entry.actorUserId}`,
+          entry.action,
+          `${entry.targetType} #${entry.targetId}`].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        row.append(details);
+        body.append(row);
+      });
+      if (!rows.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = "No audit events have been recorded yet.";
+        row.append(cell);
+        body.append(row);
+      }
+      const note = document.querySelector("#audit-data-note");
+      note.hidden = !isPreview;
+      if (isPreview) note.textContent = "No real audit events exist yet. The rows above are sample format examples only and are not security records.";
+      renderOverviewActivity(logs, isPreview);
+    }
+
+    function renderOverviewActivity(logs, isPreview = false) {
+      const container = document.querySelector("#overview-activity-list");
+      if (!container) return;
+      container.replaceChildren();
+      const entries = isPreview ? previewAudit : logs.slice(0, 4);
+      entries.forEach((entry) => {
+        const item = document.createElement("div");
+        item.className = "activity";
+        const icon = document.createElement("span");
+        icon.className = "activity-icon";
+        icon.textContent = entry.action.startsWith("job.") ? "▤" : "♙";
+        const content = document.createElement("div");
+        const text = document.createElement("p");
+        const description = entry.details ? (() => {
+          try { return JSON.parse(entry.details).title || entry.targetType; } catch { return entry.targetType; }
+        })() : entry.targetType;
+        text.textContent = `${entry.action.replaceAll(".", " ")} · ${description}`;
+        const date = document.createElement("small");
+        date.textContent = `${isPreview ? "Preview" : formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" })} · ${entry.targetType} #${entry.targetId}`;
+        content.append(text, date);
+        item.append(icon, content);
+        container.append(item);
+      });
+      if (!entries.length) {
+        const empty = document.createElement("p");
+        empty.textContent = "No admin activity has been recorded yet.";
+        container.append(empty);
+      }
+    }
+
+    async function refreshOverviewData() {
+      const [jobs, users, audit] = await Promise.all([
+        authRequest("/api/admin/jobs"),
+        currentAdminUser?.role === "superadmin"
+          ? authRequest("/api/admin/users?page=1&limit=100")
+          : Promise.resolve(null),
+        currentAdminUser?.role === "superadmin"
+          ? authRequest("/api/admin/audit-logs?page=1&limit=10")
+          : Promise.resolve(null)
+      ]);
+      if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
+      adminJobs = jobs;
+      if (jobs.length) {
+        updateJobMetrics(jobs);
+        renderOverviewJobs(jobs, false);
+      } else {
+        renderPreviewJobs();
+      }
+      if (users) {
+        if (!Array.isArray(users.items) || typeof users.total !== "number") throw new Error("The users API returned an unexpected response.");
+        adminUsers = users.items;
+        setText('[data-metric="total-users"]', users.total);
+        setText('[data-metric-note="total-users"]', "Live user accounts");
+        const candidates = users.items.filter((user) => user.role === "candidate");
+        renderCandidateAccounts(candidates, candidates.length === 0);
+        if (candidates.length === 0) {
+          document.querySelector("#candidate-data-note").textContent =
+            "No candidate accounts are in the database yet. Sample pipeline cards above are preview-only.";
+        }
+        if (users.total === 0) {
+          const note = document.querySelector("#users-data-note");
+          note.hidden = false;
+          note.textContent = "No real accounts are in the database yet. Sample rows are shown read-only; role and status controls are disabled.";
+          renderUsersTable([], true);
+        }
+      } else {
+        setText('[data-metric-note="total-users"]', "Preview · account totals require superadmin access");
+      }
+      if (audit) {
+        if (!Array.isArray(audit.items)) throw new Error("The audit API returned an unexpected response.");
+        renderOverviewActivity(audit.items, audit.items.length === 0);
+      }
+    }
+
+    async function authRequest(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        credentials: "same-origin",
+        headers: {
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...(adminAccessToken
+            ? { Authorization: `Bearer ${adminAccessToken}` }
+            : {}),
+          ...options.headers
+        }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = Array.isArray(payload.message)
+          ? payload.message.join(", ")
+          : payload.message;
+        throw new Error(message || "Unable to sign in.");
+      }
+      return payload;
+    }
+
+    async function enterAdmin(session) {
+      if (!["admin", "superadmin"].includes(session.user?.role)) {
+        authResolved = true;
+        adminAccessToken = null;
+        authRequest("/api/auth/logout", { method: "POST" }).catch(() => {});
+        throw new Error("This account does not have admin access.");
+      }
+      authResolved = true;
+      adminAccessToken = session.accessToken;
+      currentAdminUser = session.user;
+      authError.textContent = "";
+      const initials = session.user.displayName
+        .split(/\s+/)
+        .map((part) => part[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+      document.querySelector(".profile-mini strong").textContent = session.user.displayName;
+      document.querySelector(".profile-mini small").textContent = session.user.role;
+      document.querySelector(".profile-mini .profile-initials").textContent = initials;
+      document.querySelector(".top-avatar").textContent = initials;
+      document.querySelector(".top-avatar").setAttribute("aria-label", `Profile for ${session.user.displayName}`);
+      document.querySelector(".top-avatar").dataset.toast = `Signed in as ${session.user.displayName} (${session.user.role}).`;
+      updateOverviewHeader(session.user);
+      document.querySelectorAll(".superadmin-only").forEach((link) => {
+        link.hidden = session.user.role !== "superadmin";
+      });
+      authGate.hidden = true;
+      adminApp.classList.add("authenticated");
+      showView(location.hash.slice(1) || "overview");
+      await refreshOverviewData().catch((error) => showToast(`Dashboard data could not be refreshed: ${error.message}`));
+    }
+
+    document.querySelector("#admin-login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      authResolved = true;
+      const form = event.currentTarget;
+      const submit = form.querySelector('[type="submit"]');
+      const data = new FormData(form);
+      submit.disabled = true;
+      authError.textContent = "";
+      try {
+        const session = await authRequest("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: data.get("email"),
+            password: data.get("password")
+          })
+        });
+        await enterAdmin(session);
+      } catch (error) {
+        authError.textContent = error instanceof Error ? error.message : "Unable to sign in.";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    document.querySelector("[data-logout]").addEventListener("click", async () => {
+      try {
+        await authRequest("/api/auth/logout", { method: "POST" });
+      } catch {
+        showToast("Session ended locally. Please sign in again.");
+      }
+      adminAccessToken = null;
+      currentAdminUser = null;
+      adminApp.classList.remove("authenticated");
+      authGate.hidden = false;
+      document.querySelector("#admin-login-form").reset();
+      document.querySelector("#admin-email").focus();
+    });
+
+    authRequest("/api/auth/refresh", { method: "POST" })
+      .then((session) => {
+        if (!authResolved) return enterAdmin(session);
+      })
+      .catch(() => {
+        if (!authResolved) {
+          authGate.hidden = false;
+          adminApp.classList.remove("authenticated");
+        }
+      });
+
+    function showToast(message) {
+      toastElement.textContent = message;
+      toastElement.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastElement.classList.remove("show"), 2800);
+    }
+
+    function showView(name) {
+      const view = document.querySelector(`#view-${name}`)
+        ?? document.querySelector("#view-overview");
+      if ((name === "users" || name === "audit") && currentAdminUser?.role !== "superadmin") {
+        showToast("This page is available to superadmins only.");
+        return;
+      }
+      views.forEach((item) => item.classList.toggle("active", item === view));
+      navLinks.forEach((link) => link.classList.toggle("active", link.dataset.view === view.id.replace("view-", "")));
+      breadcrumb.textContent = view.dataset.title;
+      document.title = `${view.dataset.title} — esllp Admin`;
+      sidebar.classList.remove("open");
+      mobileMenu.setAttribute("aria-expanded", "false");
+      mobileMenu.setAttribute("aria-label", "Open sidebar");
+      applySearch(document.querySelector("#global-search").value);
+      if (view.id === "view-jobs" && adminAccessToken) {
+        loadAdminJobs().catch((error) => showToast(error.message));
+      }
+      if (view.id === "view-users" && adminAccessToken) {
+        loadAdminUsers().catch((error) => showToast(`Unable to load user accounts: ${error.message}`));
+      }
+      if (view.id === "view-audit" && adminAccessToken) {
+        loadAuditLogs().catch((error) => showToast(`Unable to load audit history: ${error.message}`));
+      }
+      if (view.id === "view-candidates" && adminAccessToken && currentAdminUser?.role === "superadmin") {
+        loadCandidateAccounts().catch((error) => showToast(`Unable to load candidate accounts: ${error.message}`));
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    navLinks.forEach((link) => link.addEventListener("click", (event) => {
+      event.preventDefault();
+      showView(link.dataset.view);
+      history.replaceState(null, "", `#${link.dataset.view}`);
+    }));
+    document.querySelectorAll("[data-view-link]").forEach((link) => link.addEventListener("click", (event) => {
+      event.preventDefault();
+      showView(link.dataset.viewLink);
+      history.replaceState(null, "", `#${link.dataset.viewLink}`);
+    }));
+    window.addEventListener("hashchange", () => {
+      const requested = location.hash.slice(1);
+      if (views.some((view) => view.id === `view-${requested}`)) showView(requested);
+    });
+    if (location.hash && views.some((view) => view.id === `view-${location.hash.slice(1)}`)) showView(location.hash.slice(1));
+
+    mobileMenu.addEventListener("click", () => {
+      const open = !sidebar.classList.contains("open");
+      sidebar.classList.toggle("open", open);
+      mobileMenu.setAttribute("aria-expanded", String(open));
+      mobileMenu.setAttribute("aria-label", open ? "Close sidebar" : "Open sidebar");
+    });
+    document.querySelectorAll("[data-toast]").forEach((button) => button.addEventListener("click", (event) => {
+      event.preventDefault();
+      showToast(button.dataset.toast);
+    }));
+    document.querySelector("#notifications-button").addEventListener("click", () => {
+      if (currentAdminUser?.role === "superadmin") {
+        showView("audit");
+        history.replaceState(null, "", "#audit");
+      } else {
+        showToast("A notification feed is not connected yet.");
+      }
+    });
+
+    const globalSearch = document.querySelector("#global-search");
+    function applySearch(value) {
+      const query = value.trim().toLowerCase();
+      if (document.querySelector("#view-jobs").classList.contains("active")) {
+        applyJobFilters();
+        return;
+      }
+      if (document.querySelector("#view-users").classList.contains("active")) {
+        filterUsers(value);
+        return;
+      }
+      if (document.querySelector("#view-candidates").classList.contains("active")) {
+        const candidateQuery = `${document.querySelector("#candidate-search").value} ${query}`.trim().toLowerCase();
+        document.querySelectorAll("#candidate-accounts-body tr").forEach((row) => {
+          row.hidden = candidateQuery.length > 0 && !row.innerText.toLowerCase().includes(candidateQuery);
+        });
+        return;
+      }
+      document.querySelectorAll(".view.active .filterable tr").forEach((row) => {
+        row.hidden = query.length > 0 && !row.innerText.toLowerCase().includes(query);
+      });
+    }
+    globalSearch.addEventListener("input", () => applySearch(globalSearch.value));
+    document.querySelectorAll(".page-filter").forEach((input) => input.addEventListener("input", () => {
+      if (input.closest("#view-jobs")) {
+        applyJobFilters();
+        return;
+      }
+      const query = input.value.trim().toLowerCase();
+      input.closest(".view").querySelectorAll(".filterable tr").forEach((row) => {
+        row.hidden = query.length > 0 && !row.innerText.toLowerCase().includes(query);
+      });
+    }));
+    document.querySelector("#jobs-status-filter").addEventListener("change", applyJobFilters);
+    document.querySelector("#jobs-company-filter").addEventListener("change", applyJobFilters);
+    document.querySelector("#user-search").addEventListener("input", filterUsers);
+    document.querySelector("#user-role-filter").addEventListener("change", filterUsers);
+    document.querySelector("#user-status-filter").addEventListener("change", filterUsers);
+    document.querySelector("#candidate-search").addEventListener("input", (event) => {
+      const query = event.target.value.trim().toLowerCase();
+      document.querySelectorAll("#candidate-accounts-body tr").forEach((row) => {
+        row.hidden = query.length > 0 && !row.innerText.toLowerCase().includes(query);
+      });
+    });
+    document.querySelector("[data-refresh-users]").addEventListener("click", () => {
+      loadAdminUsers(usersPage).catch((error) => showToast(`Unable to load user accounts: ${error.message}`));
+    });
+    document.querySelector("[data-refresh-audit]").addEventListener("click", () => {
+      loadAuditLogs(auditPage).catch((error) => showToast(`Unable to load audit history: ${error.message}`));
+    });
+    document.querySelector("#users-prev").addEventListener("click", () => {
+      if (usersPage > 1) loadAdminUsers(usersPage - 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#users-next").addEventListener("click", () => {
+      if (usersPage * 25 < usersTotal) loadAdminUsers(usersPage + 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#audit-prev").addEventListener("click", () => {
+      if (auditPage > 1) loadAuditLogs(auditPage - 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#audit-next").addEventListener("click", () => {
+      if (auditPage * 50 < auditTotal) loadAuditLogs(auditPage + 1).catch((error) => showToast(error.message));
+    });
+    document.querySelectorAll("[data-export-candidates]").forEach((button) => button.addEventListener("click", exportCandidateAccounts));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "/" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+        event.preventDefault();
+        globalSearch.focus();
+      }
+      if (event.key === "Escape") {
+        jobModal.classList.remove("open");
+        sidebar.classList.remove("open");
+        mobileMenu.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    document.querySelectorAll("[data-modal-open]").forEach((button) => button.addEventListener("click", () => {
+      jobModal.classList.add("open");
+      document.querySelector("#new-job-title").focus();
+    }));
+    document.querySelectorAll(".modal-close, .modal-cancel").forEach((button) => button.addEventListener("click", () => jobModal.classList.remove("open")));
+    jobModal.addEventListener("click", (event) => {
+      if (event.target === jobModal) jobModal.classList.remove("open");
+    });
+    document.querySelector("#create-job-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const job = new FormData(form);
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      try {
+        const created = await authRequest("/api/admin/jobs", {
+          method: "POST",
+          body: JSON.stringify(Object.fromEntries(job))
+        });
+        showToast(`“${created.title}” saved as draft #${created.id}.`);
+        form.reset();
+        jobModal.classList.remove("open");
+        await loadAdminJobs();
+        await refreshOverviewData();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to create the job.");
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    const settingsInputs = [...document.querySelectorAll("#profile-settings input, #profile-settings select")];
+    try {
+      const savedSettings = JSON.parse(localStorage.getItem("esllp-admin-settings") || "{}");
+      settingsInputs.forEach((input) => {
+        if (Object.hasOwn(savedSettings, input.id)) {
+          if (input.type === "checkbox") input.checked = Boolean(savedSettings[input.id]);
+          else input.value = savedSettings[input.id];
+        }
+      });
+    } catch {
+      showToast("Saved browser settings could not be read. Current defaults are loaded.");
+    }
+    document.querySelector("[data-save-settings]").addEventListener("click", () => {
+      try {
+        const savedSettings = Object.fromEntries(settingsInputs.map((input) => [
+          input.id,
+          input.type === "checkbox" ? input.checked : input.value
+        ]));
+        localStorage.setItem("esllp-admin-settings", JSON.stringify(savedSettings));
+        showToast("Preferences saved in this browser.");
+      } catch (error) {
+        showToast(`Unable to save browser preferences: ${error instanceof Error ? error.message : "storage unavailable"}`);
+      }
+    });
+    document.querySelector("#chart-range").addEventListener("change", (event) => {
+      showToast(`Chart preview range set to the last ${event.target.value} days. Live application analytics are not connected yet.`);
+    });
+
+    function downloadCsv(filename, headers, data) {
+      const rows = [headers, ...data];
+      const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      link.href = url;
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function exportJobs() {
+      try {
+        const jobs = await authRequest("/api/admin/jobs");
+        if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
+        const preview = jobs.length === 0;
+        const rows = preview ? previewJobs : jobs;
+        downloadCsv(
+          preview ? "esllp-jobs-sample-preview.csv" : "esllp-jobs.csv",
+          ["Job title", "Company", "Location", "Applications", "Status", "Posted"],
+          rows.map((job) => [job.title, job.company, job.location, preview ? "Sample only" : "", job.isActive ? "Active" : "Draft", formatDate(job.createdAt)])
+        );
+        showToast(preview ? "Sample preview CSV downloaded; no live jobs exist yet." : "Live job export downloaded.");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to export jobs.");
+      }
+    }
+    document.querySelectorAll("[data-export]").forEach((button) => button.addEventListener("click", exportJobs));
+
+  </script>
+</body>
+</html>
