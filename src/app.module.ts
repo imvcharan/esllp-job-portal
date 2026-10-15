@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { resolve } from 'node:path';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -13,13 +12,13 @@ import { CreateJobsTable1729000000000 } from './database/migrations/172900000000
 import { CreateUsersAndRefreshSessions1729000000001 } from './database/migrations/1729000000001-CreateUsersAndRefreshSessions';
 import { RefreshSession } from './auth/refresh-session.entity';
 import { User } from './users/user.entity';
+import { getDatabaseConfig } from './database/database.config';
 
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     TypeOrmModule.forRoot({
-      type: 'better-sqlite3',
-      database: resolve(process.env.SQLITE_DB_PATH ?? 'data/esllp.sqlite'),
+      ...getDatabaseConfig(),
       entities: [Job, User, RefreshSession, AuditLog],
       migrations: [
         CreateJobsTable1729000000000,

@@ -1,6 +1,6 @@
 # esllp Job Portal
 
-NestJS serves the homepage from `public/index.html`, the admin dashboard from `public/admin/index.html`, and exposes the job API at `/api/jobs`. SQLite stores application data in `data/esllp.sqlite` by default.
+NestJS serves the homepage from `public/index.html`, the admin dashboard from `public/admin/index.html`, and exposes the job API at `/api/jobs`. TypeORM connects to MySQL using the `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` environment variables. The application runs pending schema migrations automatically at startup.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ The admin dashboard includes overview, jobs, candidate accounts/pipeline, compan
 
 ## Authentication and superadmin
 
-Copy `.env.example` to `.env`, set a unique `JWT_ACCESS_SECRET` (at least 32 characters), and configure the superadmin name, email, and a unique password (16–72 UTF-8 bytes). `.env` is ignored by Git and must not be committed.
+Copy `.env.example` to `.env`, configure the MySQL connection values, set a unique `JWT_ACCESS_SECRET` (at least 32 characters), and configure the superadmin name, email, and a unique password (16–72 UTF-8 bytes). `.env` is ignored by Git and must not be committed.
 
 After building, create the first superadmin once:
 
@@ -51,7 +51,7 @@ Admin API routes require a bearer access token. `ADMIN` and `SUPERADMIN` can man
 
 This is the security and job-management foundation, not yet a complete production job portal. The admin UI uses live data for jobs, superadmin-visible user accounts, and audit events; when a supported list is empty, it displays clearly labeled preview rows instead. Preview examples are read-only and never used as API data. Application, interview, and hiring analytics, employer organization/company management, candidate profiles/resumes, and application review are not backed by server modules yet. The related dashboard panels remain labeled preview content, and actions that would imply persistence are disabled until those APIs exist. Workspace settings currently persist only in the current browser.
 
-Remaining core modules include employer organizations and membership, candidate profiles and secure resume storage, applications and employer review workflows, email verification/password recovery and notification delivery, moderation/reporting, and live analytics. Before production, configure HTTPS and a persistent SQLite volume, establish backups/restore tests, and arrange security review and superadmin MFA.
+Remaining core modules include employer organizations and membership, candidate profiles and secure resume storage, applications and employer review workflows, email verification/password recovery and notification delivery, moderation/reporting, and live analytics. Before production, configure HTTPS, establish MySQL backups/restore tests, and arrange security review and superadmin MFA.
 
 Use HTTPS in production. The refresh cookie is marked Secure when `NODE_ENV=production`; production startup also refuses to run without a 32+ character `JWT_ACCESS_SECRET`.
 
@@ -70,7 +70,7 @@ npm run build
 npm run start:prod
 ```
 
-Set `PORT` and `SQLITE_DB_PATH` in the hosting provider's environment settings. Use an absolute path for `SQLITE_DB_PATH` that is writable and persists across redeployments. Back up the SQLite file regularly. The initial schema migration runs automatically when the application starts.
+Configure `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` using the connection details from the hosting provider. Keep credentials in the hosting provider's environment settings and never commit them. `PORT` is supplied by the hosting provider when applicable. The initial schema migrations run automatically when the application starts. The local SQLite database is not uploaded or migrated automatically; import any needed existing data into MySQL separately.
 
 ## Project layout
 
@@ -81,9 +81,9 @@ src/
   admin/                Superadmin user and audit endpoints
   auth/                 Candidate registration, login, token rotation, and RBAC
   audit/                Admin action audit log
-  database/             SQLite connection and schema migrations
+  database/             MySQL connection and schema migrations
   jobs/                 Job entity, query service, and API controller
   app.module.ts         Static frontend and feature module wiring
   main.ts               NestJS application bootstrap
-data/                   Local SQLite database (ignored by Git)
+data/                   Local development data (ignored by Git)
 ```

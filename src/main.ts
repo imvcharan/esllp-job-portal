@@ -1,6 +1,5 @@
 import 'dotenv/config';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
@@ -18,11 +17,6 @@ async function bootstrap(): Promise<void> {
       'JWT_ACCESS_SECRET must be configured with at least 32 characters in production.',
     );
   }
-  const databasePath = resolve(
-    process.env.SQLITE_DB_PATH ?? 'data/esllp.sqlite',
-  );
-  mkdirSync(dirname(databasePath), { recursive: true });
-
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser());
