@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { X509Certificate } from 'node:crypto';
 import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 
 function requiredEnvironmentVariable(name: string): string {
@@ -24,6 +25,19 @@ export function getDatabaseConfig(): PostgresConnectionOptions {
     throw new Error(
       'POSTGRES_SSL_CA must contain the complete PEM certificate.',
     );
+  }
+
+  if (ssl) {
+    if (sslCa) {
+      const certificate = new X509Certificate(sslCa);
+      console.info(
+        `[database] Custom TLS CA loaded (SHA-256 fingerprint: ${certificate.fingerprint256}).`,
+      );
+    } else {
+      console.warn(
+        '[database] TLS is enabled without a custom CA certificate.',
+      );
+    }
   }
 
   const sslOptions = ssl
