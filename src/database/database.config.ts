@@ -12,7 +12,15 @@ function requiredEnvironmentVariable(name: string): string {
 
 export function getDatabaseConfig(): PostgresConnectionOptions {
   const ssl = process.env.POSTGRES_SSL?.trim().toLowerCase() === 'true';
-  const sslCa = process.env.POSTGRES_SSL_CA?.trim().replace(/\\n/g, '\n');
+  const configuredSslCa = process.env.POSTGRES_SSL_CA?.trim().replace(/\\n/g, '\n');
+  const sslCa = configuredSslCa?.replace(
+    /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g,
+    (_match, body: string) => {
+      const base64 = body.replace(/\s/g, '');
+      const lines = base64.match(/.{1,64}/g)?.join('\n') ?? '';
+      return `-----BEGIN CERTIFICATE-----\n${lines}\n-----END CERTIFICATE-----`;
+    },
+  );
   const connectionString = process.env.DATABASE_URL?.trim();
 
   if (sslCa && !ssl) {
@@ -29,7 +37,15 @@ export function getDatabaseConfig(): PostgresConnectionOptions {
 
   if (ssl) {
     if (sslCa) {
-      const certificate = new X509Certificate(sslCa);
+      let certificate: X509Certificate;
+      try {
+        certificate = new X509Certificate(sslCa);
+      } catch (error) {
+        throw new Error(
+          'POSTGRES_SSL_CA must be a valid PEM-encoded X.509 certificate.',
+          { cause: error },
+        );
+      }
       console.info(
         `[database] Custom TLS CA loaded (SHA-256 fingerprint: ${certificate.fingerprint256}).`,
       );
