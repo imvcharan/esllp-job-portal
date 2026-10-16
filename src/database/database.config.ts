@@ -11,12 +11,18 @@ function requiredEnvironmentVariable(name: string): string {
 
 export function getDatabaseConfig(): PostgresConnectionOptions {
   const ssl = process.env.POSTGRES_SSL?.trim().toLowerCase() === 'true';
-  const sslCa = process.env.POSTGRES_SSL_CA?.trim();
+  const sslCa = process.env.POSTGRES_SSL_CA?.trim().replace(/\\n/g, '\n');
   const connectionString = process.env.DATABASE_URL?.trim();
 
   if (sslCa && !ssl) {
     throw new Error(
       'POSTGRES_SSL must be true when POSTGRES_SSL_CA is configured.',
+    );
+  }
+
+  if (sslCa && !sslCa.includes('-----BEGIN CERTIFICATE-----')) {
+    throw new Error(
+      'POSTGRES_SSL_CA must contain the complete PEM certificate.',
     );
   }
 
@@ -27,9 +33,20 @@ export function getDatabaseConfig(): PostgresConnectionOptions {
     : undefined;
 
   if (connectionString) {
+    const parsedConnectionString = new URL(connectionString);
+    for (const parameter of [
+      'ssl',
+      'sslmode',
+      'sslcert',
+      'sslkey',
+      'sslrootcert',
+    ]) {
+      parsedConnectionString.searchParams.delete(parameter);
+    }
+
     return {
       type: 'postgres',
-      url: connectionString,
+      url: parsedConnectionString.toString(),
       ...(sslOptions ? { ssl: sslOptions } : {}),
     };
   }
