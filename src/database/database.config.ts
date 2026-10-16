@@ -11,13 +11,26 @@ function requiredEnvironmentVariable(name: string): string {
 
 export function getDatabaseConfig(): PostgresConnectionOptions {
   const ssl = process.env.POSTGRES_SSL?.trim().toLowerCase() === 'true';
+  const sslCa = process.env.POSTGRES_SSL_CA?.trim();
   const connectionString = process.env.DATABASE_URL?.trim();
+
+  if (sslCa && !ssl) {
+    throw new Error(
+      'POSTGRES_SSL must be true when POSTGRES_SSL_CA is configured.',
+    );
+  }
+
+  const sslOptions = ssl
+    ? sslCa
+      ? { ca: sslCa, rejectUnauthorized: true }
+      : true
+    : undefined;
 
   if (connectionString) {
     return {
       type: 'postgres',
       url: connectionString,
-      ...(ssl ? { ssl: true } : {}),
+      ...(sslOptions ? { ssl: sslOptions } : {}),
     };
   }
 
@@ -34,6 +47,6 @@ export function getDatabaseConfig(): PostgresConnectionOptions {
     username: requiredEnvironmentVariable('POSTGRES_USER'),
     password: requiredEnvironmentVariable('POSTGRES_PASSWORD'),
     database: requiredEnvironmentVariable('POSTGRES_DATABASE'),
-    ...(ssl ? { ssl: true } : {}),
+    ...(sslOptions ? { ssl: sslOptions } : {}),
   };
 }
