@@ -13,17 +13,35 @@ import { CreateUsersAndRefreshSessions1729000000001 } from './database/migration
 import { RefreshSession } from './auth/refresh-session.entity';
 import { User } from './users/user.entity';
 import { getDatabaseConfig } from './database/database.config';
+import { CandidateProfileModule } from './users/candidate-profile.module';
+import { CandidateProfile } from './users/candidate-profile.entity';
+import { CreateCandidateProfiles1729000000003 } from './database/migrations/1729000000003-CreateCandidateProfiles';
+import { CandidateSavedJob } from './users/candidate-saved-job.entity';
+import { CreateCandidateSavedJobs1729000000004 } from './database/migrations/1729000000004-CreateCandidateSavedJobs';
+import { CandidateApplication } from './users/candidate-application.entity';
+import { CreateCandidateApplications1729000000005 } from './database/migrations/1729000000005-CreateCandidateApplications';
 
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     TypeOrmModule.forRoot({
       ...getDatabaseConfig(),
-      entities: [Job, User, RefreshSession, AuditLog],
+      entities: [
+        Job,
+        User,
+        RefreshSession,
+        AuditLog,
+        CandidateProfile,
+        CandidateSavedJob,
+        CandidateApplication,
+      ],
       migrations: [
         CreateJobsTable1729000000000,
         CreateUsersAndRefreshSessions1729000000001,
         CreateAuditLogs1729000000002,
+        CreateCandidateProfiles1729000000003,
+        CreateCandidateSavedJobs1729000000004,
+        CreateCandidateApplications1729000000005,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -31,6 +49,7 @@ import { getDatabaseConfig } from './database/database.config';
     AuthModule,
     AdminModule,
     JobsModule,
+    CandidateProfileModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
