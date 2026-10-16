@@ -26,16 +26,16 @@ export class JobsService {
       queryBuilder.andWhere(
         new Brackets((where) => {
           where
-            .where('job.title LIKE :query', { query: `%${query}%` })
-            .orWhere('job.company LIKE :query', { query: `%${query}%` })
-            .orWhere('job.description LIKE :query', { query: `%${query}%` });
+            .where('job.title ILIKE :query', { query: `%${query}%` })
+            .orWhere('job.company ILIKE :query', { query: `%${query}%` })
+            .orWhere('job.description ILIKE :query', { query: `%${query}%` });
         }),
       );
     }
 
     const location = filters.location?.trim();
     if (location) {
-      queryBuilder.andWhere('job.location LIKE :location', {
+      queryBuilder.andWhere('job.location ILIKE :location', {
         location: `%${location}%`,
       });
     }

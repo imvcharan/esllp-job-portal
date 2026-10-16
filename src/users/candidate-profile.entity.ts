@@ -25,6 +25,6 @@ export class CandidateProfile {
   @Column({ type: 'text' })
   skills!: string;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'datetime' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }

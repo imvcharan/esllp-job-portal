@@ -16,7 +16,7 @@ export class CandidateSavedJob {
   @PrimaryColumn({ name: 'job_id', type: 'int' })
   jobId!: number;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

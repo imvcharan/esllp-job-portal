@@ -31,10 +31,10 @@ export class CandidateApplication {
   @Column({ length: 20, default: 'submitted' })
   status!: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'datetime' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

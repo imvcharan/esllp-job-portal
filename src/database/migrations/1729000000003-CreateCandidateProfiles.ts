@@ -14,12 +14,11 @@ export class CreateCandidateProfiles1729000000003
         phone varchar(32) NOT NULL DEFAULT '',
         summary text NOT NULL,
         skills text NOT NULL,
-        updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-          ON UPDATE CURRENT_TIMESTAMP,
+        updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id),
         CONSTRAINT FK_candidate_profiles_user FOREIGN KEY (user_id)
           REFERENCES users (id) ON DELETE CASCADE
-      ) ENGINE=InnoDB
+      )
     `);
   }
 

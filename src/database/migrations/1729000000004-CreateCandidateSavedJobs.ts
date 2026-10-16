@@ -10,15 +10,17 @@ export class CreateCandidateSavedJobs1729000000004
       CREATE TABLE candidate_saved_jobs (
         user_id int NOT NULL,
         job_id int NOT NULL,
-        created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, job_id),
-        INDEX IDX_candidate_saved_jobs_job_id (job_id),
         CONSTRAINT FK_candidate_saved_jobs_user FOREIGN KEY (user_id)
           REFERENCES users (id) ON DELETE CASCADE,
         CONSTRAINT FK_candidate_saved_jobs_job FOREIGN KEY (job_id)
           REFERENCES jobs (id) ON DELETE CASCADE
-      ) ENGINE=InnoDB
+      )
     `);
+    await queryRunner.query(
+      'CREATE INDEX IDX_candidate_saved_jobs_job_id ON candidate_saved_jobs (job_id)',
+    );
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {

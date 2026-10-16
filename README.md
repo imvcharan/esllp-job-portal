@@ -1,32 +1,38 @@
 # esllp Job Portal
 
-NestJS serves the homepage from `public/index.html`, the admin dashboard from `public/admin/index.html`, and exposes the job API at `/api/jobs`. TypeORM connects to MySQL using the `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` environment variables. The application runs pending schema migrations automatically at startup.
+NestJS serves the homepage from `public/index.html`, the admin dashboard from `public/admin/index.html`, and exposes the job API at `/api/jobs`. TypeORM connects to PostgreSQL using the `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DATABASE` environment variables, or a `DATABASE_URL`. The application runs pending schema migrations automatically at startup.
 
 ## Requirements
 
 - Node.js 20 or newer
 - npm
 
-## Local XAMPP database (Windows)
+## Local PostgreSQL database (Windows)
 
-Start MySQL from the XAMPP Control Panel before running the application.
-Apache is optional: NestJS serves the website and API itself, so opening the
-site through Apache/phpMyAdmin is not the application URL.
+Install and start PostgreSQL before running the application. A separate
+webserver is not required: NestJS serves the website and API itself.
 
-The local development database is `esllp_job_portal`, using `utf8mb4`. The
-application connects as the dedicated `esllp_app` account, which is granted
-access only to that database; it does not connect as MySQL root. Local database
-credentials and a random development JWT secret belong in the Git-ignored
-`.env` file, never in committed source. Configure:
+Create a dedicated application account and database using `psql` or
+pgAdmin (replace the placeholder password with a unique value):
+
+```sql
+CREATE ROLE esllp_app WITH LOGIN PASSWORD '<unique random password>';
+CREATE DATABASE esllp_job_portal OWNER esllp_app;
+```
+
+The application connects as `esllp_app`, not as a PostgreSQL superuser. Local
+database credentials and a random development JWT secret belong in the
+Git-ignored `.env` file, never in committed source. Configure:
 
 ```dotenv
 PORT=3000
 NODE_ENV=development
-MYSQL_HOST=127.0.0.1
-MYSQL_PORT=3306
-MYSQL_USER=esllp_app
-MYSQL_PASSWORD=<locally generated database-user password>
-MYSQL_DATABASE=esllp_job_portal
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+POSTGRES_USER=esllp_app
+POSTGRES_PASSWORD=<locally generated database-user password>
+POSTGRES_DATABASE=esllp_job_portal
+POSTGRES_SSL=false
 JWT_ACCESS_SECRET=<unique random secret of at least 32 characters>
 ```
 
@@ -34,18 +40,6 @@ On this development machine port `3000` is used by another local service; its
 `.env` therefore sets `PORT=3001`. Keep the port free on your machine and use
 the value configured in `.env`. Never copy the generated local `.env` into
 source control or production.
-
-Create the database and restricted app user once in XAMPP's MySQL/MariaDB
-server (for example, using phpMyAdmin's SQL tab while signed in as a database
-administrator):
-
-```sql
-CREATE DATABASE esllp_job_portal
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-CREATE USER 'esllp_app'@'127.0.0.1' IDENTIFIED BY '<unique random password>';
-GRANT ALL PRIVILEGES ON esllp_job_portal.* TO 'esllp_app'@'127.0.0.1';
-```
 
 Put the same generated database-user password in `.env`. Then run migrations
 and start the local app:
@@ -81,7 +75,7 @@ The admin dashboard includes overview, jobs, candidate accounts/pipeline, compan
 
 ## Authentication and superadmin
 
-Copy `.env.example` to `.env`, configure the MySQL connection values, set a unique `JWT_ACCESS_SECRET` (at least 32 characters), and configure the superadmin name, email, and a unique password (16–72 UTF-8 bytes). `.env` is ignored by Git and must not be committed.
+Copy `.env.example` to `.env`, configure the PostgreSQL connection values, set a unique `JWT_ACCESS_SECRET` (at least 32 characters), and configure the superadmin name, email, and a unique password (16–72 UTF-8 bytes). `.env` is ignored by Git and must not be committed.
 
 After building, create the first superadmin once:
 
@@ -129,7 +123,7 @@ Admin API routes require a bearer access token. `ADMIN` and `SUPERADMIN` can man
 
 This is the security and job-management foundation, not yet a complete production job portal. The admin UI uses live data for jobs, superadmin-visible user accounts, and audit events; when a supported list is empty, it displays clearly labeled preview rows instead. Preview examples are read-only and never used as API data. Candidate accounts have a responsive workspace with a saved profile editor, published-job search and details, account-synced saved jobs, and application submission/history. Guest and preview saves remain browser-local. Candidate application notes are optional, application creation is idempotent per candidate/job pair, and the current status is limited to `submitted`; resume uploads, withdrawal, employer review/status changes, and application notifications are not implemented. Employer accounts have a responsive workspace shell, but organization setup, employer-owned job management, team access, and applicant review are not implemented. Candidate experience/education, resume storage, interview and hiring analytics, notifications, and moderation are also not yet backed by server modules. Workspace settings currently persist only in the current browser.
 
-Remaining core modules include employer organizations and membership, candidate experience/education and secure resume storage, the employer application review and status lifecycle, email verification/password recovery and notification delivery, moderation/reporting, and live analytics. Before production, configure HTTPS, establish MySQL backups/restore tests, and arrange security review and superadmin MFA.
+Remaining core modules include employer organizations and membership, candidate experience/education and secure resume storage, the employer application review and status lifecycle, email verification/password recovery and notification delivery, moderation/reporting, and live analytics. Before production, configure HTTPS, establish PostgreSQL backups/restore tests, and arrange security review and superadmin MFA.
 
 Use HTTPS in production. The refresh cookie is marked Secure when `NODE_ENV=production`; production startup also refuses to run without a 32+ character `JWT_ACCESS_SECRET`.
 
@@ -148,7 +142,16 @@ npm run build
 npm run start:prod
 ```
 
-Configure `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` using the connection details from the hosting provider. Keep credentials in the hosting provider's environment settings and never commit them. `PORT` is supplied by the hosting provider when applicable. The initial schema migrations run automatically when the application starts. The local SQLite database is not uploaded or migrated automatically; import any needed existing data into MySQL separately.
+Configure `DATABASE_URL` or `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DATABASE` using the connection details from the hosting provider. Set `POSTGRES_SSL=true` if the provider requires TLS. Keep credentials in the hosting provider's environment settings and never commit them. `PORT` is supplied by the hosting provider when applicable. The initial schema migrations run automatically when the application starts. Existing MySQL or local SQLite data is not copied automatically; export and import any data you need into PostgreSQL separately.
+
+## Frontend and GitHub
+
+The homepage and admin UI are plain static files in `public/` and are served
+by the NestJS app from the same origin as the API. Commit the `public/` folder
+with the backend; these pages rely on the running `/api` service and are not a
+standalone GitHub Pages site. `.env` files and local database files under
+`data/` are ignored by Git; commit `.env.example` as the safe configuration
+template instead.
 
 ## Project layout
 
@@ -159,7 +162,7 @@ src/
   admin/                Superadmin user and audit endpoints
   auth/                 Candidate registration, login, token rotation, and RBAC
   audit/                Admin action audit log
-  database/             MySQL connection and schema migrations
+  database/             PostgreSQL connection and schema migrations
   jobs/                 Job entity, query service, and API controller
   app.module.ts         Static frontend and feature module wiring
   main.ts               NestJS application bootstrap

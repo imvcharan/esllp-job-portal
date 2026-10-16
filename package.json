@@ -2,7 +2,7 @@
   "name": "esllp-job-portal",
   "version": "1.0.0",
   "private": true,
-  "description": "esllp job portal built with NestJS and MySQL",
+  "description": "esllp job portal built with NestJS and PostgreSQL",
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
@@ -33,7 +33,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.6.1",
     "helmet": "^8.1.0",
-    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.28",

@@ -2,7 +2,7 @@
 
 This is the end-to-end delivery roadmap for a working job marketplace across
 the web, iOS, and Android. It describes planned work; unchecked items are not
-implemented. It is based on the repository's current NestJS, TypeORM, MySQL,
+implemented. It is based on the repository's current NestJS, TypeORM, PostgreSQL,
 authentication, job-search, and admin foundations.
 
 No roadmap can guarantee that literally nothing will be missed before product
@@ -24,7 +24,7 @@ explicit so those gaps are found before they become expensive rework.
 - **Backend:** Keep the existing NestJS API and extend it; do not rewrite it or
   split it into microservices without evidence that the current architecture
   cannot meet a measured need.
-- **Database:** Keep MySQL and TypeORM. Use reviewed schema migrations; never
+- **Database:** Use PostgreSQL and TypeORM. Use reviewed schema migrations; never
   enable TypeORM schema synchronization in production.
 - **Launch business model:** Free listings and applications in v1. No billing,
   subscriptions, or payment collection in launch scope. Revisit monetization
@@ -70,7 +70,7 @@ explicit so those gaps are found before they become expensive rework.
 | iOS and Android | React Native + Expo + TypeScript | One native client for candidate and employer workflows. |
 | API | Existing NestJS + TypeScript | REST API; server owns validation, permissions, and business rules. |
 | API contract | OpenAPI and generated TypeScript client/models | Web and mobile consume the same versioned contract; avoid hand-maintained duplicate request types. |
-| Database | Existing MySQL + TypeORM | Use migrations, indexes, constraints, transactions, backups, and restore tests. |
+| Database | PostgreSQL + TypeORM | Use migrations, indexes, constraints, transactions, backups, and restore tests. |
 | Uploads | Private object storage | Resume files are private; issue authorized, short-lived access, not public URLs. |
 | Email and push | Provider-backed adapters behind API modules | Select providers after delivery, cost, India availability, and privacy requirements are evaluated. |
 | Admin | Existing protected admin/API foundations, expanded as needed | Continue enforcing server authorization; UI gating is not authorization. |
@@ -109,12 +109,12 @@ releasable.
 - Candidate profile storage now includes name, email, headline, location,
   optional phone, summary, and skills. Authenticated candidate-only profile
   read/update APIs and a matching responsive web editor are implemented and
-  verified against the local MySQL database.
+  verified against the local database.
 - Candidate registration, login, access-token authentication, refresh-cookie
   rotation, logout, role guards, and rate limiting exist.
 - Public active-job listing/search and admin job management exist.
 - Superadmin user administration and audit-log endpoints exist.
-- TypeORM migrations and MySQL configuration exist; startup runs migrations.
+- TypeORM migrations and PostgreSQL configuration exist; startup runs migrations.
 - Candidate experience/education/preferences completeness, resume storage,
   employer organizations/memberships, applicant review, email
   verification, password recovery, notifications, and moderation workflows

@@ -30,6 +30,6 @@ export class AuditLog {
   @Column({ name: 'ip_address', type: 'varchar', length: 64, nullable: true })
   ipAddress!: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }
