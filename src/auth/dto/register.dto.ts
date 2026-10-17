@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Length,
   MaxLength,
   MinLength,
   ValidateIf,
@@ -59,4 +60,20 @@ export class RegisterEmployerDto {
   @MinLength(30)
   @MaxLength(100)
   invitationToken?: string;
+}
+
+export class BootstrapSuperadminDto {
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  displayName!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(72)
+  password!: string;
 }

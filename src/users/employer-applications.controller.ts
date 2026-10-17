@@ -16,9 +16,10 @@ import { RolesGuard } from "../auth/roles.guard";
 import { UpdateApplicationStatusDto } from "./dto/update-application-status.dto";
 import { CandidateApplicationsService } from "./candidate-applications.service";
 import { UserRole } from "./user.entity";
+import { EmployerApprovalGuard } from "../employers/employer-approval.guard";
 
 @Controller("employer/applications")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EmployerApprovalGuard)
 @Roles(UserRole.EMPLOYER)
 export class EmployerApplicationsController {
   constructor(

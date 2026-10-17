@@ -114,7 +114,7 @@ export class EmployersService {
   ) {}
 
   async listOrganizations(user: AuthenticatedUser) {
-    await this.assertApprovedEmployer(user.id);
+    await this.assertEmployerAccess(user.id, true);
     const rows = await this.members.find({
       where: { userId: user.id, status: "active" },
       relations: { organization: true },
@@ -133,6 +133,7 @@ export class EmployersService {
     const { organization, membership } = await this.getContext(
       user.id,
       organizationId,
+      true,
     );
     return {
       id: organization.id,
@@ -189,6 +190,7 @@ export class EmployersService {
     const { organization, membership } = await this.getContext(
       user.id,
       organizationId,
+      true,
     );
     const jobs = await this.jobs
       .createQueryBuilder("job")
@@ -206,15 +208,17 @@ export class EmployersService {
           .groupBy("application.status")
           .getRawMany<{ status: string; count: string }>()
       : [];
-    const recentApplications = jobIds.length
-      ? await this.applications
-          .createQueryBuilder("application")
-          .innerJoinAndSelect("application.job", "job")
-          .where("application.jobId IN (:...jobIds)", { jobIds })
-          .orderBy("application.createdAt", "DESC")
-          .take(5)
-          .getMany()
-      : [];
+    const recentApplications =
+      jobIds.length &&
+      user.employerApprovalStatus === EmployerApprovalStatus.APPROVED
+        ? await this.applications
+            .createQueryBuilder("application")
+            .innerJoinAndSelect("application.job", "job")
+            .where("application.jobId IN (:...jobIds)", { jobIds })
+            .orderBy("application.createdAt", "DESC")
+            .take(5)
+            .getMany()
+        : [];
     const activeJobs = jobs.filter((job) => job.isActive).length;
     const limits = this.limitsFor(organization);
     const unreadNotifications = await this.notifications.countBy({
@@ -246,12 +250,15 @@ export class EmployersService {
         seats: limits.seats,
         jobsRemaining: Math.max(0, limits.activeJobs - activeJobs),
       },
-      recentApplications: recentApplications.map((application) => ({
-        id: application.id,
-        status: application.status,
-        createdAt: application.createdAt,
-        job: { id: application.job.id, title: application.job.title },
-      })),
+      recentApplications:
+        user.employerApprovalStatus === EmployerApprovalStatus.APPROVED
+          ? recentApplications.map((application) => ({
+              id: application.id,
+              status: application.status,
+              createdAt: application.createdAt,
+              job: { id: application.job.id, title: application.job.title },
+            }))
+          : [],
     };
   }
 
@@ -261,7 +268,11 @@ export class EmployersService {
     limit = 25,
     organizationId?: number,
   ) {
-    const { organization } = await this.getContext(user.id, organizationId);
+    const { organization } = await this.getContext(
+      user.id,
+      organizationId,
+      true,
+    );
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(100, Math.max(1, limit));
     const [items, total] = await this.jobs.findAndCount({
@@ -1064,13 +1075,13 @@ export class EmployersService {
     const nextStep = existingUser
       ? existingUser.employerApprovalStatus === EmployerApprovalStatus.APPROVED
         ? "Sign in with this email address and accept the invitation."
-        : "Sign in with this email address and accept the invitation after an administrator approves your employer account."
-      : "Register as an employer using this link and the invited email address. Verify your email and wait for administrator approval before signing in.";
+        : "Sign in with this email address to view a read-only workspace preview. The invitation becomes available after an administrator approves your employer account."
+      : "Register as an employer using this link and the invited email address. Verify your email to view a read-only workspace preview while waiting for administrator approval.";
     return `You have been invited to join ${organizationName} as a ${roleName}. ${nextStep} This invitation expires in 30 days: ${invitationUrl}`;
   }
 
   async acceptTeamInvite(user: AuthenticatedUser, token: string) {
-    await this.assertApprovedEmployer(user.id);
+    await this.assertEmployerAccess(user.id, false);
     const member = await this.members.findOne({
       where: {
         invitationTokenHash: this.hashToken(token),
@@ -1553,8 +1564,9 @@ export class EmployersService {
   private async getContext(
     userId: number,
     organizationId?: number,
+    allowPending = false,
   ): Promise<EmployerContext> {
-    await this.assertApprovedEmployer(userId);
+    await this.assertEmployerAccess(userId, allowPending);
     const where = {
       userId,
       status: "active" as const,
@@ -1577,16 +1589,22 @@ export class EmployersService {
     return { organization: membership.organization, membership };
   }
 
-  private async assertApprovedEmployer(userId: number) {
+  private async assertEmployerAccess(userId: number, allowPending: boolean) {
     const user = await this.users.findOneBy({
       id: userId,
       role: UserRole.EMPLOYER,
-      employerApprovalStatus: EmployerApprovalStatus.APPROVED,
       isActive: true,
     });
-    if (!user)
+    if (
+      !user ||
+      (user.employerApprovalStatus !== EmployerApprovalStatus.APPROVED &&
+        !(
+          allowPending &&
+          user.employerApprovalStatus === EmployerApprovalStatus.PENDING
+        ))
+    )
       throw new ForbiddenException(
-        "An active, approved employer account is required.",
+        "An active employer account with the required approval is required.",
       );
   }
 

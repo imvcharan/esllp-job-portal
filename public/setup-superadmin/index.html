@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>First Superadmin Setup — esllp</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #183d32; background: #f4f7f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    main { width: min(100%, 520px); padding: 32px; border: 1px solid #dce6df; border-radius: 18px; background: #fff; box-shadow: 0 18px 50px #173d3214; }
+    h1 { margin: 0 0 10px; font-size: clamp(24px, 5vw, 32px); }
+    p { color: #5b6f66; line-height: 1.55; }
+    form { display: grid; gap: 16px; margin-top: 24px; }
+    label { display: grid; gap: 7px; font-size: 14px; font-weight: 650; }
+    input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cbd8d0; border-radius: 8px; color: inherit; font: inherit; }
+    input:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid #39a89a; outline-offset: 2px; }
+    button, .button { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: 10px 16px; border: 0; border-radius: 8px; background: #183d32; color: white; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+    button:disabled { opacity: .65; cursor: wait; }
+    .notice { min-height: 24px; margin: 18px 0 0; }
+    .notice.error { color: #a52626; }
+    .notice.success { color: #176b45; }
+    .hint { margin: 0; font-size: 13px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>First superadmin setup</h1>
+    <p>This one-time setup is available only while this deployment has no superadmin. Enter the same name, email, and password configured in the Hostinger environment variables.</p>
+    <p id="setup-status" class="notice" role="status" aria-live="polite">Checking whether first-time setup is available…</p>
+    <form id="setup-form" hidden>
+      <label for="display-name">Your name
+        <input id="display-name" name="displayName" autocomplete="name" minlength="2" maxlength="120" required>
+      </label>
+      <label for="email">Superadmin email
+        <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required>
+      </label>
+      <label for="password">Superadmin password
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+      </label>
+      <p class="hint">Use at least 8 characters. Passwords over 72 UTF-8 bytes are not accepted.</p>
+      <button id="submit-button" type="submit">Create superadmin</button>
+    </form>
+    <p id="login-link" hidden><a class="button" href="/admin/">Continue to admin sign in</a></p>
+  </main>
+  <script>
+    const statusMessage = document.querySelector("#setup-status");
+    const setupForm = document.querySelector("#setup-form");
+    const loginLink = document.querySelector("#login-link");
+    const submitButton = document.querySelector("#submit-button");
+
+    async function responsePayload(response) {
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = Array.isArray(payload.message)
+          ? payload.message.join(", ")
+          : payload.message;
+        throw new Error(message || `Setup failed (HTTP ${response.status}).`);
+      }
+      return payload;
+    }
+
+    async function checkAvailability() {
+      try {
+        const response = await fetch("/api/auth/bootstrap-superadmin/status", {
+          cache: "no-store",
+          credentials: "same-origin"
+        });
+        const payload = await responsePayload(response);
+        if (payload.available !== true) {
+          statusMessage.textContent = "First-time setup is unavailable. A superadmin may already exist, or setup has not been enabled for this deployment.";
+          return;
+        }
+        statusMessage.textContent = "Setup is available. Enter the superadmin name, email, and password configured for this deployment.";
+        setupForm.hidden = false;
+      } catch (error) {
+        statusMessage.classList.add("error");
+        statusMessage.textContent = error instanceof Error
+          ? error.message
+          : "Setup availability could not be checked.";
+      }
+    }
+
+    setupForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!setupForm.reportValidity()) return;
+
+      const formData = new FormData(setupForm);
+      const password = String(formData.get("password") || "");
+      if (new TextEncoder().encode(password).length > 72) {
+        statusMessage.className = "notice error";
+        statusMessage.textContent = "Password must be no longer than 72 UTF-8 bytes.";
+        return;
+      }
+
+      submitButton.disabled = true;
+      statusMessage.className = "notice";
+      statusMessage.textContent = "Creating the first superadmin…";
+      try {
+        const response = await fetch("/api/auth/bootstrap-superadmin", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: String(formData.get("email") || "").trim(),
+            displayName: String(formData.get("displayName") || "").trim(),
+            password
+          })
+        });
+        const payload = await responsePayload(response);
+        setupForm.hidden = true;
+        loginLink.hidden = false;
+        statusMessage.className = "notice success";
+        statusMessage.textContent = `Superadmin account created for ${payload.email}. Sign in with the email and password you entered.`;
+      } catch (error) {
+        statusMessage.className = "notice error";
+        statusMessage.textContent = error instanceof Error
+          ? error.message
+          : "Superadmin setup failed. Please try again.";
+        submitButton.disabled = false;
+      }
+    });
+
+    void checkAvailability();
+  </script>
+</body>
+</html>

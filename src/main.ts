@@ -5,6 +5,7 @@ import { NestExpressApplication } from "@nestjs/platform-express";
 import { ValidationPipe } from "@nestjs/common";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
+import { RequestMethod } from "@nestjs/common";
 import { AppModule } from "./app.module";
 
 async function bootstrap(): Promise<void> {
@@ -25,7 +26,13 @@ async function bootstrap(): Promise<void> {
   app.useStaticAssets(resolve(process.cwd(), "public"), {
     index: "index.html",
   });
-  app.setGlobalPrefix("api");
+  app.setGlobalPrefix("api", {
+    exclude: [
+      { path: "share/jobs/:id", method: RequestMethod.GET },
+      { path: "sitemap.xml", method: RequestMethod.GET },
+      { path: "robots.txt", method: RequestMethod.GET },
+    ],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

@@ -47,11 +47,12 @@ export class JwtAuthGuard implements CanActivate {
     }
     if (
       user.role === UserRole.EMPLOYER &&
-      user.employerApprovalStatus !== EmployerApprovalStatus.APPROVED
+      ![
+        EmployerApprovalStatus.PENDING,
+        EmployerApprovalStatus.APPROVED,
+      ].includes(user.employerApprovalStatus)
     ) {
-      throw new UnauthorizedException(
-        "This employer account is not approved for dashboard access.",
-      );
+      throw new UnauthorizedException("This employer account is unavailable.");
     }
 
     request.user = {
@@ -59,6 +60,7 @@ export class JwtAuthGuard implements CanActivate {
       email: user.email,
       displayName: user.displayName,
       role: user.role,
+      employerApprovalStatus: user.employerApprovalStatus,
     };
     return true;
   }

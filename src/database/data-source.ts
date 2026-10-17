@@ -28,6 +28,8 @@ import { EmployerApplicationTag } from "../employers/employer-application-tag.en
 import { EmployerInterview } from "../employers/employer-interview.entity";
 import { UserNotification } from "../employers/user-notification.entity";
 import { RazorpayWebhookEvent } from "../employers/razorpay-webhook-event.entity";
+import { CandidateSavedSearch } from "../users/candidate-saved-search.entity";
+import { CreateCandidateSavedSearches1729000000011 } from "./migrations/1729000000011-CreateCandidateSavedSearches";
 
 export const AppDataSource = new DataSource({
   ...getDatabaseConfig(),
@@ -48,6 +50,7 @@ export const AppDataSource = new DataSource({
     EmployerInterview,
     UserNotification,
     RazorpayWebhookEvent,
+    CandidateSavedSearch,
   ],
   migrations: [
     CreateJobsTable1729000000000,
@@ -61,6 +64,7 @@ export const AppDataSource = new DataSource({
     ApplicationWorkflow1729000000008,
     EmployerRegistrationApproval1729000000009,
     EmployerSaasWorkspace1729000000010,
+    CreateCandidateSavedSearches1729000000011,
   ],
   synchronize: false,
 });

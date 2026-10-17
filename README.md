@@ -71,7 +71,7 @@ npm run start:dev
 
 Open `http://localhost:3000` for the homepage or `http://localhost:3000/admin/` for the admin dashboard preview. The API is available at `http://localhost:3000/api/jobs`.
 
-The admin dashboard includes overview, jobs, candidate accounts/pipeline, companies, analytics, settings, superadmin user management, and audit history. Jobs are loaded from the protected API; an empty jobs table gets clearly marked, read-only sample listings. Superadmins can page/search/filter accounts, change roles and account status, and inspect the audit trail. Empty users/audit pages show explicitly labeled, non-editable examples. Browser search, job filters, settings preferences (saved in that browser only), password changes, and CSV exports are available.
+The admin dashboard includes live overview metrics, job management, candidate account records for superadmins, employer organizations, application analytics, recent platform activity, account security, superadmin user management, and audit history. Counts and tables use database records; empty datasets show empty states instead of example people or invented metrics. Candidate account details, role/status controls, and the security audit log remain superadmin-only.
 
 ## Authentication and superadmin
 
@@ -86,19 +86,30 @@ npm run bootstrap:superadmin
 
 The command runs pending migrations and creates the superadmin only if no account already uses that email and no superadmin exists. It never promotes an existing account or resets credentials. The password is stored as a bcrypt hash. Do not use the example values in production.
 
+Alternatively, first-time setup can be completed through `/setup-superadmin/`
+after deploying the application. Open the page over HTTPS and enter the same
+name, email, and password configured as `SUPERADMIN_NAME`,
+`SUPERADMIN_EMAIL`, and `SUPERADMIN_PASSWORD` in the deployment environment.
+The endpoint checks those values, creates a verified superadmin only if none
+exists, and uses a database advisory lock to prevent concurrent first-account
+creation. The page and endpoint are unavailable when the required deployment
+values are unset or a superadmin already exists.
+
 Run the command once against each environment's own database. For production,
 set `SUPERADMIN_NAME`, `SUPERADMIN_EMAIL`, and `SUPERADMIN_PASSWORD` as
 deployment secrets, then run `npm run bootstrap:superadmin` in the deployed
 application environment after building. Keep production and local databases
 separate; never commit or reuse a default password. Use the configured email
-and password to sign in at `/admin/` on each server. Change the password later
-from Settings → Account security; the dashboard signs out after a successful
-change.
+and password to sign in at `/admin/` on each server. The browser setup form
+requires the configured name, email, and password; never put passwords in
+source code or commit them. Change the password later from Settings → Account
+security; the dashboard signs out after a successful change.
 
 Authentication routes:
 
 - `POST /api/auth/register` — public candidate registration; requires an 8-character minimum password (maximum 72 UTF-8 bytes)
-- `POST /api/auth/register/employer` — employer registration request with company name/website; email verification and administrator approval are required before login
+- `GET /api/auth/bootstrap-superadmin/status` and `POST /api/auth/bootstrap-superadmin` — one-time first-superadmin setup; checks the configured superadmin name, email, and password and is disabled after a superadmin exists
+- `POST /api/auth/register/employer` — employer registration request with company name/website; email verification is required before login, and administrator approval is required before write access
 - `POST /api/auth/login` — issues a short-lived bearer access token and an HttpOnly, SameSite=Strict refresh cookie
 - `POST /api/auth/refresh` — rotates the refresh token and issues a new access token
 - `POST /api/auth/logout` — revokes the refresh session
@@ -111,6 +122,8 @@ Authentication routes:
 - `GET /api/candidate/saved-jobs` — list jobs saved to the authenticated candidate's account
 - `POST /api/candidate/saved-jobs/:jobId` — save a currently published job; safe to retry
 - `DELETE /api/candidate/saved-jobs/:jobId` — remove a saved job
+- `GET|POST /api/candidate/saved-searches` — list or save up to 25 searches, including supported job filters and optional instant email alerts
+- `PATCH|DELETE /api/candidate/saved-searches/:id` — update an owned saved search/alert preference or remove it
 - `GET /api/candidate/applications?page=1&limit=20` — paginated applications as `{ items, total, page, limit }`
 - `GET /api/candidate/applications/:jobId` — read that candidate's application as `{ application: ... }`, or `{ application: null }`
 - `POST /api/candidate/applications/:jobId` — submit an application with optional note, resume inclusion, and profile-sharing choices; safe to retry
@@ -126,12 +139,19 @@ Admin API routes require a bearer access token. `ADMIN` and `SUPERADMIN` can man
 - `/api/admin/users/:id/employer-approval` — superadmin approve/reject a verified employer registration
 - `/api/admin/users` — paginated user list and superadmin-only role/status updates
 - `/api/admin/audit-logs` — paginated superadmin audit log
+- `/api/admin/insights` — aggregate counts and application stages, weekly application totals, and top roles
+- `/api/admin/companies` — employer organizations with active job and team counts
+- `/api/admin/activity` — recent activity summary without audit details or IP addresses
+
+Candidates can save their current job-search query and filters from the results page, reopen saved searches from their workspace, and opt into instant emails when matching jobs are published. Alerts can be switched off or on per saved search; scheduled daily/weekly digests are not currently offered.
 
 ## Employer SaaS workspace
 
 Employer registration creates a company organization and owner membership.
-The employer must verify their email and be approved by an administrator
-before accessing the workspace. Approved employer owners can create job
+After verifying their email, a pending employer can sign in to a read-only
+workspace overview, company profile, and job-listing view. Applicant details,
+team and billing pages, and all write actions remain unavailable until an
+administrator approves the account. Approved employer owners can create job
 drafts, publish or close jobs, manage company details, and review applicants
 for their organization. Active-job and seat quotas are currently defined in
 `PLAN_LIMITS` in `src/employers/employers.service.ts`: Free has 1 job/1 seat,
@@ -141,12 +161,12 @@ after Razorpay confirms subscription activation.
 The hiring workflow includes paginated applicant search and filters, status
 history, company-private notes and tags, candidate-consented profile/resume
 access, and interview scheduling/cancellation. Company roles are owner, admin,
-recruiter, hiring manager, and billing. Invitations require an active,
-approved employer account before workspace access; a new invitee can register
-directly from the invitation link, verify their email, and wait for the normal
-administrator approval. Invitations last 30 days and owners/admins can resend
-them. Seat limits include pending invitations. Switching between organizations
-is supported for users who belong to more than one company.
+recruiter, hiring manager, and billing. Invitations are created by an active,
+approved employer account. A new invitee can register directly from the
+invitation link and verify their email; the read-only preview remains limited
+until administrator approval. Invitations last 30 days and owners/admins can
+resend them. Seat limits include pending invitations. Switching between
+organizations is supported for users who belong to more than one company.
 
 When a subscription is halted or cancelled, the organization returns to Free
 capacity. The most recently created active jobs are retained up to that quota;
@@ -203,9 +223,9 @@ secret, and staging verification are complete.
 
 ## Backend implementation status
 
-This is not yet a complete production job portal. The admin UI uses live data for jobs, superadmin-visible user accounts, and audit events; empty supported lists display clearly labeled, read-only preview rows. Candidate accounts have a private profile editor, interactive photo crop, private PDF resume storage, experience and education history, career preferences, professional links, saved jobs, and application tracking. Candidates can independently choose to attach their current resume and share a profile snapshot on each application; they can withdraw applications while status remains `submitted`. Approved employers have organization-scoped job management, applicant workflows, team access, notifications, and interview scheduling. Employers see profile details/resumes only when the candidate consented. Application status emails, interview notices, and matching job alerts use SMTP. Production database, SMTP, Supabase Storage, Razorpay, backups, and deployment still require configuration and staging verification.
+This is not yet a complete production job portal. The admin UI uses live data for job listings, organizations, aggregate application metrics, activity, superadmin-visible user accounts, and audit events. Candidate accounts have a private profile editor, interactive photo crop, private PDF resume storage, experience and education history, career preferences, professional links, saved jobs/searches, and application tracking. Candidates can independently choose to attach their current resume and share a profile snapshot on each application; they can withdraw applications while status remains `submitted`. Approved employers have organization-scoped job management, applicant workflows, bulk status updates, team access, notifications, and interview scheduling. Employers see profile details/resumes only when the candidate consented. Application status emails, interview notices, and matching job alerts use SMTP. Production database, SMTP, Supabase Storage, Razorpay, backups, and deployment still require configuration and staging verification.
 
-Before production, configure HTTPS, establish PostgreSQL backups/restore tests, test SMTP delivery, apply migrations against a staging database, and arrange security review and superadmin MFA.
+Before production, configure HTTPS, establish PostgreSQL backups/restore tests, test SMTP delivery, apply migrations against a staging database, and arrange security review and superadmin MFA. Review the Privacy and Terms pages against the business's actual data-retention, deletion, cookie/analytics, and service terms; the current pages are only high-level summaries.
 
 Use HTTPS in production. The refresh cookie is marked Secure when `NODE_ENV=production`; production startup also refuses to run without a 32+ character `JWT_ACCESS_SECRET`.
 
@@ -218,7 +238,7 @@ Useful API routes:
 - `POST|DELETE /api/candidate/profile/photo` — upload a cropped photo or remove it
 - `POST|DELETE /api/candidate/profile/resume` — upload a PDF resume or remove it
 
-The public homepage fetches published jobs from `/api/jobs` and includes URL-addressable search results and job detail views. Search, filters, sorting, and pagination are applied by the API, and clients receive bounded result pages. If an unfiltered request succeeds but the database has no published jobs, clearly labeled sample listings are shown as read-only previews. API errors are surfaced rather than silently presented as live data. Signed-in candidates save published jobs to their account; guest and preview saves remain browser-local and are offered for sync at sign-in. Candidates choose whether to attach a resume or share a profile when applying, track the full status history, and withdraw applications that remain submitted; withdrawal is final and candidates cannot reapply to that job. Interview scheduling and cancellation appear in the candidate notification center. Employers review organization-owned job applications; status changes are audited in the application timeline and emailed when the candidate has enabled status notifications.
+The public homepage fetches published jobs from `/api/jobs` and includes URL-addressable search results and job detail views. Search, filters, sorting, and pagination are applied by the API, and clients receive bounded result pages. If an unfiltered request succeeds but the database has no published jobs, clearly labeled sample listings are shown as read-only previews. API errors are surfaced rather than silently presented as live data. Signed-in candidates save published jobs and searches to their account; guest and preview saves remain browser-local and are offered for sync at sign-in. Candidates choose whether to attach a resume or share a profile when applying, track the full status history, and withdraw applications that remain submitted; withdrawal is final and candidates cannot reapply to that job. Interview scheduling and cancellation appear in the candidate notification center. Employers review organization-owned job applications; status changes are audited in the application timeline and emailed when the candidate has enabled status notifications. Public share pages at `/share/jobs/:id` provide canonical metadata and `JobPosting` structured data; `/sitemap.xml` lists active job share pages and `/robots.txt` references the sitemap. Set `PUBLIC_APP_URL` to the site’s canonical absolute HTTP(S) origin for these endpoints and matching-job email links.
 
 ## Production build
 
@@ -259,6 +279,13 @@ with the backend; these pages rely on the running `/api` service and are not a
 standalone GitHub Pages site. `.env` files and local database files under
 `data/` are ignored by Git; commit `.env.example` as the safe configuration
 template instead.
+
+The public SPA uses hash routes for job search and details, sign-in and
+registration, and candidate/employer workspaces. Its Careers, How it works,
+For employers, About, Help, Privacy, and Terms pages are standalone routes,
+not links to sections on the homepage. Privacy and Terms currently provide
+high-level information and should be reviewed against the business's actual
+policies before being treated as authoritative legal notices.
 
 ## Project layout
 

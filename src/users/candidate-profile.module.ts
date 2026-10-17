@@ -18,6 +18,9 @@ import { EmployerOrganizationMember } from "../employers/organization-member.ent
 import { UserNotification } from "../employers/user-notification.entity";
 import { CandidateNotificationsController } from "./candidate-notifications.controller";
 import { CandidateNotificationsService } from "./candidate-notifications.service";
+import { CandidateSavedSearch } from "./candidate-saved-search.entity";
+import { CandidateSavedSearchesController } from "./candidate-saved-searches.controller";
+import { CandidateSavedSearchesService } from "./candidate-saved-searches.service";
 
 @Module({
   imports: [
@@ -30,6 +33,7 @@ import { CandidateNotificationsService } from "./candidate-notifications.service
       Job,
       EmployerOrganizationMember,
       UserNotification,
+      CandidateSavedSearch,
     ]),
     AuthModule,
   ],
@@ -38,12 +42,14 @@ import { CandidateNotificationsService } from "./candidate-notifications.service
     CandidateSavedJobsController,
     CandidateApplicationsController,
     CandidateNotificationsController,
+    CandidateSavedSearchesController,
   ],
   providers: [
     CandidateProfileService,
     CandidateSavedJobsService,
     CandidateApplicationsService,
     CandidateNotificationsService,
+    CandidateSavedSearchesService,
     CandidateFileStorageService,
   ],
   exports: [CandidateApplicationsService, CandidateFileStorageService],

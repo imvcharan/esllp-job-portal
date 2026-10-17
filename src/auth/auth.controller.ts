@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Post,
@@ -16,7 +17,11 @@ import { AuthService } from "./auth.service";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { LoginDto } from "./dto/login.dto";
-import { RegisterDto, RegisterEmployerDto } from "./dto/register.dto";
+import {
+  BootstrapSuperadminDto,
+  RegisterDto,
+  RegisterEmployerDto,
+} from "./dto/register.dto";
 import {
   AccountEmailDto,
   ChangePasswordDto,
@@ -48,6 +53,20 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   registerEmployer(@Body() dto: RegisterEmployerDto) {
     return this.authService.registerEmployer(dto);
+  }
+
+  @Get("bootstrap-superadmin/status")
+  @Header("Cache-Control", "no-store")
+  bootstrapSuperadminStatus() {
+    return this.authService.bootstrapSuperadminStatus();
+  }
+
+  @Post("bootstrap-superadmin")
+  @HttpCode(HttpStatus.CREATED)
+  @Header("Cache-Control", "no-store")
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  bootstrapSuperadmin(@Body() dto: BootstrapSuperadminDto) {
+    return this.authService.bootstrapSuperadmin(dto);
   }
 
   @Post("forgot-password")

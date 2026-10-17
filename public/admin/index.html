@@ -35,6 +35,9 @@
     * { box-sizing: border-box; scrollbar-width: none; }
     *::-webkit-scrollbar { display: none; width: 0; height: 0; }
     [hidden] { display: none !important; }
+    .skip-link { position: fixed; z-index: 1000; top: 8px; left: 8px; transform: translateY(-160%); padding: 10px 14px; border-radius: 6px; color: #fff; background: #18283f; font-weight: 700; }
+    .skip-link:focus { transform: translateY(0); }
+    :focus-visible { outline: 3px solid #edb82f; outline-offset: 3px; }
     body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink); }
     button, input, select { font: inherit; }
     button { cursor: pointer; }
@@ -308,6 +311,7 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#admin-main">Skip to main content</a>
   <div class="auth-gate" id="auth-gate">
     <form class="auth-card" id="admin-login-form">
       <a class="auth-brand" href="/"><span class="brand-mark">e.</span> esllp <span style="color:#8994a3;font:500 10px 'DM Sans',sans-serif;letter-spacing:0">ADMIN</span></a>
@@ -317,7 +321,7 @@
       <div class="form-row"><label for="admin-password">Password</label><input id="admin-password" type="password" name="password" autocomplete="current-password" required maxlength="128" placeholder="Your password"></div>
       <button class="button button-primary auth-submit" type="submit">Sign in to admin <span aria-hidden="true">→</span></button>
       <p class="auth-error" id="auth-error" role="alert"></p>
-      <div class="auth-footnote">For first-time setup, create the superadmin through the one-time CLI bootstrap. Admin dashboard figures shown after sign-in are currently preview data.</div>
+      <div class="auth-footnote">For first-time setup, create the superadmin through the one-time CLI bootstrap. Job, account, organization, application, and activity data load from protected APIs after sign-in.</div>
     </form>
   </div>
   <div class="app" id="admin-app">
@@ -335,7 +339,8 @@
       <nav class="nav-list" aria-label="Management pages">
         <a class="nav-link superadmin-only" href="#users" data-view="users" hidden><span class="nav-icon">♙</span><span class="nav-text">User accounts</span></a>
         <a class="nav-link superadmin-only" href="#audit" data-view="audit" hidden><span class="nav-icon">◷</span><span class="nav-text">Audit log</span></a>
-        <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></a>
+        <a class="nav-link" href="#activity" data-view="activity"><span class="nav-icon">◷</span><span class="nav-text">Recent activity</span></a>
+        <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Account security</span></a>
         <a class="nav-link" href="mailto:hello@esllp.com?subject=esllp%20portal%20support"><span class="nav-icon">?</span><span class="nav-text">Help center</span></a>
       </nav>
       <div class="sidebar-spacer"></div>
@@ -343,12 +348,12 @@
       <div class="profile-mini"><span class="profile-initials">AS</span><span><strong>Arjun Sharma</strong><small>Workspace admin</small></span><span class="profile-more">···</span></div>
     </aside>
 
-    <div class="main">
+    <div class="main" id="admin-main" tabindex="-1">
       <header class="topbar">
         <div class="topbar-left"><button class="mobile-menu" id="mobile-menu" type="button" aria-label="Open sidebar" aria-expanded="false">☰</button><div class="crumb">Workspace&nbsp; / &nbsp;<strong id="breadcrumb">Overview</strong></div></div>
         <div class="top-actions">
           <label class="global-search"><span>⌕</span><input id="global-search" type="search" placeholder="Search this page…" aria-label="Search current page"><span class="key-hint">/</span></label>
-          <button class="icon-button" type="button" id="notifications-button" aria-label="Notifications">♧<span class="notify-dot"></span></button>
+          <button class="icon-button" type="button" id="notifications-button" aria-label="Recent platform activity">◷</button>
           <button class="icon-button" type="button" aria-label="Log out" data-logout title="Log out">⇥</button>
           <button class="top-avatar" type="button" aria-label="Admin profile" data-toast="Signed in as Arjun Sharma.">AS</button>
         </div>
@@ -361,62 +366,42 @@
             <div class="heading-actions"><button class="button" type="button" data-export>↓&nbsp; Export jobs CSV</button><button class="button button-primary" type="button" data-modal-open>＋&nbsp; Create a job</button></div>
           </div>
           <div class="stats-grid">
-            <article class="stat-card"><div class="stat-top"><span>Active job listings</span><span class="stat-icon">▤</span></div><div class="stat-value" data-metric="active-jobs">24</div><div class="stat-note" data-metric-note="active-jobs">Sample preview</div></article>
-            <article class="stat-card"><div class="stat-top"><span>Registered accounts</span><span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-users">1,284</div><div class="stat-note" data-metric-note="total-users">Sample preview until accounts are loaded</div></article>
-            <article class="stat-card"><div class="stat-top"><span>Interviews this week · preview</span><span class="stat-icon">◷</span></div><div class="stat-value">38</div><div class="stat-note">Sample until hiring pipeline exists</div></article>
-            <article class="stat-card"><div class="stat-top"><span>Time to hire · preview</span><span class="stat-icon">⌁</span></div><div class="stat-value">18.4</div><div class="stat-note">Sample until hiring analytics exist</div></article>
+            <article class="stat-card"><div class="stat-top"><span>Active job listings</span><span class="stat-icon">▤</span></div><div class="stat-value" data-metric="active-jobs">—</div><div class="stat-note" data-metric-note="active-jobs">Loading live job records</div></article>
+            <article class="stat-card"><div class="stat-top"><span>Registered accounts</span><span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-users">—</div><div class="stat-note" data-metric-note="total-users">Loading live account records</div></article>
+            <article class="stat-card"><div class="stat-top"><span>Applications</span><span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-applications">—</div><div class="stat-note" data-metric-note="total-applications">Loading live application records</div></article>
+            <article class="stat-card"><div class="stat-top"><span>Scheduled interviews</span><span class="stat-icon">◷</span></div><div class="stat-value" data-metric="scheduled-interviews">—</div><div class="stat-note" data-metric-note="scheduled-interviews">Loading live interview records</div></article>
           </div>
           <div class="analytics-grid">
             <article class="panel">
-              <div class="panel-head"><div><h2>Hiring activity</h2><p>Applications and interviews over time</p></div><select class="select" id="chart-range" aria-label="Chart range"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></div>
+              <div class="panel-head"><div><h2>Applications by week</h2><p>Weekly application volume from live records</p></div></div>
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i> Applications</span><span class="legend-item"><i class="legend-dot blue"></i> Interviews</span></div>
-              <svg class="line-chart" viewBox="0 0 620 190" role="img" aria-label="Hiring activity line chart">
-                <defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#16877f" stop-opacity=".16"/><stop offset="100%" stop-color="#16877f" stop-opacity="0"/></linearGradient></defs>
-                <line class="gridline" x1="45" y1="20" x2="608" y2="20"/><line class="gridline" x1="45" y1="57" x2="608" y2="57"/><line class="gridline" x1="45" y1="94" x2="608" y2="94"/><line class="gridline" x1="45" y1="131" x2="608" y2="131"/><line class="gridline" x1="45" y1="168" x2="608" y2="168"/>
-                <text class="axis-label" x="8" y="23">160</text><text class="axis-label" x="13" y="60">120</text><text class="axis-label" x="18" y="97">80</text><text class="axis-label" x="18" y="134">40</text><text class="axis-label" x="24" y="171">0</text>
-                <path class="chart-area" d="M50 139 C78 132 87 117 112 123 S155 101 177 109 S214 81 239 91 S275 65 301 76 S344 53 365 68 S410 36 432 51 S474 33 495 48 S540 23 560 38 S589 20 604 30 L604 168 L50 168 Z"/>
-                <path class="chart-line" d="M50 139 C78 132 87 117 112 123 S155 101 177 109 S214 81 239 91 S275 65 301 76 S344 53 365 68 S410 36 432 51 S474 33 495 48 S540 23 560 38 S589 20 604 30"/>
-                <path class="chart-line-two" d="M50 155 C78 150 90 143 112 147 S154 137 177 141 S217 125 239 130 S279 114 301 120 S342 104 365 110 S407 89 432 98 S473 84 495 91 S540 71 560 82 S586 66 604 72"/>
-                <circle class="chart-point" cx="301" cy="76" r="4"/><circle class="chart-point" cx="432" cy="51" r="4"/><circle class="chart-point" cx="560" cy="38" r="4"/>
-              </svg>
-              <div class="chart-bottom"><span>Sep 16</span><span>Sep 22</span><span>Sep 28</span><span>Oct 4</span><span>Oct 10</span><span>Oct 15</span></div>
+              <div class="bars" id="weekly-applications-chart" role="img" aria-label="Live weekly application counts"></div>
             </article>
             <article class="panel source-panel">
-              <div class="panel-head"><div><h2>Application sources · preview</h2><p>Sample attribution until applications are tracked</p></div><a class="button" href="#analytics" data-view-link="analytics">View analytics</a></div>
-              <div class="donut-wrap"><div class="donut" role="img" aria-label="Application source distribution"><div class="donut-center"><strong>1,284</strong><small>applications</small></div></div>
-                <div class="source-legend"><div class="source-row"><i class="legend-dot"></i> Direct <strong>39%</strong></div><div class="source-row"><i class="legend-dot s2"></i> LinkedIn <strong>27%</strong></div><div class="source-row"><i class="legend-dot s3"></i> Referrals <strong>17%</strong></div><div class="source-row"><i class="legend-dot s4"></i> Other <strong>11%</strong></div><div class="source-row"><i class="legend-dot s5"></i> Boards <strong>6%</strong></div></div>
-              </div>
+              <div class="panel-head"><div><h2>Application stages</h2><p>Current stage counts from live records</p></div><a class="button" href="#analytics" data-view-link="analytics">View analytics</a></div>
+              <div class="source-legend" id="application-status-summary"><p>Loading live application stages…</p></div>
             </article>
           </div>
           <div class="lower-grid">
             <article class="panel">
               <div class="panel-title-row"><h2>Top performing jobs</h2><a href="#jobs" data-view-link="jobs">View all jobs&nbsp; →</a></div>
-              <div class="table-wrap"><table><thead><tr><th>Role</th><th>Applications</th><th>Status</th><th>Posted</th></tr></thead><tbody id="overview-jobs-body" class="filterable">
-                <tr><td><span class="role-name">Senior Product Designer</span><span class="role-company">goodspace · Bengaluru</span></td><td>186</td><td><span class="status">Active</span></td><td>2 days ago</td></tr>
-                <tr><td><span class="role-name">Backend Engineer</span><span class="role-company">Northstar · Remote</span></td><td>142</td><td><span class="status">Active</span></td><td>5 days ago</td></tr>
-                <tr><td><span class="role-name">Growth Marketing Lead</span><span class="role-company">Brightloop · Mumbai</span></td><td>98</td><td><span class="status review">Reviewing</span></td><td>1 week ago</td></tr>
-              </tbody></table></div>
+              <div class="table-wrap"><table><thead><tr><th>Role</th><th>Applications</th><th>Status</th><th>Company</th></tr></thead><tbody id="overview-jobs-body" class="filterable"></tbody></table></div>
             </article>
             <article class="panel">
               <div class="panel-title-row"><h2>Recent activity</h2><a href="#candidates" data-view-link="candidates">See candidates&nbsp; →</a></div>
-              <div class="activity-list" id="overview-activity-list">
-                <div class="activity"><span class="activity-icon">♙</span><div><p><strong>Priya S.</strong> applied for Product Designer</p><small>12 minutes ago · New application</small></div></div>
-                <div class="activity"><span class="activity-icon">✓</span><div><p><strong>Rahul M.</strong> moved to interview</p><small>38 minutes ago · Backend Engineer</small></div></div>
-                <div class="activity"><span class="activity-icon">＋</span><div><p><strong>Brightloop</strong> posted a new role</p><small>2 hours ago · Growth Marketing Lead</small></div></div>
-                <div class="activity"><span class="activity-icon">☆</span><div><p><strong>Ananya K.</strong> saved a candidate</p><small>Yesterday · Product Designer</small></div></div>
-              </div>
+              <div class="activity-list" id="overview-activity-list"><p>Loading live platform activity…</p></div>
             </article>
           </div>
-          <div class="demo-note" id="overview-data-note"><span>✦</span> Active job counts and listings come from the database when present. Application, interview, source, and historical analytics are sample previews until those backend modules exist.</div>
+          <div class="demo-note" id="overview-data-note"><span>✦</span> Application attribution and time-to-hire are not tracked, so they are intentionally excluded. Counts shown here are from live records.</div>
         </section>
 
         <section class="view" id="view-jobs" data-title="Job listings">
           <div class="page-heading"><div><div class="page-eyebrow">Hiring workspace</div><h1>Job listings</h1><p>Manage openings and keep your hiring pipeline moving.</p></div><div class="heading-actions"><button class="button" type="button" data-export>↓&nbsp; Export</button><button class="button button-primary" type="button" data-modal-open>＋&nbsp; Create a job</button></div></div>
           <div class="stats-grid">
-            <article class="stat-card"><div class="stat-top">Total listings <span class="stat-icon">▤</span></div><div class="stat-value" data-job-metric="total">32</div><div class="stat-note">Across all job listings</div></article>
-            <article class="stat-card"><div class="stat-top">Active now <span class="stat-icon">●</span></div><div class="stat-value" data-job-metric="active">24</div><div class="stat-note">Visible to candidates</div></article>
-            <article class="stat-card"><div class="stat-top">Drafts <span class="stat-icon">✎</span></div><div class="stat-value" data-job-metric="drafts">5</div><div class="stat-note">Ready when you are</div></article>
-            <article class="stat-card"><div class="stat-top">Applications · preview <span class="stat-icon">♙</span></div><div class="stat-value">1,284</div><div class="stat-note">Sample until applications API exists</div></article>
+            <article class="stat-card"><div class="stat-top">Total listings <span class="stat-icon">▤</span></div><div class="stat-value" data-job-metric="total">—</div><div class="stat-note">Across all job listings</div></article>
+            <article class="stat-card"><div class="stat-top">Active now <span class="stat-icon">●</span></div><div class="stat-value" data-job-metric="active">—</div><div class="stat-note">Visible to candidates</div></article>
+            <article class="stat-card"><div class="stat-top">Drafts <span class="stat-icon">✎</span></div><div class="stat-value" data-job-metric="drafts">—</div><div class="stat-note">Ready when you are</div></article>
+            <article class="stat-card"><div class="stat-top">Applications <span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-applications">—</div><div class="stat-note">All recorded applications</div></article>
           </div>
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>All listings</h2><button class="button" type="button" data-export>↓&nbsp; Export CSV</button></div>
@@ -427,60 +412,35 @@
         </section>
 
         <section class="view" id="view-candidates" data-title="Candidates">
-          <div class="page-heading"><div><div class="page-eyebrow">Talent pipeline</div><h1>Candidates</h1><p>A clear view of every person moving through your hiring process.</p></div><div class="heading-actions"><button class="button" type="button" data-export-candidates>↓&nbsp; Export accounts</button><button class="button button-primary" type="button" disabled title="Invitation workflow is not implemented yet">＋&nbsp; Invite candidate</button></div></div>
-          <div class="candidate-grid"><div class="candidate-stat"><span>Total candidates · preview</span><strong>1,284</strong></div><div class="candidate-stat"><span>New this week · preview</span><strong>186</strong></div><div class="candidate-stat"><span>In interviews · preview</span><strong>38</strong></div><div class="candidate-stat"><span>Offers out · preview</span><strong>12</strong></div></div>
-          <div class="candidate-columns">
-            <div class="pipeline-column"><div class="pipeline-head">New <span>12</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">PS</span>Priya Sharma</div><p>Product Designer · 12m ago</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">AK</span>Ananya Kumar</div><p>Product Designer · 1h ago</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">VR</span>Vikram Rao</div><p>Backend Engineer · 3h ago</p></div></div>
-            <div class="pipeline-column"><div class="pipeline-head">Screening <span>8</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">RM</span>Rahul Mehta</div><p>Backend Engineer · Today</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">NP</span>Neha Patel</div><p>Growth Marketing · Today</p></div></div>
-            <div class="pipeline-column"><div class="pipeline-head">Interview <span>6</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">SG</span>Sana Gupta</div><p>Data Analyst · Today</p></div><div class="person-card"><div class="person-name"><span class="person-avatar">AK</span>Arjun Kapoor</div><p>Product Designer · Yesterday</p></div></div>
-            <div class="pipeline-column"><div class="pipeline-head">Offer <span>3</span></div><div class="person-card"><div class="person-name"><span class="person-avatar">DM</span>Dev Malhotra</div><p>Backend Engineer · Yesterday</p></div></div>
-          </div>
-          <div class="demo-note"><span>✦</span> Pipeline examples below are preview-only: applications and hiring stages do not have a backend module yet.</div>
+          <div class="page-heading"><div><div class="page-eyebrow">Talent pipeline</div><h1>Candidates</h1><p>Review candidate accounts and actual application stages.</p></div><div class="heading-actions"><button class="button" type="button" data-export-candidates>↓&nbsp; Export accounts</button></div></div>
+          <div class="candidate-grid"><div class="candidate-stat"><span>Total candidates</span><strong data-metric="candidate-count">—</strong></div><div class="candidate-stat"><span>Applications</span><strong data-metric="total-applications">—</strong></div><div class="candidate-stat"><span>In interview</span><strong data-metric="interview-applications">—</strong></div><div class="candidate-stat"><span>Offers</span><strong data-metric="offer-applications">—</strong></div></div>
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>Candidate accounts</h2><button class="button" type="button" data-export-candidates>↓&nbsp; Export accounts</button></div>
             <div class="table-toolbar"><input class="table-search" id="candidate-search" type="search" placeholder="Search candidate accounts…" aria-label="Search candidate accounts"></div>
             <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Account status</th><th>Email verification</th><th>Joined</th></tr></thead><tbody id="candidate-accounts-body"></tbody></table></div>
           </article>
-          <div class="demo-note" id="candidate-data-note">Candidate account records are shown when available to a superadmin; otherwise sample pipeline cards remain preview-only.</div>
+          <div class="demo-note" id="candidate-data-note">Candidate account details are restricted to superadmins. Application stage totals are aggregated from live records.</div>
         </section>
 
         <section class="view" id="view-companies" data-title="Companies">
-          <div class="page-heading"><div><div class="page-eyebrow">Employer network</div><h1>Companies</h1><p>Get a pulse on the teams hiring through esllp.</p></div><div class="heading-actions"><button class="button button-primary" type="button" disabled title="Company onboarding requires an employer organizations API">＋&nbsp; Add company</button></div></div>
-          <div class="stats-grid"><article class="stat-card"><div class="stat-top">Partner companies · preview <span class="stat-icon">▣</span></div><div class="stat-value">86 <span class="stat-change">↗ 9.4%</span></div><div class="stat-note">Sample until company API exists</div></article><article class="stat-card"><div class="stat-top">Hiring this month · preview <span class="stat-icon">↗</span></div><div class="stat-value">42</div><div class="stat-note">Sample company data</div></article><article class="stat-card"><div class="stat-top">Open positions · preview <span class="stat-icon">▤</span></div><div class="stat-value">214</div><div class="stat-note">Sample company data</div></article><article class="stat-card"><div class="stat-top">Pending review · preview <span class="stat-icon">◷</span></div><div class="stat-value">7</div><div class="stat-note">Sample company data</div></article></div>
-          <div class="company-grid" style="margin-top:15px">
-            <article class="company-card"><div class="company-head"><span class="company-logo">g</span><span><strong>goodspace</strong><small>Technology · Bengaluru</small></span></div><div class="company-meta"><span><strong>12</strong> open roles</span><span class="status">Verified</span></div></article>
-            <article class="company-card"><div class="company-head"><span class="company-logo">n</span><span><strong>Northstar</strong><small>Software · Pune</small></span></div><div class="company-meta"><span><strong>8</strong> open roles</span><span class="status">Verified</span></div></article>
-            <article class="company-card"><div class="company-head"><span class="company-logo">b</span><span><strong>Brightloop</strong><small>Consumer tech · Mumbai</small></span></div><div class="company-meta"><span><strong>6</strong> open roles</span><span class="status review">Reviewing</span></div></article>
-            <article class="company-card"><div class="company-head"><span class="company-logo">s</span><span><strong>Studio North</strong><small>Design · Remote</small></span></div><div class="company-meta"><span><strong>4</strong> open roles</span><span class="status">Verified</span></div></article>
-            <article class="company-card"><div class="company-head"><span class="company-logo">p</span><span><strong>PeopleFirst</strong><small>HR tech · Hyderabad</small></span></div><div class="company-meta"><span><strong>3</strong> open roles</span><span class="status">Verified</span></div></article>
-            <article class="company-card"><div class="company-head"><span class="company-logo">m</span><span><strong>Monsoon Labs</strong><small>Climate tech · Delhi</small></span></div><div class="company-meta"><span><strong>5</strong> open roles</span><span class="status">Verified</span></div></article>
-          </div>
-          <div class="demo-note"><span>✦</span> Company cards and metrics are sample previews. Company organizations and memberships are not in the backend yet, so these are not real employer records.</div>
+          <div class="page-heading"><div><div class="page-eyebrow">Employer network</div><h1>Companies</h1><p>Real employer organizations and current hiring activity.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-companies>↻&nbsp; Refresh</button></div></div>
+          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Company</th><th>Industry</th><th>Plan</th><th>Open jobs</th><th>Team</th><th>Joined</th></tr></thead><tbody id="companies-table-body"></tbody></table></div></article>
+          <div class="demo-note" id="companies-data-note" hidden></div>
         </section>
 
         <section class="view" id="view-analytics" data-title="Analytics">
-          <div class="page-heading"><div><div class="page-eyebrow">Insights & performance</div><h1>Analytics</h1><p>Understand what’s working across your hiring funnel.</p></div><div class="heading-actions"><select class="select" disabled aria-label="Analytics range (preview only)"><option>Last 30 days · preview</option></select><button class="button" type="button" data-export>↓&nbsp; Export jobs CSV</button></div></div>
-          <div class="stats-grid"><article class="stat-card"><div class="stat-top">Applications <span class="stat-icon">♙</span></div><div class="stat-value">1,284 <span class="stat-change">↗ 8.2%</span></div><div class="stat-note">vs previous period</div></article><article class="stat-card"><div class="stat-top">Interviews <span class="stat-icon">◷</span></div><div class="stat-value">186 <span class="stat-change">↗ 12.4%</span></div><div class="stat-note">vs previous period</div></article><article class="stat-card"><div class="stat-top">Hire rate <span class="stat-icon">✓</span></div><div class="stat-value">4.8% <span class="stat-change">↗ 0.6%</span></div><div class="stat-note">Applications to hires</div></article><article class="stat-card"><div class="stat-top">Avg. time to hire <span class="stat-icon">⌁</span></div><div class="stat-value">18.4d <span class="stat-change">↓ 2.1d</span></div><div class="stat-note">vs previous period</div></article></div>
+          <div class="page-heading"><div><div class="page-eyebrow">Insights & performance</div><h1>Analytics</h1><p>Live application, interview, and hiring activity counts.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-insights>↻&nbsp; Refresh</button></div></div>
+          <div class="stats-grid"><article class="stat-card"><div class="stat-top">Applications <span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-applications">—</div><div class="stat-note">All recorded applications</div></article><article class="stat-card"><div class="stat-top">Scheduled interviews <span class="stat-icon">◷</span></div><div class="stat-value" data-metric="scheduled-interviews">—</div><div class="stat-note">Interview records not cancelled</div></article><article class="stat-card"><div class="stat-top">Candidate accounts <span class="stat-icon">✓</span></div><div class="stat-value" data-metric="candidate-count">—</div><div class="stat-note">Registered candidate accounts</div></article><article class="stat-card"><div class="stat-top">Employer organizations <span class="stat-icon">▣</span></div><div class="stat-value" data-metric="organization-count">—</div><div class="stat-note">Registered organizations</div></article></div>
           <div class="report-grid" style="margin-top:15px">
-            <article class="panel"><div class="panel-head"><div><h2>Applications by week</h2><p>Application volume compared to interviews</p></div></div><div class="bars" aria-label="Weekly application bar chart"><div class="bar-group"><i class="bar" style="height:39%"></i><i class="bar secondary" style="height:20%"></i></div><div class="bar-group"><i class="bar" style="height:54%"></i><i class="bar secondary" style="height:29%"></i></div><div class="bar-group"><i class="bar" style="height:47%"></i><i class="bar secondary" style="height:25%"></i></div><div class="bar-group"><i class="bar" style="height:70%"></i><i class="bar secondary" style="height:38%"></i></div><div class="bar-group"><i class="bar" style="height:62%"></i><i class="bar secondary" style="height:33%"></i></div><div class="bar-group"><i class="bar" style="height:86%"></i><i class="bar secondary" style="height:44%"></i></div><div class="bar-group"><i class="bar" style="height:76%"></i><i class="bar secondary" style="height:41%"></i></div><div class="bar-group"><i class="bar" style="height:96%"></i><i class="bar secondary" style="height:51%"></i></div></div><div class="bar-labels"><span>Wk 1</span><span>Wk 2</span><span>Wk 3</span><span>Wk 4</span><span>Wk 5</span><span>Wk 6</span><span>Wk 7</span><span>Wk 8</span></div><div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i> Applications</span><span class="legend-item"><i class="legend-dot blue"></i> Interviews</span></div></article>
-            <article class="panel source-panel"><div class="panel-head"><div><h2>Application sources</h2><p>Source mix across all applications</p></div></div><div class="donut-wrap"><div class="donut" role="img" aria-label="Application source distribution"><div class="donut-center"><strong>1,284</strong><small>applications</small></div></div><div class="source-legend"><div class="source-row"><i class="legend-dot"></i> Direct <strong>39%</strong></div><div class="source-row"><i class="legend-dot s2"></i> LinkedIn <strong>27%</strong></div><div class="source-row"><i class="legend-dot s3"></i> Referrals <strong>17%</strong></div><div class="source-row"><i class="legend-dot s4"></i> Other <strong>11%</strong></div><div class="source-row"><i class="legend-dot s5"></i> Boards <strong>6%</strong></div></div></div></article>
+            <article class="panel"><div class="panel-head"><div><h2>Applications by week</h2><p>Last eight weeks from live application records</p></div></div><div class="bars" id="analytics-weekly-chart" role="img" aria-label="Weekly application counts"></div></article>
+            <article class="panel"><div class="panel-head"><div><h2>Application stages</h2><p>Current stage counts from live applications</p></div></div><div class="source-legend" id="analytics-stage-summary"></div></article>
           </div>
-          <div class="demo-note"><span>✦</span> Charts and non-job metrics are illustrative previews until application, interview, and analytics data are implemented in the backend.</div>
+          <div class="demo-note">Source attribution, hires, and time-to-hire are not currently tracked, so those metrics are not shown.</div>
         </section>
 
         <section class="view" id="view-settings" data-title="Settings">
-          <div class="page-heading"><div><div class="page-eyebrow">Workspace preferences</div><h1>Settings</h1><p>Manage your workspace details and how your team works.</p></div><div class="heading-actions"><button class="button button-primary" type="button" data-save-settings>Save changes</button></div></div>
-          <div class="settings-grid">
-            <nav class="settings-menu" aria-label="Settings sections"><a class="active" href="#profile-settings">Workspace profile</a><span aria-disabled="true" title="Notification preferences are not implemented yet">Notifications · coming soon</span><span aria-disabled="true" title="Team management is not implemented yet">Team members · coming soon</span><span aria-disabled="true" title="Security settings are not implemented yet">Security · coming soon</span></nav>
-            <article class="settings-content" id="profile-settings"><h2>Workspace profile</h2><p>This information helps candidates and employers recognize your workspace.</p>
-              <div class="form-row"><label for="workspace-name">Workspace name</label><input id="workspace-name" value="esllp careers"></div>
-              <div class="form-row"><label for="workspace-url">Website</label><input id="workspace-url" value="https://esllp.com"></div>
-              <div class="form-row"><label for="workspace-email">Contact email</label><input id="workspace-email" type="email" value="hello@esllp.com"></div>
-              <div class="form-row"><label for="workspace-timezone">Timezone</label><select id="workspace-timezone"><option>India Standard Time (IST)</option><option>UTC</option></select></div>
-              <div class="form-row"><label for="email-notifications">Email notifications</label><input class="toggle" id="email-notifications" type="checkbox" checked></div>
-            </article>
-          </div>
-          <article class="settings-content" style="margin-top:16px"><h2>Account security</h2><p>Change your signed-in account password. You will be signed out after the password is updated.</p>
+          <div class="page-heading"><div><div class="page-eyebrow">Account</div><h1>Account security</h1><p>Manage your signed-in admin account password.</p></div></div>
+          <article class="settings-content"><h2>Change password</h2><p>You will be signed out after the password is updated.</p>
             <form id="admin-password-form">
               <div class="form-row"><label for="admin-current-password">Current password</label><input id="admin-current-password" name="currentPassword" type="password" autocomplete="current-password" required maxlength="72"></div>
               <div class="form-row"><label for="admin-new-password">New password</label><input id="admin-new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" required maxlength="72"></div>
@@ -488,7 +448,11 @@
               <button class="button button-primary" type="submit">Change password</button>
             </form>
           </article>
-          <div class="demo-note"><span>✦</span> These preferences are saved in this browser only; portal-wide settings need a settings API.</div>
+        </section>
+
+        <section class="view" id="view-activity" data-title="Recent activity">
+          <div class="page-heading"><div><div class="page-eyebrow">Platform activity</div><h1>Recent activity</h1><p>Recent job, account, and employer workflow events. Sensitive audit details are shown only in the superadmin audit log.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-activity>↻&nbsp; Refresh</button></div></div>
+          <article class="panel"><div class="activity-list" id="activity-list"><p>Loading recent activity…</p></div></article>
         </section>
 
         <section class="view" id="view-users" data-title="User accounts">
@@ -539,21 +503,13 @@
     let adminJobs = [];
     let adminEmployers = [];
     let adminUsers = [];
+    let adminInsights = null;
     let usersPage = 1;
     let usersTotal = 0;
     let auditPage = 1;
     let auditTotal = 0;
     let authResolved = false;
     let toastTimer;
-    const previewJobs = [
-      { title: "Senior Product Designer", company: "goodspace", location: "Bengaluru", workplaceType: "hybrid", isActive: true, createdAt: "2026-10-13T09:00:00Z" },
-      { title: "Backend Engineer", company: "Northstar", location: "Pune", workplaceType: "remote", isActive: true, createdAt: "2026-10-10T09:00:00Z" },
-      { title: "Growth Marketing Lead", company: "Brightloop", location: "Mumbai", workplaceType: "onsite", isActive: true, createdAt: "2026-10-08T09:00:00Z" },
-      { title: "Data Analyst", company: "goodspace", location: "Hyderabad", workplaceType: "hybrid", isActive: true, createdAt: "2026-10-06T09:00:00Z" },
-      { title: "People Operations Partner", company: "Northstar", location: "Remote · India", workplaceType: "remote", isActive: false, createdAt: "2026-10-01T09:00:00Z" },
-      { title: "Finance Associate", company: "Brightloop", location: "Delhi", workplaceType: "onsite", isActive: true, createdAt: "2026-09-28T09:00:00Z" }
-    ];
-
     function formatDate(value, options = { dateStyle: "medium" }) {
       const date = new Date(value);
       return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, options).format(date);
@@ -577,23 +533,27 @@
       );
     }
 
-    function updateJobMetrics(jobs, isPreview = false) {
+    function updateJobMetrics(jobs) {
       const active = jobs.filter((job) => job.isActive).length;
       const drafts = jobs.length - active;
       document.querySelector('[data-job-metric="total"]').textContent = String(jobs.length);
       document.querySelector('[data-job-metric="active"]').textContent = String(active);
       document.querySelector('[data-job-metric="drafts"]').textContent = String(drafts);
-      document.querySelector('[data-job-metric="total"]').nextElementSibling.textContent = isPreview ? "Sample listings · preview" : "Live records from the jobs API";
-      document.querySelector('[data-job-metric="active"]').nextElementSibling.textContent = isPreview ? "Sample data · preview" : "Live published listings";
-      document.querySelector('[data-job-metric="drafts"]').nextElementSibling.textContent = isPreview ? "Sample data · preview" : "Live unpublished listings";
+      document.querySelector('[data-job-metric="total"]').nextElementSibling.textContent = "Live records from the jobs API";
+      document.querySelector('[data-job-metric="active"]').nextElementSibling.textContent = "Live published listings";
+      document.querySelector('[data-job-metric="drafts"]').nextElementSibling.textContent = "Live unpublished listings";
       document.querySelector('[data-metric="active-jobs"]').textContent = String(active);
-      document.querySelector('[data-metric-note="active-jobs"]').textContent = isPreview ? "Sample data · preview" : "Live published listings";
+      document.querySelector('[data-metric-note="active-jobs"]').textContent = "Live published listings";
     }
 
-    function renderOverviewJobs(jobs, isPreview) {
+    function renderOverviewJobs(jobs) {
       const body = document.querySelector("#overview-jobs-body");
       body.replaceChildren();
-      jobs.slice(0, 3).forEach((job, index) => {
+      const applicationCounts = new Map((adminInsights?.applicationsByJob || []).map((item) => [item.jobId, item.count]));
+      [...jobs]
+        .sort((first, second) => (applicationCounts.get(second.id) || 0) - (applicationCounts.get(first.id) || 0))
+        .slice(0, 3)
+        .forEach((job) => {
         const row = document.createElement("tr");
         const roleCell = document.createElement("td");
         const role = document.createElement("span");
@@ -604,17 +564,25 @@
         company.textContent = `${job.company} · ${job.location}`;
         roleCell.append(role, company);
         const applications = document.createElement("td");
-        applications.textContent = isPreview ? String([186, 142, 98][index]) : "—";
+        applications.textContent = String(applicationCounts.get(job.id) || 0);
         const statusCell = document.createElement("td");
         const status = document.createElement("span");
         status.className = `status${job.isActive ? "" : " closed"}`;
         status.textContent = job.isActive ? "Active" : "Draft";
         statusCell.append(status);
         const posted = document.createElement("td");
-        posted.textContent = isPreview ? ["2 days ago", "5 days ago", "1 week ago"][index] : formatDate(job.createdAt);
+        posted.textContent = formatDate(job.createdAt);
         row.append(roleCell, applications, statusCell, posted);
         body.append(row);
-      });
+        });
+      if (!jobs.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = "No jobs have been created yet.";
+        row.append(cell);
+        body.append(row);
+      }
       if (!jobs.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
@@ -625,16 +593,7 @@
       }
     }
 
-    function renderPreviewJobs() {
-      renderJobsTable(previewJobs, true);
-      updateJobMetrics(previewJobs, true);
-      renderOverviewJobs(previewJobs, true);
-      const note = document.querySelector("#jobs-data-note");
-      note.hidden = false;
-      note.replaceChildren(document.createTextNode("✦ These are read-only sample listings because there are no job records in the database. Create a job to start managing real listings."));
-    }
-
-    function renderJobsTable(jobs, isPreview = false) {
+    function renderJobsTable(jobs) {
       const body = document.querySelector("#jobs-table-body");
       const companyFilter = document.querySelector("#jobs-company-filter");
       body.replaceChildren();
@@ -643,11 +602,12 @@
       companyFilter.replaceChildren(new Option("All companies", "all"));
       companies.forEach((company) => companyFilter.add(new Option(company, company)));
       companyFilter.value = companies.includes(selectedCompany) ? selectedCompany : "all";
+      const applicationCounts = new Map((adminInsights?.applicationsByJob || []).map((item) => [item.jobId, item.count]));
       jobs.forEach((job) => {
         const row = document.createElement("tr");
         row.dataset.status = job.isActive ? "active" : "draft";
         row.dataset.company = job.company;
-        [job.title, job.company, `${job.location} · ${job.workplaceType}`, "—"].forEach((value, index) => {
+        [job.title, job.company, `${job.location} · ${job.workplaceType}`, String(applicationCounts.get(job.id) || 0)].forEach((value, index) => {
           const cell = document.createElement("td");
           cell.textContent = value;
           if (index === 0) cell.className = "role-name";
@@ -661,9 +621,7 @@
         const posted = document.createElement("td");
         posted.textContent = formatDate(job.createdAt);
         const actions = document.createElement("td");
-        if (isPreview) {
-          actions.textContent = "Preview only";
-        } else {
+        {
           const toggleButton = document.createElement("button");
           toggleButton.className = "button";
           toggleButton.type = "button";
@@ -792,14 +750,12 @@
           `Approved employer accounts could not be loaded: ${employersResult.loadError.message}`;
       }
       adminJobs = jobs;
-      if (jobs.length === 0) {
-        renderPreviewJobs();
-        return;
-      }
       updateJobMetrics(jobs);
       renderJobsTable(jobs);
-      renderOverviewJobs(jobs, false);
-      document.querySelector("#jobs-data-note").hidden = true;
+      renderOverviewJobs(jobs);
+      const note = document.querySelector("#jobs-data-note");
+      note.hidden = jobs.length > 0;
+      note.textContent = jobs.length ? "" : "No job listings have been created yet. Create a job draft to get started.";
     }
 
     async function loadAdminUsers(page = 1, limit = 25) {
@@ -817,24 +773,16 @@
       const note = document.querySelector("#users-data-note");
       note.hidden = result.total !== 0;
       if (result.total === 0) {
-        note.textContent = "No real accounts are in the database yet. Sample rows are shown read-only; role and status controls are disabled.";
-        renderUsersTable([], true);
-        renderCandidateAccounts([], true);
+        note.textContent = "No accounts are in the database yet.";
+        renderCandidateAccounts([]);
       }
       return result;
     }
 
-    const previewUsers = [
-      { id: null, displayName: "Priya Sharma", email: "priya.preview@example.test", role: "candidate", emailVerified: true, isActive: true, createdAt: "2026-10-14T08:00:00Z" },
-      { id: null, displayName: "Rahul Mehta", email: "rahul.preview@example.test", role: "employer", companyName: "Northstar", employerApprovalStatus: "pending", emailVerified: false, isActive: true, createdAt: "2026-10-12T08:00:00Z" },
-      { id: null, displayName: "Portal Admin", email: "admin.preview@example.test", role: "admin", emailVerified: true, isActive: true, createdAt: "2026-10-10T08:00:00Z" }
-    ];
-
-    function renderUsersTable(users, isPreview = false) {
+    function renderUsersTable(users) {
       const body = document.querySelector("#users-table-body");
       body.replaceChildren();
-      const rows = isPreview ? previewUsers : users;
-      rows.forEach((user) => {
+      users.forEach((user) => {
         const row = document.createElement("tr");
         const name = document.createElement("td");
         name.textContent = user.displayName;
@@ -843,9 +791,7 @@
         const company = document.createElement("td");
         company.textContent = user.companyName || "—";
         const roleCell = document.createElement("td");
-        if (isPreview) {
-          roleCell.textContent = user.role;
-        } else {
+        {
           const role = document.createElement("select");
           role.className = "select user-role";
           const roleOptions = ["candidate", "admin", "superadmin"];
@@ -897,7 +843,7 @@
         const joined = document.createElement("td");
         joined.textContent = formatDate(user.createdAt);
         const actions = document.createElement("td");
-        if (!isPreview && user.role === "employer") {
+        if (user.role === "employer") {
           const approvalStatus = user.employerApprovalStatus || "approved";
           const approvalButtons = [
             { status: "approved", text: "Approve" },
@@ -938,7 +884,7 @@
         statusButton.className = "button";
         statusButton.type = "button";
         statusButton.textContent = user.isActive ? "Deactivate" : "Activate";
-        statusButton.disabled = isPreview || user.id === currentAdminUser?.id;
+        statusButton.disabled = user.id === currentAdminUser?.id;
         statusButton.addEventListener("click", async () => {
           const nextStatus = !user.isActive;
           if (!window.confirm(`${nextStatus ? "Activate" : "Deactivate"} ${user.displayName}'s account?`)) return;
@@ -956,12 +902,11 @@
             showToast(error instanceof Error ? error.message : "Unable to update account status.");
           }
         });
-        if (isPreview) statusButton.title = "Preview rows cannot be changed.";
         actions.append(statusButton);
         row.append(name, email, company, roleCell, approval, verified, status, joined, actions);
         body.append(row);
       });
-      if (!rows.length) {
+      if (!users.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
         cell.colSpan = 9;
@@ -987,17 +932,16 @@
       const result = await authRequest("/api/admin/users?page=1&limit=100");
       if (!result || !Array.isArray(result.items)) throw new Error("The users API returned an unexpected response.");
       const candidates = result.items.filter((user) => user.role === "candidate");
-      renderCandidateAccounts(candidates, candidates.length === 0);
+      renderCandidateAccounts(candidates);
       document.querySelector("#candidate-data-note").textContent = candidates.length
-        ? `Showing ${candidates.length} real candidate account${candidates.length === 1 ? "" : "s"} from the first 100 accounts${result.total > 100 ? ` of ${result.total} total accounts` : ""}. Application records, resumes, and hiring stages are not available yet; the pipeline above is preview data.`
-        : "No candidate accounts are in the database yet. Sample pipeline cards above are preview-only.";
+        ? `Showing ${candidates.length} candidate accounts from the first 100 accounts${result.total > 100 ? ` of ${result.total} total accounts` : ""}. Application stage totals use live records.`
+        : "No candidate accounts are in the database yet.";
     }
 
-    function renderCandidateAccounts(candidates, isPreview = false) {
+    function renderCandidateAccounts(candidates) {
       const body = document.querySelector("#candidate-accounts-body");
       body.replaceChildren();
-      const rows = isPreview ? previewUsers.filter((user) => user.role === "candidate") : candidates;
-      rows.forEach((user) => {
+      candidates.forEach((user) => {
         const row = document.createElement("tr");
         [user.displayName, user.email, user.isActive ? "Active" : "Inactive", user.emailVerified ? "Verified" : "Not verified", formatDate(user.createdAt)].forEach((value) => {
           const cell = document.createElement("td");
@@ -1006,7 +950,7 @@
         });
         body.append(row);
       });
-      if (!rows.length) {
+      if (!candidates.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
         cell.colSpan = 5;
@@ -1043,11 +987,6 @@
       }
     }
 
-    const previewAudit = [
-      { actorUserId: null, action: "job.created", targetType: "job", targetId: "demo", details: '{"title":"Senior Product Designer"}', createdAt: "2026-10-14T08:00:00Z" },
-      { actorUserId: null, action: "user.activated", targetType: "user", targetId: "demo", details: '{"isActive":true}', createdAt: "2026-10-13T08:00:00Z" }
-    ];
-
     async function loadAuditLogs(page = auditPage) {
       const result = await authRequest(`/api/admin/audit-logs?page=${page}&limit=50`);
       if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
@@ -1055,18 +994,18 @@
       }
       auditPage = result.page;
       auditTotal = result.total;
-      renderAuditLogs(result.items, result.total === 0);
+      renderAuditLogs(result.items);
       setText("#audit-page-summary", `${result.total === 0 ? 0 : (result.page - 1) * result.limit + 1}–${Math.min(result.page * result.limit, result.total)} of ${result.total} events`);
       document.querySelector("#audit-prev").disabled = result.page <= 1;
       document.querySelector("#audit-next").disabled = result.page * result.limit >= result.total;
       return result;
     }
 
-    function renderAuditLogs(logs, isPreview = false) {
+    function renderAuditLogs(logs) {
       const body = document.querySelector("#audit-table-body");
       body.replaceChildren();
       const userNames = new Map(adminUsers.map((user) => [user.id, `${user.displayName} (${user.email})`]));
-      const rows = isPreview ? previewAudit : logs;
+      const rows = logs;
       rows.forEach((entry) => {
         const row = document.createElement("tr");
         const details = document.createElement("td");
@@ -1081,7 +1020,7 @@
           details.textContent = "—";
         }
         [formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" }),
-          entry.actorUserId === null ? "Preview user" : userNames.get(entry.actorUserId) || `Account #${entry.actorUserId}`,
+          userNames.get(entry.actorUserId) || `Account #${entry.actorUserId}`,
           entry.action,
           `${entry.targetType} #${entry.targetId}`].forEach((value) => {
           const cell = document.createElement("td");
@@ -1100,16 +1039,15 @@
         body.append(row);
       }
       const note = document.querySelector("#audit-data-note");
-      note.hidden = !isPreview;
-      if (isPreview) note.textContent = "No real audit events exist yet. The rows above are sample format examples only and are not security records.";
-      renderOverviewActivity(logs, isPreview);
+      note.hidden = true;
+      renderOverviewActivity(logs);
     }
 
-    function renderOverviewActivity(logs, isPreview = false) {
+    function renderOverviewActivity(logs) {
       const container = document.querySelector("#overview-activity-list");
       if (!container) return;
       container.replaceChildren();
-      const entries = isPreview ? previewAudit : logs.slice(0, 4);
+      const entries = logs.slice(0, 4);
       entries.forEach((entry) => {
         const item = document.createElement("div");
         item.className = "activity";
@@ -1118,12 +1056,9 @@
         icon.textContent = entry.action.startsWith("job.") ? "▤" : "♙";
         const content = document.createElement("div");
         const text = document.createElement("p");
-        const description = entry.details ? (() => {
-          try { return JSON.parse(entry.details).title || entry.targetType; } catch { return entry.targetType; }
-        })() : entry.targetType;
-        text.textContent = `${entry.action.replaceAll(".", " ")} · ${description}`;
+        text.textContent = `${entry.action.replaceAll(".", " ")} · ${entry.targetType}`;
         const date = document.createElement("small");
-        date.textContent = `${isPreview ? "Preview" : formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" })} · ${entry.targetType} #${entry.targetId}`;
+        date.textContent = `${formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" })} · ${entry.targetType} #${entry.targetId}`;
         content.append(text, date);
         item.append(icon, content);
         container.append(item);
@@ -1135,24 +1070,165 @@
       }
     }
 
+    function renderInsights(data) {
+      if (!data || !data.metrics || !Array.isArray(data.applicationsByStatus) || !Array.isArray(data.weeklyApplications) || !Array.isArray(data.topJobs)) {
+        throw new Error("The insights API returned an unexpected response.");
+      }
+      adminInsights = data;
+      const { metrics } = data;
+      [
+        ["total-applications", metrics.totalApplications],
+        ["scheduled-interviews", metrics.scheduledInterviews],
+        ["candidate-count", metrics.candidates],
+        ["organization-count", metrics.organizations],
+        ["interview-applications", data.applicationsByStatus.find((item) => item.status === "interview")?.count || 0],
+        ["offer-applications", data.applicationsByStatus.find((item) => item.status === "offer")?.count || 0],
+        ["total-users", metrics.totalUsers]
+      ].forEach(([key, value]) => {
+        document.querySelectorAll(`[data-metric="${key}"]`).forEach((element) => {
+          element.textContent = String(value);
+        });
+      });
+      setText('[data-metric-note="total-users"]', "Live user accounts");
+      setText('[data-metric-note="total-applications"]', "All recorded applications");
+      setText('[data-metric-note="scheduled-interviews"]', "Current interview records");
+
+      const stageContainers = [
+        document.querySelector("#application-status-summary"),
+        document.querySelector("#analytics-stage-summary")
+      ].filter(Boolean);
+      stageContainers.forEach((container) => {
+        container.replaceChildren();
+        const statuses = ["submitted", "in_review", "interview", "offer", "rejected", "withdrawn"];
+        statuses.forEach((status) => {
+          const row = data.applicationsByStatus.find((item) => item.status === status);
+          if (!row) return;
+          const line = document.createElement("div");
+          line.className = "source-row";
+          const label = document.createElement("span");
+          label.textContent = status.replaceAll("_", " ");
+          const count = document.createElement("strong");
+          count.textContent = String(row.count);
+          line.append(label, count);
+          container.append(line);
+        });
+        if (!container.childElementCount) {
+          const empty = document.createElement("p");
+          empty.textContent = "No applications have been submitted yet.";
+          container.append(empty);
+        }
+      });
+
+      const renderWeekly = (container) => {
+        if (!container) return;
+        container.replaceChildren();
+        const max = Math.max(1, ...data.weeklyApplications.map((item) => item.count));
+        container.setAttribute("aria-label", data.weeklyApplications.length
+          ? `Weekly application counts: ${data.weeklyApplications.map((item) => `${formatDate(item.week)} ${item.count}`).join(", ")}`
+          : "No weekly applications recorded.");
+        data.weeklyApplications.forEach((item) => {
+          const group = document.createElement("div");
+          group.className = "bar-group";
+          const bar = document.createElement("i");
+          bar.className = "bar";
+          bar.style.height = `${Math.max(3, Math.round((item.count / max) * 100))}%`;
+          bar.title = `${formatDate(item.week)}: ${item.count} applications`;
+          group.append(bar);
+          container.append(group);
+        });
+      };
+      renderWeekly(document.querySelector("#weekly-applications-chart"));
+      renderWeekly(document.querySelector("#analytics-weekly-chart"));
+
+      const topJobsBody = document.querySelector("#overview-jobs-body");
+      topJobsBody.replaceChildren();
+      data.topJobs.forEach((job) => {
+        const row = document.createElement("tr");
+        [job.title, String(job.applicationCount), job.isActive ? "Active" : "Closed", job.company].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        topJobsBody.append(row);
+      });
+      if (!data.topJobs.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = "No applications have been received yet.";
+        row.append(cell);
+        topJobsBody.append(row);
+      }
+    }
+
+    async function loadAdminInsights() {
+      renderInsights(await authRequest("/api/admin/insights"));
+    }
+
+    async function loadAdminCompanies() {
+      const companies = await authRequest("/api/admin/companies");
+      if (!Array.isArray(companies)) throw new Error("The companies API returned an unexpected response.");
+      const body = document.querySelector("#companies-table-body");
+      body.replaceChildren();
+      companies.forEach((company) => {
+        const row = document.createElement("tr");
+        [
+          company.name,
+          company.industry || "—",
+          `${company.planKey} · ${company.subscriptionStatus.replaceAll("_", " ")}`,
+          `${company.activeJobs} / ${company.jobs}`,
+          `${company.activeMembers} active · ${company.invitedMembers} invited`,
+          formatDate(company.createdAt)
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        body.append(row);
+      });
+      const note = document.querySelector("#companies-data-note");
+      note.hidden = companies.length > 0;
+      note.textContent = companies.length ? "" : "No employer organizations are registered yet.";
+    }
+
+    async function loadAdminActivity() {
+      const activity = await authRequest("/api/admin/activity");
+      if (!Array.isArray(activity)) throw new Error("The activity API returned an unexpected response.");
+      const list = document.querySelector("#activity-list");
+      list.replaceChildren();
+      activity.forEach((entry) => {
+        const item = document.createElement("div");
+        item.className = "activity";
+        const icon = document.createElement("span");
+        icon.className = "activity-icon";
+        icon.textContent = entry.action.startsWith("job.") ? "▤" : "◷";
+        const content = document.createElement("div");
+        const text = document.createElement("p");
+        text.textContent = `${entry.action.replaceAll(".", " ")} · ${entry.targetType}`;
+        const date = document.createElement("small");
+        date.textContent = `${formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" })} · ${entry.targetType} #${entry.targetId}`;
+        content.append(text, date);
+        item.append(icon, content);
+        list.append(item);
+      });
+      if (!activity.length) list.innerHTML = "<p>No platform activity has been recorded yet.</p>";
+      renderOverviewActivity(activity);
+    }
+
     async function refreshOverviewData() {
-      const [jobs, users, audit] = await Promise.all([
+      const [jobs, users, insights] = await Promise.all([
         authRequest("/api/admin/jobs"),
         currentAdminUser?.role === "superadmin"
           ? authRequest("/api/admin/users?page=1&limit=100")
           : Promise.resolve(null),
-        currentAdminUser?.role === "superadmin"
-          ? authRequest("/api/admin/audit-logs?page=1&limit=10")
-          : Promise.resolve(null)
+        authRequest("/api/admin/insights")
       ]);
       if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
       adminJobs = jobs;
-      if (jobs.length) {
-        updateJobMetrics(jobs);
-        renderOverviewJobs(jobs, false);
-      } else {
-        renderPreviewJobs();
-      }
+      updateJobMetrics(jobs);
+      renderJobsTable(jobs);
+      renderOverviewJobs(jobs);
+      renderInsights(insights);
       if (users) {
         if (!Array.isArray(users.items) || typeof users.total !== "number") throw new Error("The users API returned an unexpected response.");
         adminUsers = users.items;
@@ -1162,21 +1238,19 @@
         renderCandidateAccounts(candidates, candidates.length === 0);
         if (candidates.length === 0) {
           document.querySelector("#candidate-data-note").textContent =
-            "No candidate accounts are in the database yet. Sample pipeline cards above are preview-only.";
+            "No candidate accounts are in the database yet.";
         }
         if (users.total === 0) {
           const note = document.querySelector("#users-data-note");
           note.hidden = false;
-          note.textContent = "No real accounts are in the database yet. Sample rows are shown read-only; role and status controls are disabled.";
-          renderUsersTable([], true);
+          note.textContent = "No accounts are in the database yet.";
+          renderUsersTable([]);
         }
       } else {
-        setText('[data-metric-note="total-users"]', "Preview · account totals require superadmin access");
+        document.querySelector("#candidate-data-note").textContent =
+          "Candidate account details are restricted to superadmins. Aggregated application-stage counts remain visible.";
       }
-      if (audit) {
-        if (!Array.isArray(audit.items)) throw new Error("The audit API returned an unexpected response.");
-        renderOverviewActivity(audit.items, audit.items.length === 0);
-      }
+      await loadAdminActivity();
     }
 
     async function authRequest(path, options = {}) {
@@ -1308,14 +1382,28 @@
       if (view.id === "view-jobs" && adminAccessToken) {
         loadAdminJobs().catch((error) => showToast(error.message));
       }
+      if (view.id === "view-companies" && adminAccessToken) {
+        loadAdminCompanies().catch((error) => showToast(`Unable to load companies: ${error.message}`));
+      }
+      if (view.id === "view-analytics" && adminAccessToken) {
+        loadAdminInsights().catch((error) => showToast(`Unable to load analytics: ${error.message}`));
+      }
+      if (view.id === "view-activity" && adminAccessToken) {
+        loadAdminActivity().catch((error) => showToast(`Unable to load activity: ${error.message}`));
+      }
       if (view.id === "view-users" && adminAccessToken) {
         loadAdminUsers().catch((error) => showToast(`Unable to load user accounts: ${error.message}`));
       }
       if (view.id === "view-audit" && adminAccessToken) {
         loadAuditLogs().catch((error) => showToast(`Unable to load audit history: ${error.message}`));
       }
-      if (view.id === "view-candidates" && adminAccessToken && currentAdminUser?.role === "superadmin") {
-        loadCandidateAccounts().catch((error) => showToast(`Unable to load candidate accounts: ${error.message}`));
+      if (view.id === "view-candidates" && adminAccessToken) {
+        if (currentAdminUser?.role === "superadmin") {
+          loadCandidateAccounts().catch((error) => showToast(`Unable to load candidate accounts: ${error.message}`));
+        } else {
+          document.querySelector("#candidate-accounts-body").innerHTML = '<tr><td colspan="5">Candidate account details are restricted to superadmins.</td></tr>';
+          document.querySelector("#candidate-data-note").textContent = "Candidate account details are restricted to superadmins. Application stage totals are aggregated from live records.";
+        }
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -1347,12 +1435,17 @@
       showToast(button.dataset.toast);
     }));
     document.querySelector("#notifications-button").addEventListener("click", () => {
-      if (currentAdminUser?.role === "superadmin") {
-        showView("audit");
-        history.replaceState(null, "", "#audit");
-      } else {
-        showToast("A notification feed is not connected yet.");
-      }
+      showView("activity");
+      history.replaceState(null, "", "#activity");
+    });
+    document.querySelector("[data-refresh-companies]").addEventListener("click", () => {
+      loadAdminCompanies().catch((error) => showToast(`Unable to load companies: ${error.message}`));
+    });
+    document.querySelector("[data-refresh-insights]").addEventListener("click", () => {
+      loadAdminInsights().catch((error) => showToast(`Unable to load analytics: ${error.message}`));
+    });
+    document.querySelector("[data-refresh-activity]").addEventListener("click", () => {
+      loadAdminActivity().catch((error) => showToast(`Unable to load activity: ${error.message}`));
     });
 
     const globalSearch = document.querySelector("#global-search");
@@ -1465,30 +1558,6 @@
         submit.disabled = false;
       }
     });
-    const settingsInputs = [...document.querySelectorAll("#profile-settings input, #profile-settings select")];
-    try {
-      const savedSettings = JSON.parse(localStorage.getItem("esllp-admin-settings") || "{}");
-      settingsInputs.forEach((input) => {
-        if (Object.hasOwn(savedSettings, input.id)) {
-          if (input.type === "checkbox") input.checked = Boolean(savedSettings[input.id]);
-          else input.value = savedSettings[input.id];
-        }
-      });
-    } catch {
-      showToast("Saved browser settings could not be read. Current defaults are loaded.");
-    }
-    document.querySelector("[data-save-settings]").addEventListener("click", () => {
-      try {
-        const savedSettings = Object.fromEntries(settingsInputs.map((input) => [
-          input.id,
-          input.type === "checkbox" ? input.checked : input.value
-        ]));
-        localStorage.setItem("esllp-admin-settings", JSON.stringify(savedSettings));
-        showToast("Preferences saved in this browser.");
-      } catch (error) {
-        showToast(`Unable to save browser preferences: ${error instanceof Error ? error.message : "storage unavailable"}`);
-      }
-    });
     document.querySelector("#admin-password-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
@@ -1521,10 +1590,6 @@
         submit.disabled = false;
       }
     });
-    document.querySelector("#chart-range").addEventListener("change", (event) => {
-      showToast(`Chart preview range set to the last ${event.target.value} days. Live application analytics are not connected yet.`);
-    });
-
     function downloadCsv(filename, headers, data) {
       const rows = [headers, ...data];
       const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
@@ -1540,14 +1605,12 @@
       try {
         const jobs = await authRequest("/api/admin/jobs");
         if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
-        const preview = jobs.length === 0;
-        const rows = preview ? previewJobs : jobs;
         downloadCsv(
-          preview ? "esllp-jobs-sample-preview.csv" : "esllp-jobs.csv",
+          "esllp-jobs.csv",
           ["Job title", "Company", "Location", "Applications", "Status", "Posted"],
-          rows.map((job) => [job.title, job.company, job.location, preview ? "Sample only" : "", job.isActive ? "Active" : "Draft", formatDate(job.createdAt)])
+          jobs.map((job) => [job.title, job.company, job.location, adminInsights?.applicationsByJob.find((item) => item.jobId === job.id)?.count ?? 0, job.isActive ? "Active" : "Draft", formatDate(job.createdAt)])
         );
-        showToast(preview ? "Sample preview CSV downloaded; no live jobs exist yet." : "Live job export downloaded.");
+        showToast(jobs.length ? "Live job export downloaded." : "An empty export was downloaded; no live jobs exist yet.");
       } catch (error) {
         showToast(error instanceof Error ? error.message : "Unable to export jobs.");
       }

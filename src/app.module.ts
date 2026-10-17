@@ -35,6 +35,8 @@ import { EmployerInterview } from "./employers/employer-interview.entity";
 import { UserNotification } from "./employers/user-notification.entity";
 import { RazorpayWebhookEvent } from "./employers/razorpay-webhook-event.entity";
 import { EmployersModule } from "./employers/employers.module";
+import { CandidateSavedSearch } from "./users/candidate-saved-search.entity";
+import { CreateCandidateSavedSearches1729000000011 } from "./database/migrations/1729000000011-CreateCandidateSavedSearches";
 
 @Module({
   imports: [
@@ -58,6 +60,7 @@ import { EmployersModule } from "./employers/employers.module";
         EmployerInterview,
         UserNotification,
         RazorpayWebhookEvent,
+        CandidateSavedSearch,
       ],
       migrations: [
         CreateJobsTable1729000000000,
@@ -71,6 +74,7 @@ import { EmployersModule } from "./employers/employers.module";
         ApplicationWorkflow1729000000008,
         EmployerRegistrationApproval1729000000009,
         EmployerSaasWorkspace1729000000010,
+        CreateCandidateSavedSearches1729000000011,
       ],
       migrationsRun: true,
       synchronize: false,

@@ -10,14 +10,18 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { compare, hash } from "bcryptjs";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { DataSource, IsNull, Repository } from "typeorm";
 import { AuthToken, AuthTokenPurpose } from "./auth-token.entity";
 import { EmailDeliveryService } from "./email-delivery.service";
 import { AuthenticatedUser } from "./auth.types";
 import { RefreshSession } from "./refresh-session.entity";
 import { LoginDto } from "./dto/login.dto";
-import { RegisterDto, RegisterEmployerDto } from "./dto/register.dto";
+import {
+  BootstrapSuperadminDto,
+  RegisterDto,
+  RegisterEmployerDto,
+} from "./dto/register.dto";
 import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
 import { EmployerOrganization } from "../employers/organization.entity";
 import {
@@ -66,6 +70,99 @@ export class AuthService {
     const saved = await this.usersRepository.save(user);
     await this.sendVerification(saved);
     return { id: saved.id, email: saved.email };
+  }
+
+  async bootstrapSuperadminStatus(): Promise<{ available: boolean }> {
+    const configuredEmail = process.env.SUPERADMIN_EMAIL?.trim();
+    const configuredName = process.env.SUPERADMIN_NAME?.trim();
+    const configuredPassword = process.env.SUPERADMIN_PASSWORD;
+    if (
+      !configuredEmail ||
+      !configuredName ||
+      !configuredPassword ||
+      Buffer.byteLength(configuredPassword, "utf8") > 72
+    ) {
+      return { available: false };
+    }
+    const existing = await this.usersRepository.countBy({
+      role: UserRole.SUPERADMIN,
+    });
+    return { available: existing === 0 };
+  }
+
+  async bootstrapSuperadmin(
+    dto: BootstrapSuperadminDto,
+  ): Promise<{ email: string }> {
+    const configuredEmail = process.env.SUPERADMIN_EMAIL?.trim();
+    const configuredName = process.env.SUPERADMIN_NAME?.trim();
+    const configuredPassword = process.env.SUPERADMIN_PASSWORD;
+    if (!configuredEmail || !configuredName || !configuredPassword) {
+      throw new NotFoundException("Superadmin setup is not available.");
+    }
+
+    const email = this.normalizeEmail(dto.email);
+    if (
+      email !== this.normalizeEmail(configuredEmail) ||
+      dto.displayName.trim() !== configuredName
+    ) {
+      throw new UnauthorizedException(
+        "Enter the superadmin name and email configured for this deployment.",
+      );
+    }
+
+    const receivedPasswordHash = createHash("sha256")
+      .update(dto.password)
+      .digest();
+    const configuredPasswordHash = createHash("sha256")
+      .update(configuredPassword)
+      .digest();
+    if (!timingSafeEqual(receivedPasswordHash, configuredPasswordHash)) {
+      throw new UnauthorizedException(
+        "The password does not match the superadmin password configured for this deployment.",
+      );
+    }
+
+    const passwordBytes = Buffer.byteLength(dto.password, "utf8");
+    if (passwordBytes > 72) {
+      throw new BadRequestException(
+        "Password must be no longer than 72 UTF-8 bytes.",
+      );
+    }
+    const passwordHash = await hash(dto.password, 12);
+    const name = dto.displayName.trim();
+    if (name.length < 2) {
+      throw new BadRequestException("Name must contain at least 2 characters.");
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        [1_729_000_000, 11],
+      );
+      const users = manager.getRepository(User);
+      if (await users.findOneBy({ role: UserRole.SUPERADMIN })) {
+        throw new ConflictException(
+          "A superadmin already exists. First-time setup is closed.",
+        );
+      }
+      if (await users.findOneBy({ email })) {
+        throw new ConflictException(
+          "That email already belongs to an account.",
+        );
+      }
+      await users.save(
+        users.create({
+          email,
+          displayName: name,
+          passwordHash,
+          role: UserRole.SUPERADMIN,
+          emailVerified: true,
+          isActive: true,
+        }),
+      );
+    });
+
+    return { email };
   }
 
   async registerEmployer(
@@ -171,8 +268,8 @@ export class AuthService {
       id: saved.id,
       email: saved.email,
       message: registration.invited
-        ? "Company invitation accepted. Verify your email; an administrator must approve your employer account before you can sign in."
-        : "Employer registration received. Verify your email; an administrator must approve the account before you can sign in.",
+        ? "Company invitation recorded. Verify your email to preview the read-only workspace while your employer account awaits administrator approval."
+        : "Employer registration received. Verify your email to preview the read-only workspace while your account awaits administrator approval.",
     };
   }
 
@@ -204,12 +301,15 @@ export class AuthService {
     }
     if (
       user.role === UserRole.EMPLOYER &&
-      user.employerApprovalStatus !== EmployerApprovalStatus.APPROVED
+      ![
+        EmployerApprovalStatus.PENDING,
+        EmployerApprovalStatus.APPROVED,
+      ].includes(user.employerApprovalStatus)
     ) {
       throw new UnauthorizedException(
         user.employerApprovalStatus === EmployerApprovalStatus.REJECTED
           ? "This employer registration was not approved. Contact esllp support for assistance."
-          : "Your email is verified, but your employer account is still awaiting administrator approval.",
+          : "This employer account is unavailable. Contact esllp support for assistance.",
       );
     }
     return this.createSession(user);
@@ -279,7 +379,7 @@ export class AuthService {
     ) {
       return {
         message:
-          "Email address verified. Your employer account is waiting for administrator approval before you can sign in.",
+          "Email address verified. You can sign in to a read-only workspace while your employer account awaits administrator approval.",
       };
     }
     return { message: "Email address verified. You can now sign in." };
@@ -361,7 +461,10 @@ export class AuthService {
       session.expiresAt.getTime() <= Date.now() ||
       !session.user.isActive ||
       (session.user.role === UserRole.EMPLOYER &&
-        session.user.employerApprovalStatus !== EmployerApprovalStatus.APPROVED)
+        ![
+          EmployerApprovalStatus.PENDING,
+          EmployerApprovalStatus.APPROVED,
+        ].includes(session.user.employerApprovalStatus))
     ) {
       throw new UnauthorizedException(
         "The refresh session is invalid or expired",
@@ -425,6 +528,7 @@ export class AuthService {
       email: user.email,
       displayName: user.displayName,
       role: user.role,
+      employerApprovalStatus: user.employerApprovalStatus,
     };
   }
 

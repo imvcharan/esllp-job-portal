@@ -5,6 +5,7 @@ import {
   DefaultValuePipe,
   Delete,
   Get,
+  Header,
   Headers,
   Param,
   ParseIntPipe,
@@ -37,6 +38,10 @@ import {
 } from "./dto/employer-workflow.dto";
 import { UpdateApplicationStatusDto } from "../users/dto/update-application-status.dto";
 import { EmployersService } from "./employers.service";
+import {
+  AllowPendingEmployerReadOnly,
+  EmployerApprovalGuard,
+} from "./employer-approval.guard";
 
 function optionalOrganizationId(value?: string): number | undefined {
   if (value === undefined) return undefined;
@@ -49,17 +54,21 @@ function optionalOrganizationId(value?: string): number | undefined {
 }
 
 @Controller("employer")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EmployerApprovalGuard)
 @Roles(UserRole.EMPLOYER)
 export class EmployersController {
   constructor(private readonly employersService: EmployersService) {}
 
   @Get("organizations")
+  @Header("Cache-Control", "private, no-store")
+  @AllowPendingEmployerReadOnly()
   organizations(@CurrentUser() user: AuthenticatedUser) {
     return this.employersService.listOrganizations(user);
   }
 
   @Get("dashboard")
+  @Header("Cache-Control", "private, no-store")
+  @AllowPendingEmployerReadOnly()
   dashboard(
     @CurrentUser() user: AuthenticatedUser,
     @Headers("x-organization-id") organizationId?: string,
@@ -71,6 +80,8 @@ export class EmployersController {
   }
 
   @Get("company")
+  @Header("Cache-Control", "private, no-store")
+  @AllowPendingEmployerReadOnly()
   company(
     @CurrentUser() user: AuthenticatedUser,
     @Headers("x-organization-id") organizationId?: string,
@@ -95,6 +106,8 @@ export class EmployersController {
   }
 
   @Get("jobs")
+  @Header("Cache-Control", "private, no-store")
+  @AllowPendingEmployerReadOnly()
   jobs(
     @CurrentUser() user: AuthenticatedUser,
     @Query("page", new DefaultValuePipe(1), ParseIntPipe) page = 1,

@@ -19,6 +19,7 @@ import { UserNotification } from "./user-notification.entity";
 import { EmployersController } from "./employers.controller";
 import { RazorpayWebhookController } from "./razorpay-webhook.controller";
 import { EmployersService } from "./employers.service";
+import { EmployerApprovalGuard } from "./employer-approval.guard";
 
 @Module({
   imports: [
@@ -41,6 +42,6 @@ import { EmployersService } from "./employers.service";
     CandidateProfileModule,
   ],
   controllers: [EmployersController, RazorpayWebhookController],
-  providers: [EmployersService],
+  providers: [EmployersService, EmployerApprovalGuard],
 })
 export class EmployersModule {}

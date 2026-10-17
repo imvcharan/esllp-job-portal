@@ -13,6 +13,7 @@ import {
   EmployerOrganizationMember,
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
+import { CandidateSavedSearchesService } from "../users/candidate-saved-searches.service";
 
 @Injectable()
 export class JobsService {
@@ -29,6 +30,7 @@ export class JobsService {
     private readonly organizationMembers: Repository<EmployerOrganizationMember>,
     private readonly auditService: AuditService,
     private readonly emailDelivery: EmailDeliveryService,
+    private readonly savedSearchesService: CandidateSavedSearchesService,
   ) {}
 
   async findAll(filters: {
@@ -328,14 +330,36 @@ export class JobsService {
           profile.employmentTypes.includes(job.employmentType);
         return roleMatches && workplaceMatches && employmentMatches;
       });
-      if (!matchingProfiles.length) return { sent: 0, failed: 0 };
-
+      let savedSearches: Awaited<
+        ReturnType<CandidateSavedSearchesService["matchingForJob"]>
+      > = [];
+      let savedSearchFailure = 0;
+      try {
+        savedSearches = await this.savedSearchesService.matchingForJob(job);
+      } catch (error) {
+        savedSearchFailure = 1;
+        this.logger.error(
+          `Saved-search alerts could not be matched for job ${job.id}: ${
+            error instanceof Error ? error.message : "unknown matching error"
+          }`,
+        );
+      }
+      const userIds = [
+        ...new Set([
+          ...matchingProfiles.map((profile) => profile.userId),
+          ...savedSearches.map((search) => search.userId),
+        ]),
+      ];
+      if (!userIds.length) return { sent: 0, failed: savedSearchFailure };
       const recipients = await this.usersRepository.findBy(
-        matchingProfiles.map((profile) => ({
-          id: profile.userId,
-          isActive: true,
-        })),
+        userIds.map((id) => ({ id, isActive: true })),
       );
+      const matchingSearches = new Map<number, string[]>();
+      savedSearches.forEach((search) => {
+        const names = matchingSearches.get(search.userId) ?? [];
+        names.push(search.name);
+        matchingSearches.set(search.userId, names);
+      });
       const appUrl = process.env.PUBLIC_APP_URL?.trim();
       const jobUrl = appUrl
         ? `${appUrl.replace(/\/+$/, "")}/#job/${encodeURIComponent(job.id)}`
@@ -345,14 +369,14 @@ export class JobsService {
           this.emailDelivery.sendNotification(
             recipient.email,
             `New job matching your preferences: ${job.title}`,
-            `${job.title} at ${job.company} in ${job.location} matches your saved job preferences.${jobUrl ? ` View this listing: ${jobUrl}` : ""}`,
+            `${job.title} at ${job.company} in ${job.location} matches your saved job preferences${matchingSearches.has(recipient.id) ? ` (${matchingSearches.get(recipient.id)?.join(", ")})` : ""}.${jobUrl ? ` View this listing: ${jobUrl}` : ""}`,
           ),
         ),
       );
       const sent = results.filter(
         (result) => result.status === "fulfilled",
       ).length;
-      const failed = results.length - sent;
+      const failed = results.length - sent + savedSearchFailure;
       if (failed) {
         this.logger.error(
           `${failed} job alert email(s) could not be delivered for job ${job.id}.`,

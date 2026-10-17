@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f1f8fa">
   <meta name="description" content="Find work that moves you forward. Explore thoughtful job matches, real salary insights and opportunities from India's best teams.">
+  <meta property="og:site_name" content="esllp">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Find your next move — esllp">
+  <meta property="og:description" content="Explore published roles, build your candidate profile, and follow applications in one place.">
+  <meta name="twitter:card" content="summary">
   <title>esllp — Find work that moves you forward | Ocean edition</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -381,12 +386,17 @@
     }
 
     [hidden] { display: none !important; }
+    .skip-link { position: fixed; z-index: 1000; top: 8px; left: 8px; transform: translateY(-160%); padding: 10px 14px; border-radius: 6px; color: #fff; background: #102f42; font-weight: 700; }
+    .skip-link:focus { transform: translateY(0); }
+    :focus-visible { outline: 3px solid #edb82f; outline-offset: 3px; }
     body.search-mode main > section:not([data-page-view]),
     body.detail-mode main > section:not([data-page-view]),
     body.auth-mode main > section:not([data-page-view]),
+    body.info-mode main > section:not([data-page-view]),
     body.search-mode .footer,
     body.detail-mode .footer,
     body.auth-mode .footer { display: none; }
+    body.info-mode main > section:not([data-page-view]) { display: none; }
     .page-view { min-height: calc(100vh - 76px); padding: 42px 0 76px; background: var(--paper); }
     .results-topline, .results-toolbar, .result-card, .detail-topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .results-topline { margin-bottom: 22px; }
@@ -412,6 +422,7 @@
     .sort-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
     .sort-control select { width: auto; min-width: 155px; }
     .results-list { display: grid; gap: 12px; padding-top: 16px; }
+    .search-actions { display: flex; justify-content: flex-end; padding-top: 14px; }
     .result-card { align-items: flex-start; padding: 18px; border: 1px solid var(--line); border-radius: 12px; transition: border-color .2s, box-shadow .2s, transform .2s; }
     .result-card:hover { transform: translateY(-2px); border-color: #a9cfd3; box-shadow: 0 12px 28px rgba(18,57,74,.08); }
     .result-card-main { display: flex; min-width: 0; gap: 14px; }
@@ -464,7 +475,38 @@
     .auth-field input::placeholder { color: #89939b; }
     .auth-password { display: flex; gap: 8px; }
     .auth-password input { min-width: 0; }
-    .auth-password button { flex: 0 0 auto; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); background: #fff; cursor: pointer; font-size: 12px; font-weight: 700; }
+    .auth-password button { width: 45px; min-height: 45px; flex: 0 0 auto; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); background: #fff; cursor: pointer; }
+    .auth-password button:hover { color: var(--green); border-color: #a6cbb3; }
+    .auth-password button:focus-visible, .auth-tabs a:focus-visible, .auth-role-options a:focus-visible { outline: 3px solid color-mix(in srgb, var(--green) 35%, transparent); outline-offset: 2px; }
+    .auth-password svg { width: 19px; height: 19px; }
+    .auth-password .password-eye-closed { display: none; }
+    .auth-password button[aria-pressed="true"] .password-eye-open { display: none; }
+    .auth-password button[aria-pressed="true"] .password-eye-closed { display: block; }
+    .auth-tabs, .auth-role-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #f4f7f3; }
+    .auth-tabs { margin-bottom: 22px; }
+    .auth-role-options { margin: 0 0 20px; }
+    .auth-tabs a, .auth-role-options a { min-height: 39px; display: grid; place-items: center; padding: 7px 12px; border-radius: 7px; color: var(--muted); text-align: center; font-size: 12px; font-weight: 700; }
+    .auth-tabs a[aria-current="page"], .auth-role-options a[aria-current="page"] { color: var(--ink); background: #fff; box-shadow: 0 1px 4px rgba(18,57,74,.12); }
+    .info-page { min-height: calc(100vh - 76px); padding: 56px 0 80px; background: var(--paper); }
+    .info-page-header { max-width: 720px; margin: 0 auto 35px; text-align: center; }
+    .info-page-header h1 { margin: 12px 0; font-size: clamp(34px, 5vw, 54px); }
+    .info-page-header p { color: var(--muted); font-size: 15px; line-height: 1.7; }
+    .info-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .info-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 165px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+    .info-card h2, .info-card h3 { margin: 0; font: 700 17px "Manrope", sans-serif; letter-spacing: -.04em; }
+    .info-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .info-card .text-link { margin-top: auto; }
+    .info-steps { display: grid; gap: 12px; max-width: 780px; margin: 0 auto; }
+    .info-step { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 15px; padding: 18px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+    .info-step-number { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; color: var(--green); background: #eaf3e7; font-size: 12px; font-weight: 800; }
+    .info-step h2 { margin: 2px 0 5px; font: 700 16px "Manrope", sans-serif; }
+    .info-step p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .info-copy { max-width: 780px; margin: 0 auto; padding: clamp(22px, 5vw, 42px); border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+    .info-copy h2 { margin: 26px 0 8px; font: 700 19px "Manrope", sans-serif; }
+    .info-copy h2:first-child { margin-top: 0; }
+    .info-copy p, .info-copy li { color: #53645d; font-size: 13px; line-height: 1.8; }
+    .info-copy ul { padding-left: 21px; }
+    .info-cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
     .auth-form .button { width: 100%; margin-top: 3px; }
     .auth-switch { margin: 18px 0 0; color: var(--muted); text-align: center; font-size: 12px; }
     .auth-switch a, .auth-link { color: var(--green); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
@@ -663,6 +705,14 @@
       .filter-field select { min-width: 0; font-size: 12px; }
       .detail-heading { gap: 12px; }
     }
+    @media (max-width: 760px) {
+      .info-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .info-page { padding: 38px 0 58px; }
+    }
+    @media (max-width: 560px) {
+      .info-card-grid { grid-template-columns: 1fr; }
+      .info-card { min-height: 0; }
+    }
     @media (max-width: 800px) {
       .workspace-shell { grid-template-columns: 74px minmax(0, 1fr); }
       .workspace-sidebar { align-items: center; padding-inline: 8px; }
@@ -692,28 +742,29 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <div class="announcement">
     <strong>A better way to find your next move.</strong> Thoughtful matches, real opportunities.
-    <a href="#how-it-works">See how it works →</a>
+    <a href="#how-it-works-page">See how it works →</a>
   </div>
   <header class="header">
     <div class="wrap nav">
       <a class="brand" href="#home" aria-label="esllp home"><span class="brand-mark">e.</span><span class="brand-word">esllp</span></a>
       <nav class="nav-links" id="main-nav" aria-label="Main navigation">
-        <a href="#jobs">Find a job</a>
-        <a href="#categories">Explore careers</a>
-        <a href="#how-it-works">How it works</a>
-        <a href="#employers">For employers</a>
+        <a href="#search">Find a job</a>
+        <a href="#careers">Explore careers</a>
+        <a href="#how-it-works-page">How it works</a>
+        <a href="#employer-solutions">For employers</a>
       </nav>
       <div class="nav-actions">
         <a class="login" href="#sign-in" data-auth-login>Log in</a>
-        <a class="button button-dark" href="#sign-up" data-auth-signup>Create your profile <span aria-hidden="true">↗</span></a>
+        <a class="button button-dark" href="#sign-up" data-auth-signup>Create account <span aria-hidden="true">↗</span></a>
       </div>
       <button class="mobile-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="main-nav">☰</button>
     </div>
   </header>
 
-  <main>
+  <main id="main-content" tabindex="-1">
     <section class="hero">
       <div class="wrap hero-grid">
         <div class="hero-content">
@@ -811,7 +862,7 @@
     <section class="banner" id="employers">
       <div class="wrap banner-inner">
         <div class="banner-copy"><div class="section-kicker">Good teams deserve great people</div><h2>Build a team that moves you forward.</h2><p>Meet people who bring more than a CV to the table.</p></div>
-        <div class="employer-entry-actions"><a class="button button-lime" href="#sign-in">Employer sign in <span aria-hidden="true">↗</span></a><a class="text-link" href="#employer-sign-up">Create an employer account</a></div>
+        <div class="employer-entry-actions"><a class="button button-lime" href="#sign-in?role=employer">Employer sign in <span aria-hidden="true">↗</span></a><a class="text-link" href="#sign-up?role=employer">Create an employer account</a></div>
       </div>
     </section>
 
@@ -821,7 +872,7 @@
         <div class="steps">
           <div class="step"><span class="step-num">01</span><div><h3>Tell us what matters to you</h3><p>Share your strengths, what you're looking for, and what a good next step means to you.</p></div></div>
           <div class="step"><span class="step-num">02</span><div><h3>See roles that fit—not just roles that exist</h3><p>Explore relevant openings with salary, work style, and the details that help you decide.</p></div></div>
-          <div class="step"><span class="step-num">03</span><div><h3>Make your next move with confidence</h3><p>Save opportunities you want to revisit. Application submission will be added in a later release.</p></div></div>
+          <div class="step"><span class="step-num">03</span><div><h3>Make your next move with confidence</h3><p>Apply to published roles, then follow status updates from your candidate workspace.</p></div></div>
         </div>
       </div>
       <div class="wrap" style="margin-top:42px">
@@ -920,6 +971,9 @@
               <span id="page-indicator"></span>
               <button type="button" id="next-page">Next</button>
             </div>
+            <div class="search-actions">
+              <button class="button button-light" type="button" id="save-search-open">Save this search</button>
+            </div>
           </div>
         </div>
       </div>
@@ -936,18 +990,19 @@
         <div class="auth-copy">
           <div class="eyebrow"><span class="eyebrow-dot"></span> Your next move</div>
           <h1 id="auth-title">A good next step <span class="highlight">starts here.</span></h1>
-          <p>Sign in to continue your job search, or create a candidate account to get started. Your information stays connected to your account.</p>
+          <p id="auth-description">Sign in to continue. We’ll take you to the right workspace for your account.</p>
           <a class="back-link" href="#home">← Back to esllp</a>
         </div>
         <div class="auth-card" id="auth-card" aria-live="polite"></div>
       </div>
     </section>
+    <section class="page-view" id="information-view" data-page-view hidden aria-live="polite"></section>
     <section class="page-view" id="profile-view" data-page-view hidden aria-labelledby="profile-title">
       <div class="wrap profile-layout">
         <div class="workspace-shell">
           <aside class="workspace-sidebar">
             <a class="workspace-brand" href="#home" aria-label="esllp home"><span class="brand-mark">e.</span><span class="brand-word">esllp</span></a>
-            <div class="workspace-role" id="workspace-role-label">Candidate workspace</div>
+            <div class="workspace-role" id="workspace-role-label">Workspace</div>
             <div class="workspace-nav-label">Workspace</div>
             <nav class="workspace-nav" id="workspace-nav" aria-label="Workspace navigation"></nav>
             <div class="workspace-sidebar-bottom">
@@ -967,18 +1022,34 @@
     </section>
   </main>
 
+  <dialog class="photo-crop-dialog" id="save-search-dialog" aria-labelledby="save-search-title">
+    <form id="save-search-form" class="profile-fields">
+      <h2 id="save-search-title">Save this job search</h2>
+      <p class="auth-card-copy">Keep your search filters in your workspace and optionally receive an email when a new matching role is published.</p>
+      <label class="profile-field" for="saved-search-name">Search name
+        <input id="saved-search-name" name="name" maxlength="100" required>
+      </label>
+      <label class="profile-checkbox"><input name="emailAlerts" type="checkbox">Email me when a matching job is published (instant)</label>
+      <div class="photo-crop-actions">
+        <button class="button button-light" type="button" data-close-save-search>Cancel</button>
+        <button class="button button-dark" type="submit">Save search</button>
+      </div>
+      <p id="saved-search-form-status" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
   <div id="portal-status" role="status" aria-live="polite" hidden></div>
   <footer class="footer">
     <div class="wrap">
       <div class="footer-top">
         <div><a class="brand" href="#home" aria-label="esllp home"><span class="brand-mark">e.</span><span class="brand-word">esllp</span></a><p class="footer-about">Work is a big part of your story. Let's help you find the next chapter worth turning up for.</p></div>
         <div class="footer-links">
-          <div class="footer-col"><h3>For job seekers</h3><a href="#jobs">Find a job</a><a href="#categories">Explore careers</a><a href="#sign-up">Create a profile</a></div>
-          <div class="footer-col"><h3>For employers</h3><a href="#sign-in">Employer sign in</a><a href="#employer-sign-up">Create an employer account</a><a href="#employers">Find great people</a><a href="mailto:hello@esllp.com?subject=esllp%20portal%20enquiry">Get in touch</a></div>
-          <div class="footer-col"><h3>Get to know us</h3><a href="#how-it-works">How esllp works</a><span>Our stories · coming soon</span><a href="mailto:hello@esllp.com?subject=esllp%20portal%20support">Help & support</a></div>
+          <div class="footer-col"><h3>For job seekers</h3><a href="#search">Find a job</a><a href="#careers">Explore careers</a><a href="#sign-up">Create a profile</a></div>
+          <div class="footer-col"><h3>For employers</h3><a href="#sign-in?role=employer">Employer sign in</a><a href="#sign-up?role=employer">Create an employer account</a><a href="#employer-solutions">Find great people</a><a href="#help">Get in touch</a></div>
+          <div class="footer-col"><h3>Get to know us</h3><a href="#how-it-works-page">How esllp works</a><a href="#about">About esllp</a><a href="#help">Help & support</a></div>
         </div>
       </div>
-      <div class="footer-bottom"><span>© 2026 esllp. Here's to what's next.</span><div class="footer-social"><span>Privacy · coming soon</span><span>Terms · coming soon</span><span>LinkedIn · coming soon</span></div></div>
+      <div class="footer-bottom"><span>© 2026 esllp. Here's to what's next.</span><div class="footer-social"><a href="#privacy">Privacy</a><a href="#terms">Terms</a></div></div>
     </div>
   </footer>
 
@@ -1049,6 +1120,7 @@
     const portalStatus = document.querySelector("#portal-status");
     const authView = document.querySelector("#auth-view");
     const authCard = document.querySelector("#auth-card");
+    const informationView = document.querySelector("#information-view");
     const profileView = document.querySelector("#profile-view");
     const profileContent = document.querySelector("#profile-content");
     const workspaceNav = document.querySelector("#workspace-nav");
@@ -1107,6 +1179,26 @@
       const params = new URLSearchParams();
       if (query.trim()) params.set("query", query.trim());
       if (locationValue.trim()) params.set("location", locationValue.trim());
+      const suffix = params.toString();
+      return `#search${suffix ? `?${suffix}` : ""}`;
+    }
+
+    function savedSearchHash(savedSearch) {
+      const params = new URLSearchParams();
+      if (savedSearch.query) params.set("query", savedSearch.query);
+      if (savedSearch.location) params.set("location", savedSearch.location);
+      const filters = savedSearch.filters || {};
+      Object.entries({
+        workplaceType: filters.workplaceType,
+        employmentType: filters.employmentType,
+        experience: filters.experience,
+        company: filters.company,
+        minimumSalary: filters.minimumSalary,
+        freshnessDays: filters.freshnessDays,
+        sort: filters.sort
+      }).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+      });
       const suffix = params.toString();
       return `#search${suffix ? `?${suffix}` : ""}`;
     }
@@ -1373,6 +1465,7 @@
         </div>
         <div class="detail-meta">${meta}</div>
         <div class="detail-salary"><strong>${escapeHtml(formatSalary(job))}</strong><span>Salary range as provided by the listing${job.isPreview ? " · example only" : ""}</span></div>
+        ${!job.isPreview && /^\d+$/.test(String(job.id)) ? `<p><a class="text-link" href="/share/jobs/${encodeURIComponent(job.id)}" target="_blank" rel="noopener noreferrer">Open shareable job page ↗</a> <button class="button button-light" type="button" data-share-job="${escapeHtml(job.id)}">Share job</button></p>` : ""}
         <section class="detail-description"><h2>About this role</h2><p id="detail-description-text"></p></section>
       </article>
       <aside class="detail-aside">
@@ -1425,8 +1518,9 @@
       searchView.hidden = true;
       detailView.hidden = true;
       authView.hidden = true;
+      informationView.hidden = true;
       profileView.hidden = true;
-      document.body.classList.remove("search-mode", "detail-mode", "auth-mode");
+      document.body.classList.remove("search-mode", "detail-mode", "auth-mode", "info-mode");
     }
 
     function navigate(hash) {
@@ -1447,6 +1541,20 @@
         : ["admin", "superadmin"].includes(authState.user.role)
           ? "/admin/"
           : "#dashboard";
+    }
+
+    function setMainNavigationCurrent(href) {
+      document.querySelectorAll("#main-nav a").forEach((link) => {
+        if (href && link.getAttribute("href") === href) {
+          link.setAttribute("aria-current", "page");
+        } else {
+          link.removeAttribute("aria-current");
+        }
+      });
+    }
+
+    function authRouteName(hash = location.hash) {
+      return hash.slice(1).split("?")[0];
     }
 
     function redirectAuthenticatedUser() {
@@ -1500,7 +1608,8 @@
         Number.isSafeInteger(payload.user.id) &&
         typeof payload.user.email === "string" &&
         typeof payload.user.displayName === "string" &&
-        typeof payload.user.role === "string";
+        typeof payload.user.role === "string" &&
+        ["not_applicable", "pending", "approved", "rejected"].includes(payload.user.employerApprovalStatus);
     }
 
     async function restoreSession() {
@@ -1524,49 +1633,45 @@
             showToast(`Saved jobs could not be synced: ${displayAuthError(error)}`);
           }
         }
-        if (location.hash === "#sign-in" || location.hash === "#sign-up") {
+        if (["sign-in", "sign-up", "employer-sign-up"].includes(authRouteName())) {
           redirectAuthenticatedUser();
         }
       } catch (error) {
         authState.notice = displayAuthError(error);
         authState.noticeType = "error";
-        if (location.hash === "#sign-in" || location.hash === "#sign-up") renderAuth();
+        if (["sign-in", "sign-up", "employer-sign-up"].includes(authRouteName())) renderAuth();
       }
     }
 
     function renderAuth() {
       authView.hidden = false;
-      const isSignup = location.hash === "#sign-up";
-      const action = location.hash.slice(1).split("?")[0];
+      const action = authRouteName();
+      const isSignup = action === "sign-up" || action === "employer-sign-up";
       const authParams = new URLSearchParams(location.hash.split("?")[1] || "");
       const token = authParams.get("token") || "";
-      document.body.classList.add("auth-mode");
-      document.title = isSignup ? "Create your profile — esllp" : action === "employer-sign-up" ? "Employer registration — esllp" : "Log in — esllp";
-      if (action === "employer-sign-up") {
-        const invitationToken = authParams.get("invite") || "";
-        authCard.innerHTML = `<h2>Create an employer account</h2>
-          <p class="auth-card-copy">${invitationToken ? "You have been invited to join a company. Register using the email address that received the invitation; your access will be available after email verification and administrator approval." : "Register your organization. Verify your work email; an administrator will review and approve the employer account before dashboard access."}</p>
-          <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
-          <form class="auth-form" id="employer-register-form" novalidate>
-            <label class="auth-field">Your full name<input name="displayName" type="text" autocomplete="name" minlength="2" maxlength="120" required></label>
-            ${invitationToken ? `<input name="invitationToken" type="hidden" value="${escapeHtml(invitationToken)}">` : '<label class="auth-field">Company name<input name="companyName" type="text" autocomplete="organization" minlength="2" maxlength="160" required></label><label class="auth-field">Company website <span>(optional)</span><input name="companyWebsite" type="url" inputmode="url" maxlength="500" placeholder="https://example.com"></label>'}
-            <label class="auth-field">Work email address<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
-            <label class="auth-field">Password<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required></label>
-            <p class="auth-card-copy">Registration does not grant immediate access. An administrator must approve your employer account after you verify your email.</p>
-            <button class="button button-dark" type="submit">Submit for approval</button>
-          </form>
-          <p class="auth-switch"><a href="#sign-in">Already approved? Sign in</a> · <a href="#sign-up">Create a candidate account</a></p>`;
-        return;
-      }
       const inviteToken = authParams.get("invite") || "";
+      const accountType = action === "employer-sign-up" ||
+        (["sign-up", "sign-in"].includes(action) && authParams.get("role") === "employer") ||
+        (!isSignup && action === "sign-in" && inviteToken)
+        ? "employer"
+        : "candidate";
+      document.body.classList.add("auth-mode");
+      document.title = isSignup
+        ? accountType === "employer" ? "Employer registration — esllp" : "Create your profile — esllp"
+        : "Log in — esllp";
+      document.querySelector("#auth-description").textContent = isSignup
+        ? accountType === "employer"
+          ? "Build your team with an employer workspace. Verify your email to preview the read-only dashboard while an administrator reviews your account."
+          : "Create a candidate account to save your details and get ready for your next opportunity."
+        : "Sign in to continue. We’ll take you to the right workspace for your account.";
       if (["forgot-password", "reset-password", "verify-email", "resend-verification"].includes(action)) {
         const isReset = action === "reset-password";
         const isVerification = action === "verify-email";
         const isResend = action === "resend-verification";
         const heading = isReset ? "Choose a new password" : isVerification ? "Verify your email" : isResend ? "Resend verification link" : "Reset your password";
-        const copy = isReset ? "Use a strong password you do not reuse elsewhere." : isVerification ? "Confirm your email to finish activating your account. Employer accounts also require administrator approval before sign-in." : isResend ? "Enter the address used for your candidate or employer account." : "If an account exists for this address, we will send a one-time reset link.";
+        const copy = isReset ? "Use a strong password you do not reuse elsewhere." : isVerification ? "Confirm your email to finish activating your account. Verified employers can preview a read-only dashboard while awaiting administrator approval." : isResend ? "Enter the address used for your candidate or employer account." : "If an account exists for this address, we will send a one-time reset link.";
         const input = isReset
-          ? `<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>`
+          ? `<span class="auth-password"><input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>${passwordVisibilityButton()}</span>`
           : isVerification ? "" : `<input name="email" type="email" autocomplete="email" maxlength="254" required>`;
         const label = isReset ? "New password" : isVerification ? "" : "Email address";
         const button = isReset ? "Update password" : isVerification ? "Verify email" : isResend ? "Send verification link" : "Send reset link";
@@ -1590,67 +1695,137 @@
           <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>`;
         return;
       }
-      authCard.innerHTML = `<h2>${isSignup ? "Create your profile" : "Welcome back"}</h2>
-        <p class="auth-card-copy">${inviteToken ? "Sign in with the email address that received the company invitation. We’ll connect you to that team after sign-in." : isSignup ? "Create a candidate account to save your details and get ready for your next opportunity." : "Sign in to continue your job search."}</p>
+      const authTabs = `<nav class="auth-tabs" aria-label="Account access">
+          <a href="#sign-in${inviteToken && !isSignup ? `?invite=${encodeURIComponent(inviteToken)}` : ""}"${!isSignup ? ' aria-current="page"' : ""}>Sign in</a>
+          <a href="${accountType === "employer" ? "#sign-up?role=employer" : "#sign-up"}${inviteToken ? `${accountType === "employer" ? "&" : "?"}invite=${encodeURIComponent(inviteToken)}` : ""}"${isSignup ? ' aria-current="page"' : ""}>Create account</a>
+        </nav>`;
+      const roleOptions = isSignup ? `<nav class="auth-role-options" aria-label="Choose account type">
+          <a href="#sign-up${inviteToken ? `?invite=${encodeURIComponent(inviteToken)}` : ""}"${accountType === "candidate" ? ' aria-current="page"' : ""}>Candidate</a>
+          <a href="#sign-up?role=employer${inviteToken ? `&invite=${encodeURIComponent(inviteToken)}` : ""}"${accountType === "employer" ? ' aria-current="page"' : ""}>Employer</a>
+        </nav>` : "";
+      const description = inviteToken && !isSignup
+        ? "Sign in with the email address that received the company invitation. We’ll connect you to that team after sign-in."
+        : isSignup && accountType === "employer"
+          ? inviteToken
+            ? "Create your account using the email address that received the company invitation."
+            : "Register your organization and verify your work email. You can preview a read-only dashboard while your account awaits administrator approval."
+          : isSignup
+            ? "Create a candidate account to save your details and get ready for your next opportunity."
+            : "Sign in to continue. We’ll take you to the right workspace for your account.";
+      authCard.innerHTML = `${authTabs}<h2>${isSignup ? accountType === "employer" ? "Create an employer account" : "Create your profile" : "Welcome back"}</h2>
+        <p class="auth-card-copy">${description}</p>
+        ${roleOptions}
         <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
-        <form class="auth-form" id="auth-form" novalidate>
+        <form class="auth-form" id="auth-form" data-account-type="${isSignup ? accountType : ""}" novalidate>
           ${isSignup ? `<label class="auth-field" for="auth-name">Your name
             <input id="auth-name" name="displayName" type="text" autocomplete="name" minlength="2" maxlength="120" required>
           </label>` : ""}
+          ${isSignup && accountType === "employer" && !inviteToken ? `<label class="auth-field" for="auth-company-name">Company name
+            <input id="auth-company-name" name="companyName" type="text" autocomplete="organization" minlength="2" maxlength="160" required>
+          </label>
+          <label class="auth-field" for="auth-company-website">Company website <span>(optional)</span>
+            <input id="auth-company-website" name="companyWebsite" type="url" autocomplete="url" maxlength="500" placeholder="https://example.com">
+          </label>` : ""}
+          ${isSignup && accountType === "employer" && inviteToken ? `<input name="invitationToken" type="hidden" value="${escapeHtml(inviteToken)}">` : ""}
           <label class="auth-field" for="auth-email">Email address
-            <input id="auth-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+            <input id="auth-email" name="email" type="email" autocomplete="email" maxlength="254" required${inviteToken && !isSignup ? ' aria-describedby="invitation-signin-note"' : ""}>
           </label>
+          ${inviteToken && !isSignup ? '<p class="auth-card-copy" id="invitation-signin-note">Use the invited email address. You can also create an employer account from the Create account tab.</p>' : ""}
           <label class="auth-field" for="auth-password">Password
-            <span class="auth-password"><input id="auth-password" name="password" type="password" autocomplete="${isSignup ? "new-password" : "current-password"}" ${isSignup ? 'minlength="8"' : ''} maxlength="72" required>
-              <button type="button" data-password-toggle aria-pressed="false">Show</button></span>
+            <span class="auth-password"><input id="auth-password" name="password" type="password" autocomplete="${isSignup ? "new-password" : "current-password"}" ${isSignup ? 'minlength="8"' : ''} maxlength="72" required>${passwordVisibilityButton()}</span>
           </label>
-          ${isSignup ? '<p class="auth-card-copy">Use at least 8 characters. We’ll email you a verification link before first sign-in.</p>' : ""}
-          <button class="button button-dark" type="submit">${isSignup ? "Create candidate account" : "Log in"} <span aria-hidden="true">→</span></button>
+          ${isSignup ? `<p class="auth-card-copy">${accountType === "employer" ? "Use at least 8 characters. Verify your email; employer access also requires administrator approval." : "Use at least 8 characters. We’ll email you a verification link before first sign-in."}</p>` : ""}
+          <button class="button button-dark" type="submit">${isSignup ? accountType === "employer" ? inviteToken ? "Create account" : "Submit for approval" : "Create candidate account" : "Log in"} <span aria-hidden="true">→</span></button>
         </form>
-        <p class="auth-switch">${isSignup ? 'Already have an account? <a href="#sign-in">Log in</a><br>Hiring a team? <a href="#employer-sign-up">Register as an employer</a>' : '<a href="#forgot-password">Forgot password?</a> · <a href="#resend-verification">Resend verification</a><br>New to esllp? <a href="#sign-up">Candidate registration</a> · <a href="#employer-sign-up">Employer registration</a>'}</p>`;
+        ${!isSignup ? '<p class="auth-switch"><a href="#forgot-password">Forgot password?</a> · <a href="#resend-verification">Resend verification</a></p>' : ""}`;
+    }
+
+    function passwordVisibilityButton() {
+      return `<button type="button" data-password-toggle aria-label="Show password" aria-pressed="false" title="Show password">
+        <svg class="password-eye-open" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12s3.3-6 9.5-6 9.5 6 9.5 6-3.3 6-9.5 6-9.5-6-9.5-6Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg>
+        <svg class="password-eye-closed" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 3 18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6.2 0 9.5 6 9.5 6a16 16 0 0 1-2.7 3.4M6.2 6.3C3.8 8 2.5 12 2.5 12s3.3 6 9.5 6c1 0 2-.2 2.8-.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button>`;
+    }
+
+    function renderInformationPage(page) {
+      const infoPages = {
+        careers: {
+          title: "Explore careers",
+          description: "Browse opportunities by the kind of work you want to do. Search results show published roles from hiring teams.",
+          content: `<div class="info-card-grid">${[
+            ["Engineering", "⌘", "Build products, platforms and dependable systems."],
+            ["Product", "✳", "Shape useful products from discovery through launch."],
+            ["Design & creative", "◒", "Create clear, thoughtful experiences and content."],
+            ["Marketing", "↗", "Help people find, understand and choose great products."],
+            ["Data & analytics", "▤", "Turn information into better decisions."],
+            ["Business & strategy", "◫", "Help teams grow, plan and deliver."],
+            ["People & culture", "♧", "Build welcoming, effective workplaces."],
+            ["Finance", "◎", "Support healthy businesses with sound financial work."]
+          ].map(([category, icon, description]) => `<article class="info-card"><span class="category-icon" aria-hidden="true">${icon}</span><h2>${category}</h2><p>${description}</p><a class="text-link" href="${makeSearchHash(category, "")}">Explore ${category.toLowerCase()} jobs →</a></article>`).join("")}</div>
+          <div class="info-cta"><a class="button button-dark" href="#search">Search all published jobs →</a></div>`
+        },
+        "how-it-works-page": {
+          title: "How esllp works",
+          description: "A straightforward path from discovering an opportunity to following your application.",
+          content: `<div class="info-steps">
+            <article class="info-step"><span class="info-step-number">01</span><div><h2>Discover published roles</h2><p>Search by job title, skill or location. Filter roles by work arrangement, employment type, experience and other available details.</p></div></article>
+            <article class="info-step"><span class="info-step-number">02</span><div><h2>Build your candidate profile</h2><p>Add your experience, education, skills and preferences. Your profile stays private unless you choose to share it with an application.</p></div></article>
+            <article class="info-step"><span class="info-step-number">03</span><div><h2>Apply with your choices</h2><p>Submit an application to a live role, optionally include your resume and choose whether the employer can see your profile.</p></div></article>
+            <article class="info-step"><span class="info-step-number">04</span><div><h2>Follow progress</h2><p>Review application status and updates in your workspace. You can withdraw an application while it is still submitted.</p></div></article>
+          </div><div class="info-cta"><a class="button button-dark" href="#search">Find a job →</a><a class="button button-light" href="#sign-up">Create a candidate account</a></div>`
+        },
+        "employer-solutions": {
+          title: "Find people who move your team forward",
+          description: "Create an employer workspace to publish roles, review applicants and coordinate hiring with your team.",
+          content: `<div class="info-card-grid">
+            <article class="info-card"><span class="category-icon" aria-hidden="true">▤</span><h2>Publish roles</h2><p>Create and manage job listings from one employer workspace.</p></article>
+            <article class="info-card"><span class="category-icon" aria-hidden="true">♙</span><h2>Review applicants</h2><p>Search applications, review shared candidate details and manage each role’s hiring pipeline.</p></article>
+            <article class="info-card"><span class="category-icon" aria-hidden="true">◷</span><h2>Coordinate interviews</h2><p>Schedule interviews, add internal notes and keep hiring activity with the relevant application.</p></article>
+            <article class="info-card"><span class="category-icon" aria-hidden="true">▣</span><h2>Work as a team</h2><p>Set up your company profile and invite teammates to collaborate in your organization.</p></article>
+            <article class="info-card"><span class="category-icon" aria-hidden="true">✓</span><h2>Clear approval process</h2><p>After email verification, employers can preview a read-only dashboard while they wait for administrator approval.</p></article>
+            <article class="info-card"><span class="category-icon" aria-hidden="true">◎</span><h2>Manage your plan</h2><p>Review available workspace plan and billing actions from the employer dashboard.</p></article>
+          </div><div class="info-cta"><a class="button button-dark" href="#sign-up?role=employer">Create an employer account →</a><a class="button button-light" href="#sign-in?role=employer">Employer sign in</a></div>`
+        },
+        about: {
+          title: "A more thoughtful way to find work",
+          description: "esllp brings job discovery, candidate profiles and hiring workflows into one clear place.",
+          content: `<article class="info-copy"><h2>For people looking for their next step</h2><p>Search published opportunities, save roles to revisit, build your profile and keep track of applications from your candidate workspace.</p><h2>For teams building theirs</h2><p>Employers can set up a company workspace, publish roles, review applications and coordinate interviews with invited teammates.</p><h2>Built around useful information</h2><p>Job details, salary information and work arrangements are shown when provided by the hiring team. Candidate profile sharing is controlled through your profile and application choices.</p><div class="info-cta"><a class="button button-dark" href="#search">Explore published jobs</a><a class="button button-light" href="#employer-solutions">For employers</a></div></article>`
+        },
+        help: {
+          title: "How can we help?",
+          description: "Find a quick answer or contact the esllp support team.",
+          content: `<div class="info-card-grid">
+            <article class="info-card"><h2>I can’t sign in</h2><p>Check that you have verified your email. Use password recovery if you need to set a new password.</p><a class="text-link" href="#forgot-password">Reset my password →</a></article>
+            <article class="info-card"><h2>I need another verification email</h2><p>Request a fresh verification link for your candidate or employer account.</p><a class="text-link" href="#resend-verification">Resend verification →</a></article>
+            <article class="info-card"><h2>I’m an employer</h2><p>Verify your email to sign in to a read-only preview while an administrator reviews your employer account.</p><a class="text-link" href="#employer-solutions">Employer information →</a></article>
+          </div><article class="info-copy" style="margin-top:18px"><h2>Contact support</h2><p>For account, job listing or workspace help, email us from the address associated with your account and include a short description of the issue. Never send your password or verification link.</p><a class="button button-dark" href="mailto:hello@esllp.com?subject=esllp%20portal%20support">Email hello@esllp.com</a></article>`
+        },
+        privacy: {
+          title: "Privacy",
+          description: "A clear overview of how information is used across esllp accounts and hiring workflows.",
+          content: `<article class="info-copy"><h2>Information you provide</h2><p>Account details, candidate profile information, resumes, job applications and employer workspace information are used to provide the portal features you request.</p><h2>Candidate profile and applications</h2><p>Your candidate profile is available to you in your workspace. Employers receive profile details only when profile sharing is enabled and you choose to share them with an application. Application details are visible to the employer handling that role.</p><h2>Account and service messages</h2><p>We use your email address for account verification, password recovery and service-related messages. Keep your account email current so you can receive these messages.</p><h2>Your choices and requests</h2><p>You can update your profile and account password from your workspace. For a privacy question or a request concerning your account data, contact <a href="mailto:hello@esllp.com?subject=Privacy%20request">hello@esllp.com</a> from your account email. Do not include passwords or sign-in links.</p><p>This is a high-level overview, not a complete privacy policy. Contact us for questions about data access or deletion, and contact the relevant employer about information it handles during hiring.</p></article>`
+        },
+        terms: {
+          title: "Terms of use",
+          description: "Guidance for using the esllp job portal responsibly.",
+          content: `<article class="info-copy"><h2>Using an account</h2><p>Provide accurate account details, keep your password private and use your account only for its intended job-seeking or hiring purpose. Tell us if you believe someone else has accessed your account.</p><h2>Candidate accounts</h2><p>Keep profile and application information accurate and share only information you are comfortable providing to the employer for a role.</p><h2>Employer accounts and listings</h2><p>Employers are responsible for the accuracy of their company details, job listings and hiring communications. Do not publish misleading roles or use candidate information outside the relevant hiring process.</p><h2>Platform availability</h2><p>We work to keep the portal useful and available, but features may change or be temporarily unavailable while we maintain the service. Contact support if you encounter a problem.</p><h2>Questions</h2><p>For help with these terms or an account, email <a href="mailto:hello@esllp.com?subject=Terms%20question">hello@esllp.com</a>.</p><p>This is a high-level overview, not a complete agreement. Have the final terms reviewed and published with your business-specific rules before relying on them.</p></article>`
+        }
+      };
+      const content = infoPages[page];
+      if (!content) return false;
+      informationView.innerHTML = `<div class="info-page"><div class="wrap">
+        <header class="info-page-header"><div class="section-kicker">${page === "employer-solutions" ? "For hiring teams" : page === "careers" ? "Explore opportunities" : "esllp"}</div><h1>${content.title}</h1><p>${content.description}</p></header>
+        ${content.content}
+      </div></div>`;
+      informationView.hidden = false;
+      document.body.classList.add("info-mode");
+      document.title = `${content.title} — esllp`;
+      const navigationPage = page === "careers" ? "#careers" : page === "how-it-works-page" ? "#how-it-works-page" : page === "employer-solutions" ? "#employer-solutions" : "";
+      setMainNavigationCurrent(navigationPage);
+      return true;
     }
 
     authCard.addEventListener("submit", async (event) => {
-      if (event.target.id === "employer-register-form") {
-        event.preventDefault();
-        const form = event.target;
-        if (!form.reportValidity()) return;
-        const formData = new FormData(form);
-        const password = String(formData.get("password") || "");
-        if (new TextEncoder().encode(password).length > 72) {
-          setAuthNotice("Password must be no longer than 72 UTF-8 bytes.", "error");
-          return;
-        }
-        const button = form.querySelector('[type="submit"]');
-        button.disabled = true;
-        button.textContent = "Submitting…";
-        setAuthNotice("");
-        try {
-          const response = await fetch("/api/auth/register/employer", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              displayName: String(formData.get("displayName") || "").trim(),
-              ...(formData.get("invitationToken") ? { invitationToken: String(formData.get("invitationToken")) } : {
-                companyName: String(formData.get("companyName") || "").trim(),
-                companyWebsite: String(formData.get("companyWebsite") || "").trim() || undefined
-              }),
-              email: String(formData.get("email") || "").trim(),
-              password
-            })
-          });
-          const result = await readAuthResponse(response);
-          authState.notice = result.message;
-          authState.noticeType = "";
-          navigate("#sign-in");
-        } catch (error) {
-          setAuthNotice(displayAuthError(error), "error");
-          button.disabled = false;
-          button.textContent = "Submit for approval";
-        }
-        return;
-      }
       if (event.target.id === "account-action-form") {
         event.preventDefault();
         const form = event.target;
@@ -1698,7 +1873,8 @@
       const form = event.target;
       if (!form.reportValidity()) return;
       const formData = new FormData(form);
-      const isSignup = location.hash === "#sign-up";
+      const isSignup = ["sign-up", "employer-sign-up"].includes(authRouteName());
+      const accountType = isSignup ? form.dataset.accountType : "";
       const password = String(formData.get("password") || "");
       const displayName = String(formData.get("displayName") || "").trim();
       if (isSignup && (displayName.length < 2 || displayName.length > 120)) {
@@ -1711,23 +1887,40 @@
       }
       const submitButton = form.querySelector('[type="submit"]');
       submitButton.disabled = true;
-      submitButton.textContent = isSignup ? "Creating account…" : "Signing in…";
+      submitButton.textContent = isSignup
+        ? accountType === "employer" ? "Submitting…" : "Creating account…"
+        : "Signing in…";
       setAuthNotice("");
       try {
-        const response = await fetch(`/api/auth/${isSignup ? "register" : "login"}`, {
+        const registrationDetails = accountType === "employer"
+          ? {
+              ...(formData.get("invitationToken")
+                ? { invitationToken: String(formData.get("invitationToken")) }
+                : {
+                    companyName: String(formData.get("companyName") || "").trim(),
+                    companyWebsite: String(formData.get("companyWebsite") || "").trim() || undefined
+                  })
+            }
+          : {};
+        const authEndpoint = isSignup
+          ? accountType === "employer" ? "register/employer" : "register"
+          : "login";
+        const response = await fetch(`/api/auth/${authEndpoint}`, {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             email: String(formData.get("email") || "").trim(),
             password,
-            ...(isSignup ? { displayName } : {})
+            ...(isSignup ? { displayName, ...registrationDetails } : {})
           })
         });
         const payload = await readAuthResponse(response);
         if (isSignup) {
+          authState.notice = accountType === "employer"
+            ? payload.message
+            : "Account created. Check your email for the verification link before signing in.";
           authState.noticeType = "";
-          setAuthNotice("Account created. Check your email for the verification link before signing in.");
           navigate("#sign-in");
           return;
         }
@@ -1741,7 +1934,9 @@
         authState.noticeType = "";
         updateAuthNavigation();
         const inviteToken = new URLSearchParams(location.hash.split("?")[1] || "").get("invite");
-        if (inviteToken) {
+        if (inviteToken && payload.user.employerApprovalStatus === "pending") {
+          authState.notice = "Your employer account is awaiting administrator approval.";
+        } else if (inviteToken) {
           if (payload.user.role !== "employer") {
             authState.notice = "You signed in, but company invitations require an employer account.";
             authState.noticeType = "error";
@@ -1775,18 +1970,55 @@
       } catch (error) {
         setAuthNotice(displayAuthError(error), "error");
         submitButton.disabled = false;
-        submitButton.innerHTML = `${isSignup ? "Create candidate account" : "Log in"} <span aria-hidden="true">→</span>`;
+        submitButton.innerHTML = `${isSignup ? accountType === "employer" ? "Submit for approval" : "Create candidate account" : "Log in"} <span aria-hidden="true">→</span>`;
       }
     });
 
     document.addEventListener("click", async (event) => {
       const visibilityButton = event.target.closest("[data-password-toggle]");
       if (visibilityButton) {
-        const input = event.target.closest(".auth-password").querySelector("#auth-password");
+        const input = visibilityButton.closest(".auth-password").querySelector("input");
         const isVisible = input.type === "text";
         input.type = isVisible ? "password" : "text";
-        visibilityButton.textContent = isVisible ? "Show" : "Hide";
+        const label = isVisible ? "Show password" : "Hide password";
+        visibilityButton.setAttribute("aria-label", label);
+        visibilityButton.setAttribute("title", label);
         visibilityButton.setAttribute("aria-pressed", String(!isVisible));
+        return;
+      }
+      const approvalStatusButton = event.target.closest("[data-refresh-employer-approval]");
+      if (approvalStatusButton) {
+        approvalStatusButton.disabled = true;
+        approvalStatusButton.textContent = "Checking…";
+        try {
+          const response = await authenticatedFetch("/api/auth/me");
+          const user = await readAuthResponse(response);
+          if (
+            !user ||
+            user.id !== authState.user?.id ||
+            user.role !== "employer" ||
+            !["pending", "approved", "rejected"].includes(user.employerApprovalStatus)
+          ) {
+            throw new Error("The account service returned an unexpected approval status.");
+          }
+          authState.user = user;
+          updateAuthNavigation();
+          if (isPendingEmployer()) {
+            showToast("Your employer account is still awaiting administrator approval.");
+          } else if (user.employerApprovalStatus === "approved") {
+            showToast("Your employer account is approved. Workspace actions are now available.");
+            route();
+          } else {
+            showToast("Your employer account is no longer available. Contact esllp support.");
+          }
+        } catch (error) {
+          showToast(`Approval status could not be checked: ${displayAuthError(error)}`);
+        } finally {
+          if (approvalStatusButton.isConnected) {
+            approvalStatusButton.disabled = false;
+            approvalStatusButton.textContent = "Check approval status";
+          }
+        }
         return;
       }
       const logoutButton = event.target.closest("[data-auth-logout]");
@@ -2426,9 +2658,18 @@
       }
     }
 
+    function isPendingEmployer() {
+      return authState.user?.role === "employer" &&
+        authState.user.employerApprovalStatus === "pending";
+    }
+
+    function pendingEmployerNotice(message) {
+      return `<div class="workspace-notice" role="status"><strong>Pending admin approval.</strong> ${escapeHtml(message)} <button class="button" type="button" data-refresh-employer-approval>Check approval status</button></div>`;
+    }
+
     function workspaceItems(role) {
       if (role === "employer") {
-        return [
+        const items = [
           { key: "overview", label: "Overview", icon: "⌂", href: "#dashboard" },
           { key: "company", label: "Company profile", icon: "▦", href: "#dashboard/company" },
           { key: "jobs", label: "Manage jobs", icon: "▤", href: "#dashboard/jobs" },
@@ -2438,12 +2679,20 @@
           { key: "notifications", label: "Notifications", icon: "♢", href: "#dashboard/notifications" },
           { key: "billing", label: "Plan & billing", icon: "◇", href: "#dashboard/billing" }
         ];
+        return isPendingEmployer()
+          ? items
+              .filter((item) => ["overview", "company", "jobs"].includes(item.key))
+              .map((item) =>
+                item.key === "jobs" ? { ...item, label: "Job listings" } : item,
+              )
+          : items;
       }
       return [
         { key: "overview", label: "Overview", icon: "⌂", href: "#dashboard" },
         { key: "profile", label: "My profile", icon: "◉", href: "#dashboard/profile" },
         { key: "jobs", label: "Find jobs", icon: "⌕", href: "#dashboard/jobs" },
         { key: "saved", label: "Saved jobs", icon: "♡", href: "#dashboard/saved" },
+        { key: "saved-searches", label: "Saved searches", icon: "⌕", href: "#dashboard/saved-searches" },
         { key: "applications", label: "Applications", icon: "▣", href: "#dashboard/applications" },
         { key: "notifications", label: "Notifications", icon: "♢", href: "#dashboard/notifications" }
       ];
@@ -2453,11 +2702,13 @@
       const user = authState.user;
       if (!user) return;
       const isEmployer = user.role === "employer";
+      const pendingEmployer = isPendingEmployer();
       const pageTitle = ({
         overview: "Overview",
         profile: "My profile",
-        jobs: isEmployer ? "Manage jobs" : "Find jobs",
+        jobs: isPendingEmployer() ? "Job listings" : isEmployer ? "Manage jobs" : "Find jobs",
         saved: "Saved jobs",
+        "saved-searches": "Saved searches",
         applications: "Applications",
         company: "Company profile",
         applicants: "Applicants",
@@ -2467,7 +2718,9 @@
         billing: "Plan & billing",
         job: "Job details"
       })[page] || "Overview";
-      document.querySelector("#workspace-role-label").textContent = isEmployer ? "Employer workspace" : "Candidate workspace";
+      document.querySelector("#workspace-role-label").textContent = pendingEmployer
+        ? "Employer workspace · pending approval"
+        : isEmployer ? "Employer workspace" : "Candidate workspace";
       document.querySelector("#workspace-current-title").textContent = pageTitle;
       document.querySelector("#workspace-user-name").textContent = user.displayName;
       document.querySelector("#workspace-user-role").textContent = user.role;
@@ -2505,16 +2758,18 @@
     }
 
     async function loadEmployerOverview() {
+      const pendingEmployer = isPendingEmployer();
       profileContent.innerHTML = '<section class="workspace-welcome"><h2>Welcome to your hiring workspace</h2><p>Loading company activity and hiring metrics…</p></section><div class="workspace-stat-grid"><article class="workspace-stat"><span class="workspace-stat-label">Active jobs</span><strong class="workspace-stat-value">—</strong></article><article class="workspace-stat"><span class="workspace-stat-label">Applicants</span><strong class="workspace-stat-value">—</strong></article><article class="workspace-stat"><span class="workspace-stat-label">Plan</span><strong class="workspace-stat-value">—</strong></article></div>';
       try {
         const response = await employerRequest("/api/employer/dashboard");
         const dashboard = await readAuthResponse(response);
         const metrics = dashboard.metrics;
         const pipeline = metrics.pipeline || {};
-        profileContent.innerHTML = `${workspaceHeading(dashboard.organization.name, `Welcome, ${authState.user.displayName}`, "Your team’s hiring activity, applicant pipeline, and plan usage at a glance.")}
-          <section class="workspace-welcome"><h2>Build a great team, one thoughtful hire at a time.</h2><p>Publish roles, review candidate applications, coordinate interviews, and keep your hiring team aligned from one workspace.</p><a class="button button-lime" href="#dashboard/jobs">Manage open roles →</a></section>
+        profileContent.innerHTML = `${pendingEmployer ? pendingEmployerNotice("This dashboard is read-only until an administrator approves your employer account. You can review your company profile and job listings, but cannot make changes.") : ""}
+          ${workspaceHeading(dashboard.organization.name, `Welcome, ${authState.user.displayName}`, pendingEmployer ? "Read-only preview of your employer workspace while your account awaits administrator approval." : "Your team’s hiring activity, applicant pipeline, and plan usage at a glance.")}
+          <section class="workspace-welcome"><h2>${pendingEmployer ? "Your employer workspace is awaiting approval." : "Build a great team, one thoughtful hire at a time."}</h2><p>${pendingEmployer ? "Once approved, you’ll be able to update your company, publish roles, review applications, and coordinate hiring." : "Publish roles, review candidate applications, coordinate interviews, and keep your hiring team aligned from one workspace."}</p>${pendingEmployer ? "" : '<a class="button button-lime" href="#dashboard/jobs">Manage open roles →</a>'}</section>
           <div class="workspace-stat-grid">
-            <article class="workspace-stat"><span class="workspace-stat-label">Active jobs</span><strong class="workspace-stat-value">${metrics.activeJobs}</strong><span class="workspace-stat-note">${dashboard.limits.jobsRemaining} publish slot(s) remaining · limit ${dashboard.limits.activeJobs}</span></article>
+            <article class="workspace-stat"><span class="workspace-stat-label">Active jobs</span><strong class="workspace-stat-value">${metrics.activeJobs}</strong><span class="workspace-stat-note">${pendingEmployer ? "Job publishing unlocks after approval." : `${dashboard.limits.jobsRemaining} publish slot(s) remaining · limit ${dashboard.limits.activeJobs}`}</span></article>
             <article class="workspace-stat"><span class="workspace-stat-label">Total applicants</span><strong class="workspace-stat-value">${metrics.totalApplicants}</strong><span class="workspace-stat-note">${pipeline.submitted || 0} awaiting review</span></article>
             <article class="workspace-stat"><span class="workspace-stat-label">Plan & team seats</span><strong class="workspace-stat-value">${escapeHtml(dashboard.organization.planKey)}</strong><span class="workspace-stat-note">${dashboard.organization.subscriptionStatus.replace(/_/g, " ")} · ${dashboard.limits.seats} seat(s)</span></article>
           </div>
@@ -2523,19 +2778,32 @@
             <article class="workspace-stat"><span class="workspace-stat-label">Interviews</span><strong class="workspace-stat-value">${pipeline.interview || 0}</strong><span class="workspace-stat-note">Candidates in the interview stage.</span></article>
             <article class="workspace-stat"><span class="workspace-stat-label">Offers</span><strong class="workspace-stat-value">${pipeline.offer || 0}</strong><span class="workspace-stat-note">Offers currently in progress.</span></article>
           </div>
-          <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Recent applications</h2><p>Latest candidates across your company’s roles.</p></div><a class="text-link" href="#dashboard/applicants">View applicants →</a></div>
+          ${pendingEmployer ? "" : `<section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Recent applications</h2><p>Latest candidates across your company’s roles.</p></div><a class="text-link" href="#dashboard/applicants">View applicants →</a></div>
             ${dashboard.recentApplications.length ? `<div class="workspace-action-list">${dashboard.recentApplications.map((item) => `<a class="workspace-action" href="#dashboard/applicants"><span>${escapeHtml(item.job.title)}</span><span><span class="employer-pill">${escapeHtml(item.status.replace(/_/g, " "))}</span> · ${escapeHtml(new Date(item.createdAt).toLocaleDateString())}</span></a>`).join("")}</div>` : '<p class="workspace-notice">No applications yet. Publish a role to start building your pipeline.</p>'}
-          </section>`;
+          </section>`}`;
       } catch (error) {
         profileContent.innerHTML = `${workspaceHeading("Employer workspace", "Your hiring workspace", "Manage hiring activity across your company.")}<div class="workspace-notice error" role="alert">${escapeHtml(displayAuthError(error))}</div>`;
       }
     }
 
     async function loadEmployerCompany() {
+      const pendingEmployer = isPendingEmployer();
       profileContent.innerHTML = '<div class="workspace-panel">Loading company profile…</div>';
       try {
         const response = await employerRequest("/api/employer/company");
         const company = await readAuthResponse(response);
+        if (pendingEmployer) {
+          profileContent.innerHTML = `${pendingEmployerNotice("This company profile is visible for review but cannot be edited until your employer account is approved.")}
+            ${workspaceHeading("Read-only preview", "Company profile", "Review the company information submitted with your registration.")}
+            <section class="workspace-panel"><div class="workspace-action-list">
+              <div class="workspace-action"><span>Company name</span><strong>${escapeHtml(company.name)}</strong></div>
+              <div class="workspace-action"><span>Website</span><strong>${escapeHtml(company.website || "Not provided")}</strong></div>
+              <div class="workspace-action"><span>Industry</span><strong>${escapeHtml(company.industry || "Not provided")}</strong></div>
+              <div class="workspace-action"><span>Company size</span><strong>${escapeHtml(company.companySize || "Not provided")}</strong></div>
+              <div class="workspace-action"><span>About</span><strong>${escapeHtml(company.description || "Not provided")}</strong></div>
+            </div></section>`;
+          return;
+        }
         profileContent.innerHTML = `${workspaceHeading("Company settings", "Company profile", "Keep your organization identity consistent across job listings and candidate communications.")}
           <section class="workspace-panel"><form id="employer-company-form" class="employer-form">
             <label>Company name<input name="name" value="${escapeHtml(company.name)}" minlength="2" maxlength="160" required></label>
@@ -2551,13 +2819,16 @@
     }
 
     async function loadEmployerJobs() {
+      const pendingEmployer = isPendingEmployer();
       profileContent.innerHTML = '<div class="workspace-panel">Loading your job listings…</div>';
       try {
         const response = await employerRequest("/api/employer/jobs");
         const result = await readAuthResponse(response);
         const limits = result.limits;
-        profileContent.innerHTML = `${workspaceHeading("Hiring", "Manage jobs", "Create drafts, publish open roles, and manage every vacancy owned by your company.")}
+        profileContent.innerHTML = `${pendingEmployer ? pendingEmployerNotice("Job listings are read-only until an administrator approves your employer account.") : ""}
+          ${workspaceHeading(pendingEmployer ? "Read-only preview" : "Hiring", pendingEmployer ? "Your job listings" : "Manage jobs", pendingEmployer ? "Review the listings currently associated with your company." : "Create drafts, publish open roles, and manage every vacancy owned by your company.")}
           <div class="workspace-notice">Plan capacity: ${limits.activeJobs} active job(s), ${limits.seats} team seat(s). Drafts do not use a published job slot.</div>
+          ${pendingEmployer ? "" : `
           <section class="workspace-panel"><div class="workspace-panel-head"><div><h2 id="employer-job-form-title">Create a job draft</h2><p>New listings stay private until you publish them.</p></div></div>
             <form id="employer-job-form" class="employer-form">
               <input type="hidden" name="jobId">
@@ -2571,12 +2842,14 @@
               <label class="full">Job description<textarea name="description" maxlength="20000" placeholder="Responsibilities, requirements and benefits…"></textarea></label>
               <div class="employer-form-actions full"><button class="button button-dark" type="submit">Save draft</button><button class="button" type="reset" data-reset-employer-job>Clear</button><span id="employer-job-form-status" role="status"></span></div>
             </form>
-          </section>
+          </section>`}
           <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Your listings</h2><p>${result.total} job(s) owned by this company.</p></div></div>
-            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Applicants</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.isActive ? "published" : "draft"}</span></td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td><td><button class="button" type="button" data-edit-employer-job="${job.id}">Edit</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">Publish</button>`}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state"><h2>No job listings yet</h2><p>Create your first draft above. You stay in control of when it goes live.</p></div>'}
+            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Applicants</th><th>Status</th><th>Created</th>${pendingEmployer ? "" : "<th>Actions</th>"}</tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.isActive ? "published" : "draft"}</span></td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td>${pendingEmployer ? "" : `<td><button class="button" type="button" data-edit-employer-job="${job.id}">Edit</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">Publish</button>`}</td>`}</tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><h2>No job listings yet</h2><p>${pendingEmployer ? "Job creation will be available after administrator approval." : "Create your first draft above. You stay in control of when it goes live."}</p></div>`}
           </section>`;
-        const form = profileContent.querySelector("#employer-job-form");
-        form.dataset.jobs = JSON.stringify(result.items);
+        if (!pendingEmployer) {
+          const form = profileContent.querySelector("#employer-job-form");
+          form.dataset.jobs = JSON.stringify(result.items);
+        }
       } catch (error) {
         profileContent.innerHTML = `<div class="workspace-notice error">${escapeHtml(displayAuthError(error))}</div>`;
       }
@@ -2860,6 +3133,31 @@
       }
     }
 
+    async function loadWorkspaceSavedSearches() {
+      profileContent.innerHTML = `${workspaceHeading("Candidate workspace", "Saved searches", "Keep useful job searches and choose whether to receive instant matching-job emails.")}<section class="workspace-panel"><div id="saved-search-list"><div class="empty-state"><p>Loading your saved searches…</p></div></div></section>`;
+      const list = profileContent.querySelector("#saved-search-list");
+      try {
+        const response = await authenticatedFetch("/api/candidate/saved-searches");
+        const searches = await readAuthResponse(response);
+        if (!Array.isArray(searches)) throw new Error("The saved-search service returned an unexpected response.");
+        list.innerHTML = searches.length
+          ? `<div class="workspace-action-list">${searches.map((savedSearch) => {
+            const filters = savedSearch.filters || {};
+            const summary = [
+              savedSearch.query,
+              savedSearch.location,
+              filters.workplaceType,
+              filters.employmentType,
+              filters.company
+            ].filter(Boolean).join(" · ");
+            return `<article class="workspace-action"><span><strong>${escapeHtml(savedSearch.name)}</strong><br><small>${escapeHtml(summary || "All published jobs")}</small><br><a class="text-link" href="${escapeHtml(savedSearchHash(savedSearch))}">Run this search →</a></span><span><label><input type="checkbox" data-saved-search-alert="${savedSearch.id}"${savedSearch.emailAlerts ? " checked" : ""}> Instant email alerts</label><br><button class="button button-light" type="button" data-delete-saved-search="${savedSearch.id}">Delete</button></span></article>`;
+          }).join("")}</div>`
+          : '<div class="empty-state"><h2>No saved searches yet</h2><p>Run a search, choose your filters, then use “Save this search” to keep it here.</p><a class="button button-dark" href="#search">Find jobs</a></div>';
+      } catch (error) {
+        list.innerHTML = `<div class="empty-state"><h2>Saved searches unavailable</h2><p>${escapeHtml(displayAuthError(error))}</p><button class="button button-light" type="button" data-retry-saved-searches>Try again</button></div>`;
+      }
+    }
+
     async function loadWorkspaceApplications(page = state.candidateApplicationsPage) {
       state.candidateApplicationsPage = page;
       profileContent.innerHTML = `${workspaceHeading("Candidate workspace", "Applications", "Review every application submitted from your candidate account.")}
@@ -2930,12 +3228,14 @@
             <select name="jobId"><option value="">All jobs</option>${jobResult.items.map((job) => `<option value="${job.id}"${String(filters.jobId || "") === String(job.id) ? " selected" : ""}>${escapeHtml(job.title)}</option>`).join("")}</select>
             <button class="button button-dark" type="submit">Apply filters</button>
           </form><p>${result.total} applicant(s) · page ${result.page} of ${Math.max(1, Math.ceil(result.total / result.limit))}</p>
+          ${applications.length ? `<form id="employer-bulk-status-form" class="workspace-filter"><label>Update selected applicants <select name="status" required><option value="in_review">In review</option><option value="interview">Interview</option><option value="offer">Offer</option><option value="rejected">Rejected</option></select></label><label>Candidate note <input name="note" maxlength="500" placeholder="Optional status update"></label><button class="button button-dark" type="submit" disabled>Update selected</button><span id="bulk-status-selection" role="status">Select applicants on this page.</span></form>` : ""}
           <div id="employer-applications-list" class="application-list">${applications.length ? applications.map((application) => {
             const statusOptions = ["in_review", "interview", "offer", "rejected"];
             const profile = application.profile;
             const currentStatusIsTerminal = ["offer", "rejected", "withdrawn"].includes(application.status);
             return `<article class="application-card employer-application-card" data-employer-application="${application.id}">
               <div>
+                <label class="profile-checkbox"><input type="checkbox" data-bulk-application="${application.id}" data-current-status="${escapeHtml(application.status)}"${currentStatusIsTerminal ? " disabled" : ""}>Select for bulk update</label>
                 <h2>${escapeHtml(application.candidateName)}</h2>
                 <p>${escapeHtml(application.job.title)} · ${escapeHtml(application.job.company)}</p>
                 <div class="application-meta"><span class="application-status">${escapeHtml(String(application.status).replace(/[-_]/g, " "))}</span><span>Applied ${escapeHtml(new Date(application.createdAt).toLocaleDateString())}</span></div>
@@ -2983,6 +3283,18 @@
         return;
       }
       if (authState.user.role === "employer") {
+        if (
+          isPendingEmployer() &&
+          !["overview", "company", "jobs"].includes(page)
+        ) {
+          renderProfileGate(
+            "Pending administrator approval",
+            "Your employer account has read-only access to the overview, company profile, and job listings until an administrator approves it.",
+            "#dashboard",
+            "Return to overview",
+          );
+          return;
+        }
         try {
           await ensureEmployerOrganizations();
         } catch (error) {
@@ -3028,6 +3340,8 @@
         }
       } else if (page === "saved" && authState.user.role === "candidate") {
         await loadWorkspaceSavedJobs();
+      } else if (page === "saved-searches" && authState.user.role === "candidate") {
+        await loadWorkspaceSavedSearches();
       } else if (page === "applications" && authState.user.role === "candidate") {
         await loadWorkspaceApplications();
       } else if (page === "notifications" && authState.user.role === "candidate") {
@@ -3254,6 +3568,63 @@
           status: String(values.get("status") || "all"),
           jobId: String(values.get("jobId") || "")
         });
+        return;
+      }
+      if (event.target.id === "employer-bulk-status-form") {
+        event.preventDefault();
+        const form = event.target;
+        const button = form.querySelector('[type="submit"]');
+        const requestedStatus = form.elements.status.value;
+        const transitions = {
+          submitted: ["in_review", "interview", "offer", "rejected"],
+          in_review: ["interview", "offer", "rejected"],
+          interview: ["offer", "rejected"]
+        };
+        const selected = [...profileContent.querySelectorAll("[data-bulk-application]:checked")];
+        const eligible = selected.filter((checkbox) =>
+          transitions[checkbox.dataset.currentStatus]?.includes(requestedStatus)
+        );
+        const skipped = selected.length - eligible.length;
+        if (!eligible.length) {
+          showToast("None of the selected applicants can move to that stage.");
+          return;
+        }
+        if (!window.confirm(`Update ${eligible.length} selected applicant(s) to ${requestedStatus.replaceAll("_", " ")}? Candidate notifications may be sent.`)) {
+          return;
+        }
+        button.disabled = true;
+        try {
+          const results = await Promise.allSettled(eligible.map(async (checkbox) => {
+            const response = await employerRequest(
+              `/api/employer/applications/${encodeURIComponent(checkbox.dataset.bulkApplication)}/status`,
+              {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  status: requestedStatus,
+                  note: String(form.elements.note.value || "").trim()
+                })
+              }
+            );
+            return readAuthResponse(response);
+          }));
+          const succeeded = results.filter((result) => result.status === "fulfilled");
+          const failed = results.filter((result) => result.status === "rejected");
+          if (succeeded.length) {
+            await loadEmployerApplicants(state.employerApplicantsPage, state.employerApplicantFilters);
+          } else {
+            button.disabled = false;
+          }
+          const mailFailures = succeeded.filter((result) =>
+            result.status === "fulfilled" && result.value.notificationStatus === "failed"
+          ).length;
+          showToast(
+            `${succeeded.length} applicant(s) updated; ${failed.length} failed; ${skipped} skipped (invalid stage transition).${mailFailures ? ` ${mailFailures} candidate email(s) failed; check SMTP logs.` : ""}`
+          );
+        } catch (error) {
+          button.disabled = false;
+          showToast(`Bulk update could not be completed: ${displayAuthError(error)}`);
+        }
         return;
       }
       if (event.target.id === "candidate-application-form") {
@@ -3774,8 +4145,23 @@
       hideViews();
       searchView.hidden = false;
       document.body.classList.add("search-mode");
+      setMainNavigationCurrent("#search");
       state.searchHash = hash;
       const { query, location: place } = parseSearchHash(hash);
+      const searchParams = new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+      [
+        ["workplaceType", "#filter-workplace", "all"],
+        ["employmentType", "#filter-employment", "all"],
+        ["experience", "#filter-experience", "all"],
+        ["company", "#filter-company", "all"],
+        ["minimumSalary", "#filter-salary", "0"],
+        ["freshnessDays", "#filter-freshness", "all"],
+        ["sort", "#sort-jobs", "newest"]
+      ].forEach(([key, selector, defaultValue]) => {
+        const value = searchParams.get(key);
+        if (value) document.querySelector(selector).value = value;
+        else document.querySelector(selector).value = defaultValue;
+      });
       keywordInput.value = query;
       locationInput.value = place;
       document.querySelector("#results-keyword").value = query;
@@ -3786,11 +4172,19 @@
 
     function route() {
       const hash = location.hash || "#home";
+      const infoPage = hash.slice(1).split("?")[0];
+      if (["careers", "how-it-works-page", "employer-solutions", "about", "help", "privacy", "terms"].includes(infoPage)) {
+        hideViews();
+        renderInformationPage(infoPage);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       if (
         ["#sign-in", "#sign-up", "#employer-sign-up", "#forgot-password", "#reset-password", "#verify-email", "#resend-verification"]
           .some((route) => hash === route || hash.startsWith(`${route}?`))
       ) {
         hideViews();
+        setMainNavigationCurrent("");
         renderAuth();
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
@@ -3804,9 +4198,11 @@
         const page = dashboardMatch?.[1] || "overview";
         const jobId = dashboardMatch?.[2] || "";
         hideViews();
+        setMainNavigationCurrent("");
         profileView.hidden = false;
         document.body.classList.add("auth-mode");
         document.title = `${page === "overview" ? "Overview" : page[0].toUpperCase() + page.slice(1)} — esllp`;
+        profileContent.innerHTML = '<div class="workspace-panel" role="status">Checking your sign-in and loading your workspace…</div>';
         void loadWorkspacePage(page, jobId);
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
@@ -3817,6 +4213,7 @@
           document.querySelector("#back-to-results").href = state.searchHash;
         }
         hideViews();
+        setMainNavigationCurrent("#search");
         detailView.hidden = false;
         document.body.classList.add("detail-mode");
         document.title = "Job details — esllp";
@@ -3830,6 +4227,7 @@
         return;
       }
       hideViews();
+      setMainNavigationCurrent("");
       document.title = "esllp — Find work that moves you forward | Ocean edition";
       if (hash !== "#home" && hash !== "#") {
         requestAnimationFrame(() => document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" }));
@@ -3848,6 +4246,64 @@
         document.querySelector("#results-keyword").value,
         document.querySelector("#results-location").value
       ));
+    });
+
+    const saveSearchDialog = document.querySelector("#save-search-dialog");
+    document.querySelector("#save-search-open").addEventListener("click", () => {
+      if (authState.user?.role !== "candidate") {
+        showToast("Sign in with a candidate account to save searches.");
+        navigate("#sign-in");
+        return;
+      }
+      const terms = parseSearchHash(state.searchHash);
+      const parts = [terms.query, terms.location].filter(Boolean);
+      document.querySelector("#saved-search-name").value = parts.join(" · ") || "My job search";
+      document.querySelector("#saved-search-form-status").textContent = "";
+      saveSearchDialog.showModal();
+      document.querySelector("#saved-search-name").focus();
+    });
+    document.querySelector("[data-close-save-search]").addEventListener("click", () => saveSearchDialog.close());
+    document.querySelector("#save-search-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const status = document.querySelector("#saved-search-form-status");
+      const submit = form.querySelector('[type="submit"]');
+      const terms = parseSearchHash(state.searchHash);
+      const readFilter = (selector, defaultValue) => {
+        const value = document.querySelector(selector).value;
+        return value === defaultValue ? undefined : value;
+      };
+      const body = {
+        name: form.elements.name.value.trim(),
+        query: terms.query,
+        location: terms.location,
+        workplaceType: readFilter("#filter-workplace", "all"),
+        employmentType: readFilter("#filter-employment", "all"),
+        experience: readFilter("#filter-experience", "all"),
+        company: readFilter("#filter-company", "all"),
+        minimumSalary: Number(readFilter("#filter-salary", "0")) || undefined,
+        freshnessDays: Number(readFilter("#filter-freshness", "all")) || undefined,
+        sort: readFilter("#sort-jobs", "newest"),
+        emailAlerts: form.elements.emailAlerts.checked
+      };
+      Object.keys(body).forEach((key) => body[key] === undefined && delete body[key]);
+      submit.disabled = true;
+      status.textContent = "Saving…";
+      try {
+        const response = await authenticatedFetch("/api/candidate/saved-searches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        await readAuthResponse(response);
+        saveSearchDialog.close();
+        showToast("Search saved to your candidate workspace.");
+      } catch (error) {
+        status.textContent = displayAuthError(error);
+      } finally {
+        submit.disabled = false;
+      }
     });
 
     document.querySelectorAll("[data-search]").forEach((link) => {
@@ -3886,6 +4342,48 @@
     });
 
     document.addEventListener("click", async (event) => {
+      const shareButton = event.target.closest("[data-share-job]");
+      if (shareButton) {
+        const shareUrl = new URL(`/share/jobs/${encodeURIComponent(shareButton.dataset.shareJob)}`, location.origin).href;
+        try {
+          if (navigator.share) {
+            await navigator.share({
+              title: document.querySelector("#detail-title")?.textContent || "Job opportunity",
+              url: shareUrl
+            });
+          } else if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(shareUrl);
+            showToast("Shareable job link copied.");
+          } else {
+            showToast("Use “Open shareable job page” to copy the job link from your browser.");
+          }
+        } catch (error) {
+          if (error?.name !== "AbortError") showToast(`Could not share this job: ${displayAuthError(error)}`);
+        }
+        return;
+      }
+      const deleteSearchButton = event.target.closest("[data-delete-saved-search]");
+      if (deleteSearchButton) {
+        deleteSearchButton.disabled = true;
+        try {
+          const response = await authenticatedFetch(
+            `/api/candidate/saved-searches/${encodeURIComponent(deleteSearchButton.dataset.deleteSavedSearch)}`,
+            { method: "DELETE" }
+          );
+          await readAuthResponse(response);
+          await loadWorkspaceSavedSearches();
+          showToast("Saved search deleted.");
+        } catch (error) {
+          deleteSearchButton.disabled = false;
+          showToast(`Saved search could not be deleted: ${displayAuthError(error)}`);
+        }
+        return;
+      }
+      const retrySearches = event.target.closest("[data-retry-saved-searches]");
+      if (retrySearches) {
+        await loadWorkspaceSavedSearches();
+        return;
+      }
       const saveButton = event.target.closest("[data-save-job]");
       if (!saveButton) return;
       const jobId = String(saveButton.dataset.saveJob);
@@ -3924,6 +4422,52 @@
         showToast(`The job could not be ${isSaved ? "removed" : "saved"}: ${displayAuthError(error)}`);
       } finally {
         if (saveButton.isConnected) saveButton.disabled = false;
+      }
+    });
+
+    profileContent.addEventListener("change", async (event) => {
+      const selectedApplications = event.target.closest("[data-bulk-application]");
+      if (selectedApplications) {
+        const selected = [...profileContent.querySelectorAll("[data-bulk-application]:checked")];
+        const form = profileContent.querySelector("#employer-bulk-status-form");
+        const button = form?.querySelector('[type="submit"]');
+        const targetStatus = form?.elements.status.value;
+        const transitions = {
+          submitted: ["in_review", "interview", "offer", "rejected"],
+          in_review: ["interview", "offer", "rejected"],
+          interview: ["offer", "rejected"]
+        };
+        const eligibleCount = selected.filter((checkbox) =>
+          transitions[checkbox.dataset.currentStatus]?.includes(targetStatus)
+        ).length;
+        if (button) button.disabled = eligibleCount === 0;
+        const status = profileContent.querySelector("#bulk-status-selection");
+        if (status) status.textContent = `${selected.length} selected · ${eligibleCount} can move to ${targetStatus.replaceAll("_", " ")}`;
+        return;
+      }
+      if (event.target.matches("#employer-bulk-status-form select[name='status']")) {
+        profileContent.querySelector("[data-bulk-application]")?.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+      const alertToggle = event.target.closest("[data-saved-search-alert]");
+      if (!alertToggle) return;
+      alertToggle.disabled = true;
+      try {
+        const response = await authenticatedFetch(
+          `/api/candidate/saved-searches/${encodeURIComponent(alertToggle.dataset.savedSearchAlert)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ emailAlerts: alertToggle.checked })
+          }
+        );
+        await readAuthResponse(response);
+        showToast(alertToggle.checked ? "Instant alerts enabled." : "Instant alerts paused.");
+      } catch (error) {
+        alertToggle.checked = !alertToggle.checked;
+        showToast(`Alert preference could not be saved: ${displayAuthError(error)}`);
+      } finally {
+        alertToggle.disabled = false;
       }
     });
 
