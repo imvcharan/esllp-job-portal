@@ -3,9 +3,9 @@ import {
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
-} from 'typeorm';
+} from "typeorm";
 
-@Entity({ name: 'jobs' })
+@Entity({ name: "jobs" })
 export class Job {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -19,27 +19,33 @@ export class Job {
   @Column({ length: 120 })
   location!: string;
 
-  @Column({ name: 'workplace_type', length: 20, default: 'onsite' })
+  @Column({ name: "workplace_type", length: 20, default: "onsite" })
   workplaceType!: string;
 
-  @Column({ name: 'employment_type', length: 30, default: 'full-time' })
+  @Column({ name: "employment_type", length: 30, default: "full-time" })
   employmentType!: string;
 
-  @Column({ name: 'salary_min', type: 'integer', nullable: true })
+  @Column({ name: "salary_min", type: "integer", nullable: true })
   salaryMin!: number | null;
 
-  @Column({ name: 'salary_max', type: 'integer', nullable: true })
+  @Column({ name: "salary_max", type: "integer", nullable: true })
   salaryMax!: number | null;
 
-  @Column({ type: 'varchar', length: 80, nullable: true })
+  @Column({ type: "varchar", length: 80, nullable: true })
   experience!: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: "text", nullable: true })
   description!: string | null;
 
-  @Column({ name: 'is_active', type: 'boolean', default: true })
+  @Column({ name: "is_active", type: "boolean", default: true })
   isActive!: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @Column({ name: "employer_user_id", type: "integer", nullable: true })
+  employerUserId!: number | null;
+
+  @Column({ name: "organization_id", type: "integer", nullable: true })
+  organizationId!: number | null;
+
+  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
 }

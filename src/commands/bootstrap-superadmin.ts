@@ -13,9 +13,9 @@ async function bootstrapSuperadmin(): Promise<void> {
     );
   }
   const passwordBytes = Buffer.byteLength(password, 'utf8');
-  if (passwordBytes < 16 || passwordBytes > 72) {
+  if (password.length < 8 || passwordBytes > 72) {
     throw new Error(
-      'SUPERADMIN_PASSWORD must be between 16 and 72 UTF-8 bytes.',
+      'SUPERADMIN_PASSWORD must be at least 8 characters and no more than 72 UTF-8 bytes.',
     );
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

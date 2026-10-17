@@ -480,13 +480,21 @@
               <div class="form-row"><label for="email-notifications">Email notifications</label><input class="toggle" id="email-notifications" type="checkbox" checked></div>
             </article>
           </div>
+          <article class="settings-content" style="margin-top:16px"><h2>Account security</h2><p>Change your signed-in account password. You will be signed out after the password is updated.</p>
+            <form id="admin-password-form">
+              <div class="form-row"><label for="admin-current-password">Current password</label><input id="admin-current-password" name="currentPassword" type="password" autocomplete="current-password" required maxlength="72"></div>
+              <div class="form-row"><label for="admin-new-password">New password</label><input id="admin-new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" required maxlength="72"></div>
+              <div class="form-row"><label for="admin-confirm-password">Confirm new password</label><input id="admin-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required maxlength="72"></div>
+              <button class="button button-primary" type="submit">Change password</button>
+            </form>
+          </article>
           <div class="demo-note"><span>✦</span> These preferences are saved in this browser only; portal-wide settings need a settings API.</div>
         </section>
 
         <section class="view" id="view-users" data-title="User accounts">
           <div class="page-heading"><div><div class="page-eyebrow">Superadmin controls</div><h1>User accounts</h1><p>Review accounts and manage roles or access status.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-users>↻&nbsp; Refresh</button></div></div>
           <div class="table-toolbar"><input class="table-search" id="user-search" type="search" placeholder="Search name or email…" aria-label="Search users"><select class="select" id="user-role-filter"><option value="all">All roles</option><option value="candidate">Candidate</option><option value="employer">Employer</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select><select class="select" id="user-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Verification</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="users-table-body" class="filterable"></tbody></table></div></article>
+          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Role</th><th>Employer approval</th><th>Verification</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="users-table-body" class="filterable"></tbody></table></div></article>
           <div class="table-toolbar"><span id="users-page-summary">Loading accounts…</span><button class="button" id="users-prev" type="button">← Previous</button><button class="button" id="users-next" type="button">Next →</button></div>
           <div class="demo-note" id="users-data-note" hidden></div>
         </section>
@@ -508,6 +516,8 @@
       <div class="form-row"><label for="new-job-company">Company</label><input id="new-job-company" name="company" required placeholder="Company name"></div>
       <div class="form-row"><label for="new-job-location">Location</label><input id="new-job-location" name="location" required placeholder="City or remote"></div>
       <div class="form-row"><label for="new-job-type">Workplace</label><select id="new-job-type" name="workplaceType"><option value="hybrid">Hybrid</option><option value="remote">Remote</option><option value="onsite">On-site</option></select></div>
+      <div class="form-row"><label for="new-job-employer">Assign to employer (optional)</label><select id="new-job-employer" name="employerUserId"><option value="">No employer assigned</option></select></div>
+      <p class="form-hint" id="employer-options-note">Only the assigned employer can access applicants for this job.</p>
       <div class="modal-actions"><button class="button modal-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save as draft</button></div>
     </form>
   </div>
@@ -527,6 +537,7 @@
     let adminAccessToken = null;
     let currentAdminUser = null;
     let adminJobs = [];
+    let adminEmployers = [];
     let adminUsers = [];
     let usersPage = 1;
     let usersTotal = 0;
@@ -660,11 +671,15 @@
           toggleButton.addEventListener("click", async () => {
             toggleButton.disabled = true;
             try {
-              await authRequest(`/api/admin/jobs/${job.id}`, {
+              const updated = await authRequest(`/api/admin/jobs/${job.id}`, {
                 method: "PATCH",
                 body: JSON.stringify({ isActive: !job.isActive })
               });
-              showToast(job.isActive ? "Job paused." : "Job published.");
+              const delivery = updated.notificationDelivery;
+              const alertSummary = delivery
+                ? ` ${delivery.sent} matching job alert(s) emailed${delivery.failed ? `; ${delivery.failed} failed (see server logs)` : ""}.`
+                : "";
+              showToast(job.isActive ? "Job paused." : `Job published.${alertSummary}`);
               await loadAdminJobs();
               await refreshOverviewData();
             } catch (error) {
@@ -677,6 +692,42 @@
           archiveButton.type = "button";
           archiveButton.style.marginLeft = "5px";
           archiveButton.textContent = "Archive";
+          const ownerButton = document.createElement("button");
+          ownerButton.className = "button";
+          ownerButton.type = "button";
+          ownerButton.style.marginLeft = "5px";
+          ownerButton.textContent = job.employerUserId ? `Employer #${job.employerUserId}` : "Assign employer";
+          ownerButton.addEventListener("click", async () => {
+            if (!adminEmployers.length) {
+              showToast("No active employer accounts are available to assign.");
+              return;
+            }
+            const choices = adminEmployers.map((employer) =>
+              `${employer.id}: ${employer.displayName} (${employer.email})`
+            ).join("\n");
+            const value = window.prompt(`Enter an active employer account ID. Leave blank to unassign.\n\n${choices}`, job.employerUserId ? String(job.employerUserId) : "");
+            if (value === null) return;
+            const employerUserId = value.trim() ? Number(value.trim()) : null;
+            if (employerUserId !== null && (
+              !Number.isSafeInteger(employerUserId) ||
+              !adminEmployers.some((employer) => employer.id === employerUserId)
+            )) {
+              showToast("Choose an active employer ID from the listed accounts.");
+              return;
+            }
+            ownerButton.disabled = true;
+            try {
+              await authRequest(`/api/admin/jobs/${job.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ employerUserId })
+              });
+              showToast(employerUserId ? `Job assigned to employer #${employerUserId}.` : "Employer assignment removed.");
+              await loadAdminJobs();
+            } catch (error) {
+              showToast(error instanceof Error ? error.message : "Unable to assign employer.");
+              ownerButton.disabled = false;
+            }
+          });
           archiveButton.addEventListener("click", async () => {
             if (!window.confirm(`Archive "${job.title}"? It will no longer appear in public job listings.`)) return;
             archiveButton.disabled = true;
@@ -690,7 +741,7 @@
               archiveButton.disabled = false;
             }
           });
-          actions.append(toggleButton, archiveButton);
+          actions.append(toggleButton, ownerButton, archiveButton);
         }
         row.append(statusCell, posted, actions);
         body.append(row);
@@ -718,8 +769,28 @@
     }
 
     async function loadAdminJobs() {
-      const jobs = await authRequest("/api/admin/jobs");
+      const [jobs, employersResult] = await Promise.all([
+        authRequest("/api/admin/jobs"),
+        authRequest("/api/admin/employers").catch((error) => ({ loadError: error }))
+      ]);
       if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
+      if (Array.isArray(employersResult)) {
+        adminEmployers = employersResult;
+        const employerSelect = document.querySelector("#new-job-employer");
+        employerSelect.replaceChildren(new Option("No employer assigned", ""));
+        adminEmployers.forEach((employer) => {
+          employerSelect.add(new Option(
+            `${employer.displayName} · ${employer.email} (#${employer.id})`,
+            String(employer.id)
+          ));
+        });
+        document.querySelector("#employer-options-note").textContent = adminEmployers.length
+          ? "Only the assigned active employer can access applicants for this job."
+          : "No approved active employer accounts are available. Approve an employer registration and activate the account before assigning applicants.";
+      } else {
+        document.querySelector("#employer-options-note").textContent =
+          `Approved employer accounts could not be loaded: ${employersResult.loadError.message}`;
+      }
       adminJobs = jobs;
       if (jobs.length === 0) {
         renderPreviewJobs();
@@ -755,7 +826,7 @@
 
     const previewUsers = [
       { id: null, displayName: "Priya Sharma", email: "priya.preview@example.test", role: "candidate", emailVerified: true, isActive: true, createdAt: "2026-10-14T08:00:00Z" },
-      { id: null, displayName: "Rahul Mehta", email: "rahul.preview@example.test", role: "employer", emailVerified: false, isActive: true, createdAt: "2026-10-12T08:00:00Z" },
+      { id: null, displayName: "Rahul Mehta", email: "rahul.preview@example.test", role: "employer", companyName: "Northstar", employerApprovalStatus: "pending", emailVerified: false, isActive: true, createdAt: "2026-10-12T08:00:00Z" },
       { id: null, displayName: "Portal Admin", email: "admin.preview@example.test", role: "admin", emailVerified: true, isActive: true, createdAt: "2026-10-10T08:00:00Z" }
     ];
 
@@ -769,13 +840,17 @@
         name.textContent = user.displayName;
         const email = document.createElement("td");
         email.textContent = user.email;
+        const company = document.createElement("td");
+        company.textContent = user.companyName || "—";
         const roleCell = document.createElement("td");
         if (isPreview) {
           roleCell.textContent = user.role;
         } else {
           const role = document.createElement("select");
           role.className = "select user-role";
-          ["candidate", "employer", "admin", "superadmin"].forEach((value) => role.add(new Option(value, value)));
+          const roleOptions = ["candidate", "admin", "superadmin"];
+          if (user.role === "employer") roleOptions.splice(1, 0, "employer");
+          roleOptions.forEach((value) => role.add(new Option(value, value)));
           role.value = user.role;
           role.disabled = user.id === currentAdminUser.id;
           role.setAttribute("aria-label", `Role for ${user.displayName}`);
@@ -802,6 +877,16 @@
           });
           roleCell.append(role);
         }
+        const approval = document.createElement("td");
+        if (user.role === "employer") {
+          const approvalStatus = user.employerApprovalStatus || "approved";
+          const approvalBadge = document.createElement("span");
+          approvalBadge.className = `status${approvalStatus === "pending" ? " review" : approvalStatus === "rejected" ? " closed" : ""}`;
+          approvalBadge.textContent = approvalStatus.replace(/_/g, " ");
+          approval.append(approvalBadge);
+        } else {
+          approval.textContent = "—";
+        }
         const verified = document.createElement("td");
         verified.textContent = user.emailVerified ? "Verified" : "Not verified";
         const status = document.createElement("td");
@@ -812,6 +897,43 @@
         const joined = document.createElement("td");
         joined.textContent = formatDate(user.createdAt);
         const actions = document.createElement("td");
+        if (!isPreview && user.role === "employer") {
+          const approvalStatus = user.employerApprovalStatus || "approved";
+          const approvalButtons = [
+            { status: "approved", text: "Approve" },
+            { status: "rejected", text: "Reject" }
+          ];
+          approvalButtons.forEach(({ status: nextStatus, text }) => {
+            const approvalButton = document.createElement("button");
+            approvalButton.className = "button";
+            approvalButton.type = "button";
+            approvalButton.textContent = text;
+            approvalButton.style.marginRight = "4px";
+            approvalButton.disabled = nextStatus === "approved" && !user.emailVerified;
+            approvalButton.title = approvalButton.disabled
+              ? "The employer must verify their email before approval."
+              : `${text} this employer account`;
+            approvalButton.addEventListener("click", async () => {
+              const companyLabel = user.companyName ? ` for ${user.companyName}` : "";
+              if (!window.confirm(`${text} ${user.displayName}${companyLabel}?`)) return;
+              approvalButton.disabled = true;
+              try {
+                await authRequest(`/api/admin/users/${user.id}/employer-approval`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ status: nextStatus })
+                });
+                showToast(`Employer ${nextStatus}.`);
+                await loadAdminUsers(usersPage);
+                await loadAuditLogs(1);
+              } catch (error) {
+                approvalButton.disabled = nextStatus === "approved" && !user.emailVerified;
+                showToast(error instanceof Error ? error.message : `Unable to ${text.toLowerCase()} employer.`);
+              }
+            });
+            if (approvalStatus === nextStatus) approvalButton.disabled = true;
+            actions.append(approvalButton);
+          });
+        }
         const statusButton = document.createElement("button");
         statusButton.className = "button";
         statusButton.type = "button";
@@ -836,13 +958,13 @@
         });
         if (isPreview) statusButton.title = "Preview rows cannot be changed.";
         actions.append(statusButton);
-        row.append(name, email, roleCell, verified, status, joined, actions);
+        row.append(name, email, company, roleCell, approval, verified, status, joined, actions);
         body.append(row);
       });
       if (!rows.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
-        cell.colSpan = 7;
+        cell.colSpan = 9;
         cell.textContent = "No user accounts found.";
         row.append(cell);
         body.append(row);
@@ -856,8 +978,8 @@
       const status = document.querySelector("#user-status-filter").value;
       document.querySelectorAll("#users-table-body tr").forEach((row) => {
         row.hidden = (query && !row.innerText.toLowerCase().includes(query))
-          || (role !== "all" && row.children[2].innerText.toLowerCase() !== role)
-          || (status !== "all" && row.children[4].innerText.toLowerCase() !== status);
+          || (role !== "all" && row.children[3].innerText.toLowerCase() !== role)
+          || (status !== "all" && row.children[6].innerText.toLowerCase() !== status);
       });
     }
 
@@ -1325,7 +1447,12 @@
       try {
         const created = await authRequest("/api/admin/jobs", {
           method: "POST",
-          body: JSON.stringify(Object.fromEntries(job))
+          body: JSON.stringify({
+            ...Object.fromEntries(job),
+            employerUserId: String(job.get("employerUserId") || "").trim()
+              ? Number(job.get("employerUserId"))
+              : null
+          })
         });
         showToast(`“${created.title}” saved as draft #${created.id}.`);
         form.reset();
@@ -1360,6 +1487,38 @@
         showToast("Preferences saved in this browser.");
       } catch (error) {
         showToast(`Unable to save browser preferences: ${error instanceof Error ? error.message : "storage unavailable"}`);
+      }
+    });
+    document.querySelector("#admin-password-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const submit = form.querySelector('[type="submit"]');
+      if (data.get("newPassword") !== data.get("confirmPassword")) {
+        showToast("The new password and confirmation do not match.");
+        return;
+      }
+      submit.disabled = true;
+      try {
+        await authRequest("/api/auth/change-password", {
+          method: "POST",
+          body: JSON.stringify({
+            currentPassword: data.get("currentPassword"),
+            newPassword: data.get("newPassword")
+          })
+        });
+        form.reset();
+        adminAccessToken = null;
+        currentAdminUser = null;
+        adminApp.classList.remove("authenticated");
+        authGate.hidden = false;
+        document.querySelector("#admin-login-form").reset();
+        authError.textContent = "Password changed. Sign in again with your new password.";
+        document.querySelector("#admin-email").focus();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to change the password.");
+      } finally {
+        submit.disabled = false;
       }
     });
     document.querySelector("#chart-range").addEventListener("change", (event) => {

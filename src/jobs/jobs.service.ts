@@ -1,66 +1,165 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { AuditService } from '../audit/audit.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
-import { Job } from './job.entity';
-import { CreateJobDto } from './dto/create-job.dto';
-import { UpdateJobDto } from './dto/update-job.dto';
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import { AuditService } from "../audit/audit.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Brackets, Repository } from "typeorm";
+import { Job } from "./job.entity";
+import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
+import { CreateJobDto } from "./dto/create-job.dto";
+import { UpdateJobDto } from "./dto/update-job.dto";
+import { CandidateProfile } from "../users/candidate-profile.entity";
+import { EmailDeliveryService } from "../auth/email-delivery.service";
+import {
+  EmployerOrganizationMember,
+  OrganizationMemberRole,
+} from "../employers/organization-member.entity";
 
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
+
   constructor(
     @InjectRepository(Job)
     private readonly jobsRepository: Repository<Job>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+    @InjectRepository(CandidateProfile)
+    private readonly profilesRepository: Repository<CandidateProfile>,
+    @InjectRepository(EmployerOrganizationMember)
+    private readonly organizationMembers: Repository<EmployerOrganizationMember>,
     private readonly auditService: AuditService,
+    private readonly emailDelivery: EmailDeliveryService,
   ) {}
 
-  findAll(filters: { query?: string; location?: string }): Promise<Job[]> {
+  async findAll(filters: {
+    query?: string;
+    location?: string;
+    page?: number;
+    limit?: number;
+    workplaceType?: string;
+    employmentType?: string;
+    experience?: string;
+    company?: string;
+    minimumSalary?: number;
+    freshnessDays?: number;
+    sort?: string;
+  }) {
+    const page = Math.min(1_000_000, Math.max(1, filters.page ?? 1));
+    const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
     const queryBuilder = this.jobsRepository
-      .createQueryBuilder('job')
-      .where('job.isActive = :isActive', { isActive: true })
-      .orderBy('job.createdAt', 'DESC');
+      .createQueryBuilder("job")
+      .where("job.isActive = :isActive", { isActive: true })
+      .take(limit)
+      .skip((page - 1) * limit);
 
     const query = filters.query?.trim();
     if (query) {
       queryBuilder.andWhere(
         new Brackets((where) => {
           where
-            .where('job.title ILIKE :query', { query: `%${query}%` })
-            .orWhere('job.company ILIKE :query', { query: `%${query}%` })
-            .orWhere('job.description ILIKE :query', { query: `%${query}%` });
+            .where("job.title ILIKE :query", { query: `%${query}%` })
+            .orWhere("job.company ILIKE :query", { query: `%${query}%` })
+            .orWhere("job.description ILIKE :query", { query: `%${query}%` });
         }),
       );
     }
 
     const location = filters.location?.trim();
     if (location) {
-      queryBuilder.andWhere('job.location ILIKE :location', {
+      queryBuilder.andWhere("job.location ILIKE :location", {
         location: `%${location}%`,
       });
     }
 
-    return queryBuilder.getMany();
+    if (filters.workplaceType) {
+      queryBuilder.andWhere("job.workplaceType = :workplaceType", {
+        workplaceType: filters.workplaceType,
+      });
+    }
+    if (filters.employmentType) {
+      queryBuilder.andWhere("job.employmentType = :employmentType", {
+        employmentType: filters.employmentType,
+      });
+    }
+    if (filters.company) {
+      queryBuilder.andWhere("job.company = :company", {
+        company: filters.company,
+      });
+    }
+    if (filters.minimumSalary && filters.minimumSalary > 0) {
+      queryBuilder.andWhere("job.salaryMin >= :minimumSalary", {
+        minimumSalary: filters.minimumSalary,
+      });
+    }
+    if (filters.freshnessDays && filters.freshnessDays > 0) {
+      queryBuilder.andWhere(
+        "job.createdAt >= NOW() - (:freshnessDays * INTERVAL '1 day')",
+        { freshnessDays: filters.freshnessDays },
+      );
+    }
+    if (filters.experience === "early") {
+      queryBuilder.andWhere(
+        "(substring(job.experience from '\\d+'))::int <= 2",
+      );
+    } else if (filters.experience === "mid") {
+      queryBuilder
+        .andWhere("(substring(job.experience from '\\d+'))::int <= 5")
+        .andWhere(
+          "COALESCE((substring(job.experience from '\\d+\\D+(\\d+)'))::int, CASE WHEN job.experience ILIKE '%+%' THEN 2147483647 ELSE (substring(job.experience from '\\d+'))::int END) >= 3",
+        );
+    } else if (filters.experience === "senior") {
+      queryBuilder.andWhere(
+        "COALESCE((substring(job.experience from '\\d+\\D+(\\d+)'))::int, CASE WHEN job.experience ILIKE '%+%' THEN 2147483647 ELSE (substring(job.experience from '\\d+'))::int END) >= 5",
+      );
+    }
+
+    if (filters.sort === "salary") {
+      queryBuilder
+        .orderBy("COALESCE(job.salaryMax, job.salaryMin)", "DESC", "NULLS LAST")
+        .addOrderBy("job.createdAt", "DESC");
+    } else if (filters.sort === "title") {
+      queryBuilder
+        .orderBy("job.title", "ASC")
+        .addOrderBy("job.createdAt", "DESC");
+    } else {
+      queryBuilder.orderBy("job.createdAt", "DESC");
+    }
+
+    const [items, total] = await queryBuilder.getManyAndCount();
+    const companies = await this.jobsRepository
+      .createQueryBuilder("job")
+      .select("DISTINCT job.company", "company")
+      .where("job.isActive = :isActive", { isActive: true })
+      .orderBy("job.company", "ASC")
+      .getRawMany<{ company: string }>();
+    return {
+      items,
+      total,
+      page,
+      limit,
+      companies: companies.map(({ company }) => company),
+    };
   }
 
   findAllForAdministration(): Promise<Job[]> {
-    return this.jobsRepository.find({ order: { createdAt: 'DESC' } });
+    return this.jobsRepository.find({ order: { createdAt: "DESC" } });
   }
 
   async create(
     dto: CreateJobDto,
     actor: AuthenticatedUser,
     ipAddress?: string,
-  ): Promise<Job> {
+  ): Promise<
+    Job & { notificationDelivery?: { sent: number; failed: number } }
+  > {
+    const employerOrganizationId = await this.getEmployerOrganizationId(
+      dto.employerUserId,
+    );
     const salaryMin = dto.salaryMin ?? null;
     const salaryMax = dto.salaryMax ?? null;
-    if (
-      salaryMin !== null &&
-      salaryMax !== null &&
-      salaryMin > salaryMax
-    ) {
+    if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) {
       throw new BadRequestException(
-        'Minimum salary cannot exceed maximum salary',
+        "Minimum salary cannot exceed maximum salary",
       );
     }
     const job = await this.jobsRepository.save(
@@ -69,24 +168,31 @@ export class JobsService {
         title: dto.title.trim(),
         company: dto.company.trim(),
         location: dto.location.trim(),
-        workplaceType: dto.workplaceType ?? 'onsite',
-        employmentType: dto.employmentType ?? 'full-time',
+        workplaceType: dto.workplaceType ?? "onsite",
+        employmentType: dto.employmentType ?? "full-time",
         salaryMin,
         salaryMax,
         experience: dto.experience?.trim() || null,
         description: dto.description?.trim() || null,
         isActive: dto.isActive ?? false,
+        organizationId: employerOrganizationId,
       }),
     );
     await this.auditService.record({
       actorUserId: actor.id,
-      action: 'job.created',
-      targetType: 'job',
+      action: "job.created",
+      targetType: "job",
       targetId: job.id,
-      details: { title: job.title, isActive: job.isActive },
+      details: {
+        title: job.title,
+        isActive: job.isActive,
+        employerUserId: job.employerUserId,
+      },
       ipAddress,
     });
-    return job;
+    if (!job.isActive) return job;
+    const notificationDelivery = await this.notifyMatchingCandidates(job);
+    return Object.assign(job, { notificationDelivery });
   }
 
   async update(
@@ -94,20 +200,26 @@ export class JobsService {
     dto: UpdateJobDto,
     actor: AuthenticatedUser,
     ipAddress?: string,
-  ): Promise<Job | null> {
+  ): Promise<
+    (Job & { notificationDelivery?: { sent: number; failed: number } }) | null
+  > {
     const job = await this.jobsRepository.findOneBy({ id });
     if (!job) {
       return null;
     }
-    const salaryMin = dto.salaryMin === undefined ? job.salaryMin : dto.salaryMin;
-    const salaryMax = dto.salaryMax === undefined ? job.salaryMax : dto.salaryMax;
-    if (
-      salaryMin !== null &&
-      salaryMax !== null &&
-      salaryMin > salaryMax
-    ) {
+    if (dto.employerUserId !== undefined) {
+      job.organizationId = await this.getEmployerOrganizationId(
+        dto.employerUserId,
+      );
+    }
+    const wasActive = job.isActive;
+    const salaryMin =
+      dto.salaryMin === undefined ? job.salaryMin : dto.salaryMin;
+    const salaryMax =
+      dto.salaryMax === undefined ? job.salaryMax : dto.salaryMax;
+    if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) {
       throw new BadRequestException(
-        'Minimum salary cannot exceed maximum salary',
+        "Minimum salary cannot exceed maximum salary",
       );
     }
 
@@ -122,13 +234,19 @@ export class JobsService {
     const saved = await this.jobsRepository.save(job);
     await this.auditService.record({
       actorUserId: actor.id,
-      action: 'job.updated',
-      targetType: 'job',
+      action: "job.updated",
+      targetType: "job",
       targetId: saved.id,
-      details: { title: saved.title, isActive: saved.isActive },
+      details: {
+        title: saved.title,
+        isActive: saved.isActive,
+        employerUserId: saved.employerUserId,
+      },
       ipAddress,
     });
-    return saved;
+    if (dto.isActive !== true || wasActive) return saved;
+    const notificationDelivery = await this.notifyMatchingCandidates(saved);
+    return Object.assign(saved, { notificationDelivery });
   }
 
   async archive(
@@ -144,8 +262,8 @@ export class JobsService {
     const archived = await this.jobsRepository.save(job);
     await this.auditService.record({
       actorUserId: actor.id,
-      action: 'job.archived',
-      targetType: 'job',
+      action: "job.archived",
+      targetType: "job",
       targetId: archived.id,
       details: { title: archived.title },
       ipAddress,
@@ -155,5 +273,99 @@ export class JobsService {
 
   findOne(id: number): Promise<Job | null> {
     return this.jobsRepository.findOneBy({ id, isActive: true });
+  }
+
+  private async getEmployerOrganizationId(
+    employerUserId: number | null | undefined,
+  ): Promise<number | null> {
+    if (employerUserId == null) return null;
+    const employer = await this.usersRepository.findOneBy({
+      id: employerUserId,
+      role: UserRole.EMPLOYER,
+      isActive: true,
+      employerApprovalStatus: EmployerApprovalStatus.APPROVED,
+    });
+    if (!employer) {
+      throw new BadRequestException(
+        "Assigned job owner must be an active employer account.",
+      );
+    }
+    const ownerMembership = await this.organizationMembers.findOne({
+      where: {
+        userId: employer.id,
+        role: OrganizationMemberRole.OWNER,
+        status: "active",
+      },
+      order: { createdAt: "ASC" },
+    });
+    if (!ownerMembership) {
+      throw new BadRequestException(
+        "The employer account has no active company workspace.",
+      );
+    }
+    return ownerMembership.organizationId;
+  }
+
+  async notifyMatchingCandidates(job: Job) {
+    try {
+      const profiles = await this.profilesRepository.findBy({
+        jobAlertEmails: true,
+      });
+      const matchingProfiles = profiles.filter((profile) => {
+        const roleMatches = profile.desiredJobTitles.some((title) => {
+          const candidateTitle = title.toLocaleLowerCase();
+          const jobTitle = job.title.toLocaleLowerCase();
+          return (
+            candidateTitle.includes(jobTitle) ||
+            jobTitle.includes(candidateTitle)
+          );
+        });
+        const workplaceMatches =
+          !profile.workplaceTypes.length ||
+          profile.workplaceTypes.includes(job.workplaceType);
+        const employmentMatches =
+          !profile.employmentTypes.length ||
+          profile.employmentTypes.includes(job.employmentType);
+        return roleMatches && workplaceMatches && employmentMatches;
+      });
+      if (!matchingProfiles.length) return { sent: 0, failed: 0 };
+
+      const recipients = await this.usersRepository.findBy(
+        matchingProfiles.map((profile) => ({
+          id: profile.userId,
+          isActive: true,
+        })),
+      );
+      const appUrl = process.env.PUBLIC_APP_URL?.trim();
+      const jobUrl = appUrl
+        ? `${appUrl.replace(/\/+$/, "")}/#job/${encodeURIComponent(job.id)}`
+        : null;
+      const results = await Promise.allSettled(
+        recipients.map((recipient) =>
+          this.emailDelivery.sendNotification(
+            recipient.email,
+            `New job matching your preferences: ${job.title}`,
+            `${job.title} at ${job.company} in ${job.location} matches your saved job preferences.${jobUrl ? ` View this listing: ${jobUrl}` : ""}`,
+          ),
+        ),
+      );
+      const sent = results.filter(
+        (result) => result.status === "fulfilled",
+      ).length;
+      const failed = results.length - sent;
+      if (failed) {
+        this.logger.error(
+          `${failed} job alert email(s) could not be delivered for job ${job.id}.`,
+        );
+      }
+      return { sent, failed };
+    } catch (error) {
+      this.logger.error(
+        `Job alerts could not be processed for job ${job.id}: ${
+          error instanceof Error ? error.message : "unknown notification error"
+        }`,
+      );
+      return { sent: 0, failed: 1 };
+    }
   }
 }

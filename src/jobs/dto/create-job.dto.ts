@@ -8,7 +8,7 @@ import {
   MaxLength,
   Min,
   MinLength,
-} from 'class-validator';
+} from "class-validator";
 
 export class CreateJobDto {
   @IsString()
@@ -28,12 +28,12 @@ export class CreateJobDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['onsite', 'hybrid', 'remote'])
+  @IsIn(["onsite", "hybrid", "remote"])
   workplaceType?: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(['full-time', 'part-time', 'contract', 'internship', 'temporary'])
+  @IsIn(["full-time", "part-time", "contract", "internship", "temporary"])
   employmentType?: string;
 
   @IsOptional()
@@ -61,4 +61,8 @@ export class CreateJobDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  employerUserId?: number | null;
 }
