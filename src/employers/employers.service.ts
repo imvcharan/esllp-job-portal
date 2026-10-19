@@ -47,6 +47,7 @@ import {
 import { EmployerOrganization } from "./organization.entity";
 import { UserNotification } from "./user-notification.entity";
 import { JobsService } from "../jobs/jobs.service";
+import { currentJobDeadlineDate } from "../jobs/job.constants";
 
 const PLAN_LIMITS = {
   free: { activeJobs: 1, seats: 1 },
@@ -323,6 +324,10 @@ export class EmployersService {
         employmentType: dto.employmentType ?? "full-time",
         salaryMin: dto.salaryMin ?? null,
         salaryMax: dto.salaryMax ?? null,
+        salaryCurrency: dto.salaryCurrency ?? "INR",
+        salaryPeriod: dto.salaryPeriod ?? "year",
+        applicationDeadline: dto.applicationDeadline ?? null,
+        numberOfOpenings: dto.numberOfOpenings ?? 1,
         experience: dto.experience?.trim() || null,
         description: dto.description?.trim() || null,
         isActive: false,
@@ -360,6 +365,13 @@ export class EmployersService {
       job.employmentType = dto.employmentType;
     if (dto.salaryMin !== undefined) job.salaryMin = dto.salaryMin;
     if (dto.salaryMax !== undefined) job.salaryMax = dto.salaryMax;
+    if (dto.salaryCurrency !== undefined)
+      job.salaryCurrency = dto.salaryCurrency;
+    if (dto.salaryPeriod !== undefined) job.salaryPeriod = dto.salaryPeriod;
+    if (dto.applicationDeadline !== undefined)
+      job.applicationDeadline = dto.applicationDeadline;
+    if (dto.numberOfOpenings !== undefined)
+      job.numberOfOpenings = dto.numberOfOpenings;
     if (dto.experience !== undefined)
       job.experience = dto.experience?.trim() || null;
     if (dto.description !== undefined)
@@ -401,6 +413,14 @@ export class EmployersService {
         if (!job)
           throw new NotFoundException("Job was not found in this company.");
         if (job.isActive) return { job, published: false };
+        if (
+          job.applicationDeadline &&
+          job.applicationDeadline < currentJobDeadlineDate()
+        ) {
+          throw new BadRequestException(
+            "A job with a past application deadline cannot be published.",
+          );
+        }
         await this.assertJobQuota(organization, jobs);
         job.isActive = true;
         return { job: await jobs.save(job), published: true };
@@ -523,6 +543,19 @@ export class EmployersService {
           : Promise.resolve(null),
       ),
     );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.applicants_viewed",
+      targetType: "employer_organization",
+      targetId: organization.id,
+      details: {
+        page,
+        resultCount: items.length,
+        total,
+        status: query.status ?? "all",
+        jobId: query.jobId ?? null,
+      },
+    });
     return {
       items: items.map((application, index) => ({
         id: application.id,
@@ -589,13 +622,14 @@ export class EmployersService {
       })
       .getOne();
     if (!application) throw new NotFoundException("Application was not found");
-    return this.applicationsService.updateStatus(
+    const result = await this.applicationsService.updateStatus(
       user,
       applicationId,
       status,
       note,
       context.organization.id,
     );
+    return result;
   }
 
   async addApplicationNote(
@@ -618,6 +652,16 @@ export class EmployersService {
         note: dto.note.trim(),
       }),
     );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.application_note_added",
+      targetType: "application",
+      targetId: applicationId,
+      details: {
+        organizationId: context.organization.id,
+        noteId: note.id,
+      },
+    });
     return {
       id: note.id,
       note: note.note,
@@ -653,6 +697,13 @@ export class EmployersService {
         createdByUserId: user.id,
       }),
     );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.application_tag_added",
+      targetType: "application",
+      targetId: applicationId,
+      details: { organizationId: context.organization.id, tagId: tag.id },
+    });
     return { id: tag.id, label: tag.label };
   }
 
@@ -670,6 +721,13 @@ export class EmployersService {
       organizationId: context.organization.id,
     });
     if (!result.affected) throw new NotFoundException("Tag was not found");
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.application_tag_removed",
+      targetType: "application",
+      targetId: applicationId,
+      details: { organizationId: context.organization.id, tagId },
+    });
     return { success: true };
   }
 
@@ -745,6 +803,19 @@ export class EmployersService {
       `An interview was scheduled for ${application.job.title}.`,
       "/#dashboard/notifications",
     );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.interview_scheduled",
+      targetType: "interview",
+      targetId: interview.id,
+      details: {
+        organizationId: context.organization.id,
+        applicationId,
+        startsAt: startsAt.toISOString(),
+        durationMinutes: interview.durationMinutes,
+        notificationStatus,
+      },
+    });
     return { ...interview, notificationStatus };
   }
 
@@ -788,6 +859,17 @@ export class EmployersService {
       `The interview for ${application.job.title} was cancelled.`,
       "/#dashboard/notifications",
     );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.interview_cancelled",
+      targetType: "interview",
+      targetId: saved.id,
+      details: {
+        organizationId: context.organization.id,
+        applicationId: interview.applicationId,
+        notificationStatus,
+      },
+    });
     return { ...saved, notificationStatus };
   }
 
@@ -1110,6 +1192,16 @@ export class EmployersService {
       `You joined ${member.organization.name}.`,
       "/#dashboard",
     );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.team_invitation_accepted",
+      targetType: "employer_organization_member",
+      targetId: member.id,
+      details: {
+        organizationId: member.organizationId,
+        role: member.role,
+      },
+    });
     return {
       organizationId: member.organizationId,
       organizationName: member.organization.name,
@@ -1256,7 +1348,7 @@ export class EmployersService {
       throw new ServiceUnavailableException(
         `The configured Razorpay ${planKey} plan must be monthly in INR and match EMPLOYER_${planKey.toUpperCase()}_PRICE_INR.`,
       );
-    return this.dataSource.transaction(async (manager) => {
+    const checkout = await this.dataSource.transaction(async (manager) => {
       const organizations = manager.getRepository(EmployerOrganization);
       const organization = await organizations.findOne({
         where: { id: context.organization.id },
@@ -1341,6 +1433,14 @@ export class EmployersService {
         amountInr: plan.amountInr,
       };
     });
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.subscription_checkout_started",
+      targetType: "employer_organization",
+      targetId: context.organization.id,
+      details: { planKey, amountInr: plan.amountInr },
+    });
+    return checkout;
   }
 
   async verifySubscription(
@@ -1382,7 +1482,7 @@ export class EmployersService {
       throw new ForbiddenException(
         "Razorpay subscription ownership could not be confirmed.",
       );
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const organizations = manager.getRepository(EmployerOrganization);
       const organization = await organizations.findOne({
         where: { id: context.organization.id },
@@ -1429,6 +1529,16 @@ export class EmployersService {
         message: "Payment confirmation received.",
       };
     });
+    if (result.active) {
+      await this.auditService.record({
+        actorUserId: user.id,
+        action: "employer.subscription_activated",
+        targetType: "employer_organization",
+        targetId: context.organization.id,
+        details: { active: result.active },
+      });
+    }
+    return result;
   }
 
   async cancelSubscription(user: AuthenticatedUser, organizationId?: number) {
@@ -1452,6 +1562,13 @@ export class EmployersService {
     await this.readProviderResponse(response);
     context.organization.subscriptionStatus = "cancel_pending";
     await this.organizations.save(context.organization);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.subscription_cancellation_requested",
+      targetType: "employer_organization",
+      targetId: context.organization.id,
+      details: { planKey: context.organization.planKey },
+    });
     return { status: context.organization.subscriptionStatus };
   }
 

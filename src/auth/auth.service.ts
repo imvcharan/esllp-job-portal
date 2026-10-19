@@ -28,6 +28,7 @@ import {
   EmployerOrganizationMember,
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
+import { AuditService } from "../audit/audit.service";
 
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -46,6 +47,7 @@ export class AuthService {
     @InjectRepository(AuthToken)
     private readonly tokensRepository: Repository<AuthToken>,
     private readonly emailDelivery: EmailDeliveryService,
+    private readonly auditService: AuditService,
   ) {}
 
   async registerCandidate(
@@ -68,6 +70,13 @@ export class AuthService {
       role: UserRole.CANDIDATE,
     });
     const saved = await this.usersRepository.save(user);
+    await this.auditService.record({
+      actorUserId: saved.id,
+      action: "auth.candidate_registered",
+      targetType: "user",
+      targetId: saved.id,
+      details: { role: saved.role },
+    });
     await this.sendVerification(saved);
     return { id: saved.id, email: saved.email };
   }
@@ -134,7 +143,7 @@ export class AuthService {
       throw new BadRequestException("Name must contain at least 2 characters.");
     }
 
-    await this.dataSource.transaction(async (manager) => {
+    const created = await this.dataSource.transaction(async (manager) => {
       await manager.query(
         "SELECT pg_advisory_xact_lock($1, $2)",
         [1_729_000_000, 11],
@@ -150,7 +159,7 @@ export class AuthService {
           "That email already belongs to an account.",
         );
       }
-      await users.save(
+      return users.save(
         users.create({
           email,
           displayName: name,
@@ -162,6 +171,13 @@ export class AuthService {
       );
     });
 
+    await this.auditService.record({
+      actorUserId: created.id,
+      action: "auth.superadmin_bootstrapped",
+      targetType: "user",
+      targetId: created.id,
+      details: { role: created.role },
+    });
     return { email };
   }
 
@@ -255,6 +271,16 @@ export class AuthService {
       return { user: savedUser, invited: false };
     });
     const saved = registration.user;
+    await this.auditService.record({
+      actorUserId: saved.id,
+      action: "auth.employer_registered",
+      targetType: "user",
+      targetId: saved.id,
+      details: {
+        role: saved.role,
+        invited: registration.invited,
+      },
+    });
     try {
       await this.sendVerification(saved);
     } catch (error) {
@@ -279,6 +305,7 @@ export class AuthService {
     user: AuthenticatedUser;
   }> {
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
+      await this.recordLoginFailure(null, "invalid_credentials");
       throw new UnauthorizedException("Email or password is incorrect");
     }
     const email = this.normalizeEmail(dto.email);
@@ -292,9 +319,11 @@ export class AuthService {
       !user.isActive ||
       !(await compare(dto.password, user.passwordHash))
     ) {
+      await this.recordLoginFailure(user?.id ?? null, "invalid_credentials");
       throw new UnauthorizedException("Email or password is incorrect");
     }
     if (!user.emailVerified) {
+      await this.recordLoginFailure(user.id, "email_not_verified");
       throw new UnauthorizedException(
         "Verify your email before signing in. You can request a new verification link.",
       );
@@ -306,13 +335,22 @@ export class AuthService {
         EmployerApprovalStatus.APPROVED,
       ].includes(user.employerApprovalStatus)
     ) {
+      await this.recordLoginFailure(user.id, "employer_not_approved");
       throw new UnauthorizedException(
         user.employerApprovalStatus === EmployerApprovalStatus.REJECTED
           ? "This employer registration was not approved. Contact esllp support for assistance."
           : "This employer account is unavailable. Contact esllp support for assistance.",
       );
     }
-    return this.createSession(user);
+    const session = await this.createSession(user);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.login",
+      targetType: "user",
+      targetId: user.id,
+      details: { role: user.role },
+    });
+    return session;
   }
 
   async requestPasswordReset(emailInput: string): Promise<{ message: string }> {
@@ -322,6 +360,12 @@ export class AuthService {
       isActive: true,
     });
     if (user) {
+      await this.auditService.record({
+        actorUserId: user.id,
+        action: "auth.password_reset_requested",
+        targetType: "user",
+        targetId: user.id,
+      });
       try {
         await this.issueEmailToken(user, "password_reset");
       } catch (error) {
@@ -345,6 +389,12 @@ export class AuthService {
       isActive: true,
     });
     if (user && !user.emailVerified) {
+      await this.auditService.record({
+        actorUserId: user.id,
+        action: "auth.verification_resent",
+        targetType: "user",
+        targetId: user.id,
+      });
       try {
         await this.sendVerification(user);
       } catch (error) {
@@ -373,6 +423,12 @@ export class AuthService {
         "The account for this verification link no longer exists.",
       );
     }
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.email_verified",
+      targetType: "user",
+      targetId: user.id,
+    });
     if (
       user.role === UserRole.EMPLOYER &&
       user.employerApprovalStatus !== EmployerApprovalStatus.APPROVED
@@ -397,12 +453,18 @@ export class AuthService {
     const userId = await this.consumeEmailToken(rawToken, "password_reset");
     await this.usersRepository.update(
       { id: userId, isActive: true },
-      { passwordHash: await hash(password, 12) },
+      { passwordHash: await hash(password, 12), mustChangePassword: false },
     );
     await this.sessionsRepository.update(
       { userId, revokedAt: IsNull() },
       { revokedAt: new Date() },
     );
+    await this.auditService.record({
+      actorUserId: userId,
+      action: "auth.password_reset",
+      targetType: "user",
+      targetId: userId,
+    });
     return {
       message: "Your password was reset. Sign in with your new password.",
     };
@@ -432,11 +494,18 @@ export class AuthService {
       );
     }
     user.passwordHash = await hash(newPassword, 12);
+    user.mustChangePassword = false;
     await this.usersRepository.save(user);
     await this.sessionsRepository.update(
       { userId, revokedAt: IsNull() },
       { revokedAt: new Date() },
     );
+    await this.auditService.record({
+      actorUserId: userId,
+      action: "auth.password_changed",
+      targetType: "user",
+      targetId: userId,
+    });
     return {
       message:
         "Password changed. Your other sessions have been signed out; sign in again.",
@@ -487,10 +556,23 @@ export class AuthService {
     if (!token) {
       return;
     }
-    await this.sessionsRepository.update(
-      { tokenHash: this.hashToken(token), revokedAt: IsNull() },
+    const tokenHash = this.hashToken(token);
+    const session = await this.sessionsRepository.findOneBy({
+      tokenHash,
+      revokedAt: IsNull(),
+    });
+    const result = await this.sessionsRepository.update(
+      { tokenHash, revokedAt: IsNull() },
       { revokedAt: new Date() },
     );
+    if (result.affected && session) {
+      await this.auditService.record({
+        actorUserId: session.userId,
+        action: "auth.logout",
+        targetType: "user",
+        targetId: session.userId,
+      });
+    }
   }
 
   async getSafeUser(id: number): Promise<AuthenticatedUser> {
@@ -529,11 +611,25 @@ export class AuthService {
       displayName: user.displayName,
       role: user.role,
       employerApprovalStatus: user.employerApprovalStatus,
+      mustChangePassword: user.mustChangePassword,
     };
   }
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  private recordLoginFailure(
+    actorUserId: number | null,
+    reason: string,
+  ): Promise<unknown> {
+    return this.auditService.record({
+      actorUserId,
+      action: "auth.login_failed",
+      targetType: actorUserId === null ? "authentication" : "user",
+      targetId: actorUserId ?? "unknown",
+      details: { reason },
+    });
   }
 
   private slugify(value: string): string {

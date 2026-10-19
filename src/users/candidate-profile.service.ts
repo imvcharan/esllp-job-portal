@@ -11,6 +11,7 @@ import { User } from "./user.entity";
 import { CandidateProfile } from "./candidate-profile.entity";
 import { CandidateFileStorageService } from "./candidate-file-storage.service";
 import { CandidateApplication } from "./candidate-application.entity";
+import { AuditService } from "../audit/audit.service";
 import {
   CandidateEducationDto,
   CandidateExperienceDto,
@@ -30,6 +31,7 @@ export class CandidateProfileService {
     private readonly profilesRepository: Repository<CandidateProfile>,
     @InjectRepository(CandidateApplication)
     private readonly applicationsRepository: Repository<CandidateApplication>,
+    private readonly auditService: AuditService,
   ) {}
 
   async get(user: AuthenticatedUser) {
@@ -159,6 +161,16 @@ export class CandidateProfileService {
       await profiles.save(profile);
     });
 
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.profile_updated",
+      targetType: "user",
+      targetId: user.id,
+      details: {
+        fields: Object.keys(dto).sort().join(","),
+        fieldCount: Object.keys(dto).length,
+      },
+    });
     return this.get(user);
   }
 
@@ -177,6 +189,12 @@ export class CandidateProfileService {
     const storageCleanupWarning = previousPath
       ? await this.removeOldObject(previousPath, "previous profile photo")
       : null;
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.profile_photo_uploaded",
+      targetType: "user",
+      targetId: user.id,
+    });
     return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
   }
 
@@ -188,6 +206,12 @@ export class CandidateProfileService {
     const storageCleanupWarning = previousPath
       ? await this.removeOldObject(previousPath, "profile photo")
       : null;
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.profile_photo_removed",
+      targetType: "user",
+      targetId: user.id,
+    });
     return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
   }
 
@@ -215,6 +239,12 @@ export class CandidateProfileService {
     const storageCleanupWarning = previousPath
       ? await this.removeOldResumeIfUnattached(previousPath)
       : null;
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.resume_uploaded",
+      targetType: "user",
+      targetId: user.id,
+    });
     return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
   }
 
@@ -227,6 +257,12 @@ export class CandidateProfileService {
     const storageCleanupWarning = previousPath
       ? await this.removeOldResumeIfUnattached(previousPath)
       : null;
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.resume_removed",
+      targetType: "user",
+      targetId: user.id,
+    });
     return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
   }
 

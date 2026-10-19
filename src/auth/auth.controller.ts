@@ -16,6 +16,7 @@ import { AuthenticatedUser } from "./auth.types";
 import { AuthService } from "./auth.service";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
+import { AllowForcedPasswordChange } from "./forced-password-change.decorator";
 import { LoginDto } from "./dto/login.dto";
 import {
   BootstrapSuperadminDto,
@@ -99,6 +100,7 @@ export class AuthController {
 
   @Post("change-password")
   @UseGuards(JwtAuthGuard)
+  @AllowForcedPasswordChange()
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async changePassword(

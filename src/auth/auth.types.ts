@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   displayName: string;
   role: UserRole;
   employerApprovalStatus: EmployerApprovalStatus;
+  mustChangePassword: boolean;
 }
 
 export interface AccessTokenPayload {

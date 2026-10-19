@@ -17,6 +17,8 @@ import { SubmitCandidateApplicationDto } from "./dto/submit-candidate-applicatio
 import { User, UserRole } from "./user.entity";
 import { EmployerOrganizationMember } from "../employers/organization-member.entity";
 import { UserNotification } from "../employers/user-notification.entity";
+import { currentJobDeadlineDate } from "../jobs/job.constants";
+import { AuditService } from "../audit/audit.service";
 
 const EMPLOYER_TRANSITIONS: Record<string, string[]> = {
   submitted: ["in_review", "interview", "offer", "rejected"],
@@ -46,6 +48,7 @@ export class CandidateApplicationsService {
     private readonly notificationsRepository: Repository<UserNotification>,
     private readonly fileStorage: CandidateFileStorageService,
     private readonly emailDelivery: EmailDeliveryService,
+    private readonly auditService: AuditService,
   ) {}
 
   async list(user: AuthenticatedUser, requestedPage = 1, requestedLimit = 20) {
@@ -142,6 +145,10 @@ export class CandidateApplicationsService {
         .getRepository(Job)
         .createQueryBuilder("job")
         .where("job.id = :jobId", { jobId })
+        .andWhere("job.isActive = :isActive", { isActive: true })
+        .andWhere(
+          "(job.applicationDeadline IS NULL OR job.applicationDeadline >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date)",
+        )
         .setLock("pessimistic_write")
         .getOne();
       if (!lockedJob?.isActive) {
@@ -212,7 +219,16 @@ export class CandidateApplicationsService {
     if (!application) {
       throw new Error("Submitted application could not be loaded");
     }
-    if (created) await this.notifyEmployer(application.job);
+    if (created) {
+      await this.auditService.record({
+        actorUserId: user.id,
+        action: "candidate.application_submitted",
+        targetType: "application",
+        targetId: application.id,
+        details: { jobId, status: application.status },
+      });
+      await this.notifyEmployer(application.job);
+    }
     return this.toCandidateResponse(application, [
       ...((await this.getHistories([application])).get(application.id) ?? []),
     ]);
@@ -250,6 +266,13 @@ export class CandidateApplicationsService {
       relations: { job: true },
     });
     if (!application) throw new NotFoundException("Application was not found");
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.application_withdrawn",
+      targetType: "application",
+      targetId: application.id,
+      details: { jobId: application.jobId },
+    });
     const histories = await this.getHistories([application]);
     return this.toCandidateResponse(
       application,
@@ -374,6 +397,17 @@ export class CandidateApplicationsService {
         );
       }
     }
+    await this.auditService.record({
+      actorUserId: employer.id,
+      action: "employer.application_status_changed",
+      targetType: "application",
+      targetId: applicationId,
+      details: {
+        jobId: application.jobId,
+        status,
+        notificationStatus,
+      },
+    });
     return {
       applicationId,
       status,
@@ -432,7 +466,10 @@ export class CandidateApplicationsService {
         salaryMin: job.salaryMin,
         salaryMax: job.salaryMax,
         experience: job.experience,
-        isActive: job.isActive,
+        isActive:
+          job.isActive &&
+          (!job.applicationDeadline ||
+            job.applicationDeadline >= currentJobDeadlineDate()),
       },
     };
   }

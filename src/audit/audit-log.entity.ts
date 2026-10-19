@@ -30,6 +30,18 @@ export class AuditLog {
   @Column({ name: 'ip_address', type: 'varchar', length: 64, nullable: true })
   ipAddress!: string | null;
 
+  @Column({ name: 'location_city', type: 'varchar', length: 120, nullable: true })
+  locationCity!: string | null;
+
+  @Column({ name: 'location_region', type: 'varchar', length: 120, nullable: true })
+  locationRegion!: string | null;
+
+  @Column({ name: 'location_country', type: 'varchar', length: 120, nullable: true })
+  locationCountry!: string | null;
+
+  @Column({ name: 'user_agent', type: 'varchar', length: 1000, nullable: true })
+  userAgent!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }

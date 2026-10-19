@@ -4,12 +4,17 @@ import {
   DefaultValuePipe,
   Get,
   Param,
+  ParseEnumPipe,
   ParseIntPipe,
   Patch,
+  Post,
   Query,
   Req,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { Request } from "express";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { AuthenticatedUser } from "../auth/auth.types";
@@ -20,6 +25,7 @@ import { UserRole } from "../users/user.entity";
 import { UpdateUserRoleDto } from "./dto/update-user-role.dto";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto";
 import { UpdateEmployerApprovalDto } from "./dto/update-employer-approval.dto";
+import { CreateManagedUserDto } from "./dto/create-managed-user.dto";
 import { AdminUsersService } from "./admin-users.service";
 
 @Controller("admin/users")
@@ -32,8 +38,25 @@ export class AdminUsersController {
   list(
     @Query("page", new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Query("limit", new DefaultValuePipe(25), ParseIntPipe) limit = 25,
+    @Query("role", new ParseEnumPipe(UserRole, { optional: true }))
+    role?: UserRole,
   ) {
-    return this.adminUsersService.list(page, limit);
+    return this.adminUsersService.list(page, limit, role);
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  create(
+    @Body() dto: CreateManagedUserDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.adminUsersService.create(
+      actor.id,
+      dto,
+      request.ip,
+    );
   }
 
   @Patch(":id/role")

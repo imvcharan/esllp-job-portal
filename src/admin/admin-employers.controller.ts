@@ -12,7 +12,7 @@ import {
 
 @Controller("admin/employers")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+@Roles(UserRole.STAFF, UserRole.ADMIN, UserRole.SUPERADMIN)
 export class AdminEmployersController {
   constructor(
     @InjectRepository(User)

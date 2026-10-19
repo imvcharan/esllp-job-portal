@@ -7,7 +7,7 @@ import { AdminInsightsService } from "./admin-insights.service";
 
 @Controller("admin")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+@Roles(UserRole.STAFF, UserRole.ADMIN, UserRole.SUPERADMIN)
 export class AdminInsightsController {
   constructor(private readonly insightsService: AdminInsightsService) {}
 
@@ -22,6 +22,7 @@ export class AdminInsightsController {
   }
 
   @Get("activity")
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @Header("Cache-Control", "private, no-store")
   activity() {
     return this.insightsService.activity();

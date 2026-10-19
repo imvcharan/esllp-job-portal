@@ -411,7 +411,8 @@
     .filter-panel { position: sticky; top: 96px; padding: 20px; }
     .filter-panel h2 { margin: 0 0 18px; font-size: 18px; }
     .filter-field { display: grid; gap: 7px; margin-top: 17px; color: var(--ink); font-size: 12px; font-weight: 700; }
-    .filter-field select, .results-toolbar select { width: 100%; min-height: 42px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fff; font: inherit; }
+    .filter-field select, .filter-field input, .results-toolbar select { width: 100%; min-height: 42px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fff; font: inherit; }
+    .filter-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
     .filter-reset { display: inline-flex; margin-top: 18px; padding: 0; border: 0; color: var(--green); background: transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
     .results-searchbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) auto; gap: 9px; margin: 18px 0; }
     .results-searchbar input { min-width: 0; min-height: 43px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fff; font: inherit; font-size: 13px; }
@@ -671,7 +672,7 @@
     @media (max-width: 800px) {
       .results-layout { grid-template-columns: 1fr; }
       .filter-panel { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
-      .filter-panel h2, .filter-reset { grid-column: 1 / -1; }
+      .filter-panel h2, .filter-reset, .filter-hint { grid-column: 1 / -1; }
       .filter-field { margin-top: 12px; }
       .detail-layout { grid-template-columns: 1fr; }
       .detail-aside { position: static; }
@@ -936,14 +937,33 @@
                 <option value="all">Any company</option>
               </select>
             </label>
-            <label class="filter-field">Minimum salary
-              <select id="filter-salary">
-                <option value="0">Any salary</option>
-                <option value="500000">₹5 lakh+</option>
-                <option value="1000000">₹10 lakh+</option>
-                <option value="2000000">₹20 lakh+</option>
+            <label class="filter-field">Minimum salary (amount)
+              <input id="filter-salary" type="number" min="0" max="2000000000" step="1" value="0" aria-label="Minimum salary amount" placeholder="Any amount">
+            </label>
+            <label class="filter-field">Salary currency
+              <select id="filter-salary-currency">
+                <option value="all">Any currency</option>
+                <option value="INR">INR · Indian rupee</option>
+                <option value="USD">USD · US dollar</option>
+                <option value="GBP">GBP · British pound</option>
+                <option value="EUR">EUR · Euro</option>
+                <option value="AED">AED · UAE dirham</option>
+                <option value="CAD">CAD · Canadian dollar</option>
+                <option value="AUD">AUD · Australian dollar</option>
+                <option value="SGD">SGD · Singapore dollar</option>
               </select>
             </label>
+            <label class="filter-field">Pay period
+              <select id="filter-salary-period">
+                <option value="all">Any period</option>
+                <option value="year">Per year</option>
+                <option value="month">Per month</option>
+                <option value="week">Per week</option>
+                <option value="day">Per day</option>
+                <option value="hour">Per hour</option>
+              </select>
+            </label>
+            <p class="filter-hint">If you set a minimum without choosing a currency or period, it is compared as INR per year.</p>
             <label class="filter-field">Posted
               <select id="filter-freshness">
                 <option value="all">Any time</option>
@@ -960,7 +980,7 @@
               <label class="sort-control">Sort by
                 <select id="sort-jobs">
                   <option value="newest">Newest first</option>
-                  <option value="salary">Highest salary</option>
+                  <option value="salary">Salary (grouped by currency/period)</option>
                   <option value="title">Job title</option>
                 </select>
               </label>
@@ -1039,6 +1059,23 @@
   </dialog>
 
   <div id="portal-status" role="status" aria-live="polite" hidden></div>
+  <dialog class="photo-crop-dialog" id="forced-password-change-dialog" aria-labelledby="forced-password-change-title">
+    <form id="forced-password-change-form" class="profile-fields" novalidate>
+      <h2 id="forced-password-change-title">Set your password</h2>
+      <p>Your account was created with a temporary password. Change it before continuing.</p>
+      <label class="profile-field" for="forced-current-password">Temporary password
+        <input id="forced-current-password" name="currentPassword" type="password" autocomplete="current-password" required maxlength="72">
+      </label>
+      <label class="profile-field" for="forced-new-password">New password
+        <input id="forced-new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" required maxlength="72">
+      </label>
+      <label class="profile-field" for="forced-confirm-password">Confirm new password
+        <input id="forced-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required maxlength="72">
+      </label>
+      <p id="forced-password-change-status" role="alert" aria-live="polite"></p>
+      <div class="photo-crop-actions"><button class="button button-dark" type="submit">Change password</button></div>
+    </form>
+  </dialog>
   <footer class="footer">
     <div class="wrap">
       <div class="footer-top">
@@ -1109,7 +1146,7 @@
     ];
     const savedJobsKey = "esllp-saved-jobs";
     const savedDashboardReturn = sessionStorage.getItem("esllp-dashboard-job-return");
-    const state = { jobs: [], page: 1, searchTotal: 0, searchLimit: 20, searchHash: "#search", dashboardJobReturn: ["#dashboard/saved", "#dashboard/applications"].includes(savedDashboardReturn) ? savedDashboardReturn : "#dashboard/jobs", serverSavedJobs: new Map(), detailRequest: 0, featuredRequest: 0, searchRequest: 0, employerOrganizations: [], employerOrganizationId: Number(localStorage.getItem("esllp-employer-organization-id")) || null, employerApplicantsPage: 1, employerApplicantFilters: {}, workspaceJobPage: 1, workspaceJobQuery: "", workspaceJobLocation: "", candidateApplicationsPage: 1, candidateNotificationsPage: 1 };
+    const state = { jobs: [], page: 1, searchTotal: 0, searchLimit: 20, searchHash: "#search", dashboardJobReturn: ["#dashboard/saved", "#dashboard/applications"].includes(savedDashboardReturn) ? savedDashboardReturn : "#dashboard/jobs", serverSavedJobs: new Map(), detailRequest: 0, featuredRequest: 0, searchRequest: 0, employerOrganizations: [], employerOrganizationId: Number(localStorage.getItem("esllp-employer-organization-id")) || null, employerJobsPage: 1, employerApplicantsPage: 1, employerApplicantFilters: {}, workspaceJobPage: 1, workspaceJobQuery: "", workspaceJobLocation: "", candidateApplicationsPage: 1, candidateNotificationsPage: 1 };
     const searchForm = document.querySelector("#job-search");
     const keywordInput = document.querySelector("#keyword");
     const locationInput = document.querySelector("#location");
@@ -1125,6 +1162,7 @@
     const profileContent = document.querySelector("#profile-content");
     const workspaceNav = document.querySelector("#workspace-nav");
     const authState = { accessToken: null, user: null, notice: "", noticeType: "" };
+    const forcedPasswordDialog = document.querySelector("#forced-password-change-dialog");
     const formatter = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
     let toastTimer;
     let sessionReady = Promise.resolve();
@@ -1194,6 +1232,8 @@
         experience: filters.experience,
         company: filters.company,
         minimumSalary: filters.minimumSalary,
+        salaryCurrency: filters.salaryCurrency,
+        salaryPeriod: filters.salaryPeriod,
         freshnessDays: filters.freshnessDays,
         sort: filters.sort
       }).forEach(([key, value]) => {
@@ -1214,9 +1254,21 @@
     function formatSalary(job) {
       if (job.salaryLabel) return job.salaryLabel;
       if (job.salaryMin == null && job.salaryMax == null) return "Salary not provided";
-      const min = job.salaryMin == null ? "" : `₹${formatter.format(job.salaryMin)}`;
-      const max = job.salaryMax == null ? "" : `₹${formatter.format(job.salaryMax)}`;
-      return min && max ? `${min} – ${max}` : `${min || max}+`;
+      const currency = job.salaryCurrency || "INR";
+      const min = job.salaryMin == null ? "" : new Intl.NumberFormat(undefined, {
+        style: "currency", currency, maximumFractionDigits: 0
+      }).format(job.salaryMin);
+      const max = job.salaryMax == null ? "" : new Intl.NumberFormat(undefined, {
+        style: "currency", currency, maximumFractionDigits: 0
+      }).format(job.salaryMax);
+      const range = min && max ? `${min} – ${max}` : `${min || max}+`;
+      return `${range} / ${job.salaryPeriod || "year"}`;
+    }
+
+    function deadlineLabel(value) {
+      if (!value) return "";
+      const date = new Date(`${value}T00:00:00`);
+      return Number.isNaN(date.getTime()) ? "" : `Apply by ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date)}`;
     }
 
     function postedLabel(value) {
@@ -1243,7 +1295,13 @@
       const detailHash = inWorkspace
         ? `#dashboard/job/${encodeURIComponent(job.id)}`
         : `#job/${encodeURIComponent(job.id)}`;
-      const meta = [employmentLabel(job.employmentType), workplaceLabel(job.workplaceType), job.experience]
+      const meta = [
+        employmentLabel(job.employmentType),
+        workplaceLabel(job.workplaceType),
+        job.experience,
+        Number.isSafeInteger(job.numberOfOpenings) ? `${job.numberOfOpenings} opening${job.numberOfOpenings === 1 ? "" : "s"}` : "",
+        deadlineLabel(job.applicationDeadline)
+      ]
         .filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("");
       return `<article class="result-card">
         <div class="result-card-main">
@@ -1348,6 +1406,8 @@
           document.querySelector("#filter-experience").value = "all";
           document.querySelector("#filter-company").value = "all";
           document.querySelector("#filter-salary").value = "0";
+          document.querySelector("#filter-salary-currency").value = "all";
+          document.querySelector("#filter-salary-period").value = "all";
           document.querySelector("#filter-freshness").value = "all";
           keywordInput.value = "";
           locationInput.value = "";
@@ -1375,12 +1435,14 @@
         ["experience", "#filter-experience", "all"],
         ["company", "#filter-company", "all"],
         ["minimumSalary", "#filter-salary", "0"],
+        ["salaryCurrency", "#filter-salary-currency", "all"],
+        ["salaryPeriod", "#filter-salary-period", "all"],
         ["freshnessDays", "#filter-freshness", "all"],
         ["sort", "#sort-jobs", "newest"]
       ];
       for (const [key, selector, defaultValue] of filters) {
         const value = document.querySelector(selector).value;
-        if (value !== defaultValue) params.set(key, value);
+        if (value !== defaultValue && value !== "") params.set(key, value);
       }
       try {
         const response = await fetch(`/api/jobs?${params}`);
@@ -1396,7 +1458,7 @@
         state.searchError = false;
         state.noMatches = result.total === 0 && Boolean(query || locationValue);
         const hasFilters = filters.some(([key, selector, defaultValue]) =>
-          key !== "sort" && document.querySelector(selector).value !== defaultValue
+          key !== "sort" && document.querySelector(selector).value !== defaultValue && document.querySelector(selector).value !== ""
         );
         if (result.total === 0 && !query && !locationValue && !hasFilters) {
           state.jobs = previewJobs;
@@ -1559,11 +1621,16 @@
 
     function redirectAuthenticatedUser() {
       if (!authState.user) return;
-      if (["admin", "superadmin"].includes(authState.user.role)) {
+      if (["staff", "admin", "superadmin"].includes(authState.user.role)) {
         window.location.assign("/admin/");
         return;
       }
       navigate("#dashboard");
+    }
+
+    function showForcedPasswordChange() {
+      if (!forcedPasswordDialog.open) forcedPasswordDialog.showModal();
+      document.querySelector("#forced-current-password").focus();
     }
 
     function setAuthNotice(message, type = "") {
@@ -1626,6 +1693,10 @@
         authState.accessToken = payload.accessToken;
         authState.user = payload.user;
         updateAuthNavigation();
+        if (payload.user.mustChangePassword) {
+          showForcedPasswordChange();
+          return;
+        }
         if (payload.user.role === "candidate") {
           try {
             await syncLocalSavedJobs();
@@ -1933,6 +2004,10 @@
         authState.notice = "";
         authState.noticeType = "";
         updateAuthNavigation();
+        if (payload.user.mustChangePassword) {
+          showForcedPasswordChange();
+          return;
+        }
         const inviteToken = new URLSearchParams(location.hash.split("?")[1] || "").get("invite");
         if (inviteToken && payload.user.employerApprovalStatus === "pending") {
           authState.notice = "Your employer account is awaiting administrator approval.";
@@ -1971,6 +2046,46 @@
         setAuthNotice(displayAuthError(error), "error");
         submitButton.disabled = false;
         submitButton.innerHTML = `${isSignup ? accountType === "employer" ? "Submit for approval" : "Create candidate account" : "Log in"} <span aria-hidden="true">→</span>`;
+      }
+    });
+
+    forcedPasswordDialog.addEventListener("cancel", (event) => event.preventDefault());
+    document.querySelector("#forced-password-change-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const status = document.querySelector("#forced-password-change-status");
+      status.textContent = "";
+      if (data.get("newPassword") !== data.get("confirmPassword")) {
+        status.textContent = "The new password and confirmation do not match.";
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      try {
+        const response = await authenticatedFetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentPassword: data.get("currentPassword"),
+            newPassword: data.get("newPassword")
+          })
+        });
+        const result = await readAuthResponse(response);
+        authState.accessToken = null;
+        authState.user = null;
+        state.employerOrganizations = [];
+        forcedPasswordDialog.close();
+        form.reset();
+        updateAuthNavigation();
+        authState.notice = result.message || "Password changed. Sign in again with your new password.";
+        authState.noticeType = "";
+        navigate("#sign-in");
+      } catch (error) {
+        status.textContent = displayAuthError(error);
+      } finally {
+        submit.disabled = false;
       }
     });
 
@@ -2532,6 +2647,7 @@
 
     document.querySelector("#workspace-org-switcher").addEventListener("change", (event) => {
       state.employerOrganizationId = Number(event.target.value);
+      state.employerJobsPage = 1;
       state.employerApplicantsPage = 1;
       state.employerApplicantFilters = {};
       localStorage.setItem("esllp-employer-organization-id", String(state.employerOrganizationId));
@@ -2818,11 +2934,12 @@
       }
     }
 
-    async function loadEmployerJobs() {
+    async function loadEmployerJobs(page = state.employerJobsPage) {
+      state.employerJobsPage = page;
       const pendingEmployer = isPendingEmployer();
       profileContent.innerHTML = '<div class="workspace-panel">Loading your job listings…</div>';
       try {
-        const response = await employerRequest("/api/employer/jobs");
+        const response = await employerRequest(`/api/employer/jobs?page=${page}&limit=25`);
         const result = await readAuthResponse(response);
         const limits = result.limits;
         profileContent.innerHTML = `${pendingEmployer ? pendingEmployerNotice("Job listings are read-only until an administrator approves your employer account.") : ""}
@@ -2836,15 +2953,19 @@
               <label>Location<input name="location" minlength="2" maxlength="120" required placeholder="City, region or Remote"></label>
               <label>Workplace<select name="workplaceType"><option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option></select></label>
               <label>Employment type<select name="employmentType">${["full-time", "part-time", "contract", "internship", "temporary"].map((type) => `<option value="${type}">${type.replace("-", " ")}</option>`).join("")}</select></label>
-              <label>Minimum salary (INR / year)<input name="salaryMin" type="number" min="0" max="2000000000"></label>
-              <label>Maximum salary (INR / year)<input name="salaryMax" type="number" min="0" max="2000000000"></label>
+              <label>Minimum salary<input name="salaryMin" type="number" min="0" max="2000000000"></label>
+              <label>Maximum salary<input name="salaryMax" type="number" min="0" max="2000000000"></label>
+              <label>Salary currency<select name="salaryCurrency">${[["INR", "Indian rupee"], ["USD", "US dollar"], ["GBP", "British pound"], ["EUR", "Euro"], ["AED", "UAE dirham"], ["CAD", "Canadian dollar"], ["AUD", "Australian dollar"], ["SGD", "Singapore dollar"]].map(([code, label]) => `<option value="${code}">${code} · ${label}</option>`).join("")}</select></label>
+              <label>Pay period<select name="salaryPeriod">${[["year", "Per year"], ["month", "Per month"], ["week", "Per week"], ["day", "Per day"], ["hour", "Per hour"]].map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
+              <label>Number of openings<input name="numberOfOpenings" type="number" min="1" max="2000000000" step="1" value="1" required></label>
+              <label>Application deadline<input name="applicationDeadline" type="date"></label>
               <label>Experience<input name="experience" maxlength="80" placeholder="3+ years"></label>
               <label class="full">Job description<textarea name="description" maxlength="20000" placeholder="Responsibilities, requirements and benefits…"></textarea></label>
               <div class="employer-form-actions full"><button class="button button-dark" type="submit">Save draft</button><button class="button" type="reset" data-reset-employer-job>Clear</button><span id="employer-job-form-status" role="status"></span></div>
             </form>
           </section>`}
           <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Your listings</h2><p>${result.total} job(s) owned by this company.</p></div></div>
-            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Applicants</th><th>Status</th><th>Created</th>${pendingEmployer ? "" : "<th>Actions</th>"}</tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.isActive ? "published" : "draft"}</span></td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td>${pendingEmployer ? "" : `<td><button class="button" type="button" data-edit-employer-job="${job.id}">Edit</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">Publish</button>`}</td>`}</tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><h2>No job listings yet</h2><p>${pendingEmployer ? "Job creation will be available after administrator approval." : "Create your first draft above. You stay in control of when it goes live."}</p></div>`}
+            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applicants</th><th>Status</th><th>Created</th>${pendingEmployer ? "" : "<th>Actions</th>"}</tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.salaryMin == null && job.salaryMax == null ? "Not provided" : `${escapeHtml(job.salaryCurrency)} ${job.salaryMin ?? ""}${job.salaryMin != null && job.salaryMax != null ? "–" : ""}${job.salaryMax ?? ""} / ${escapeHtml(job.salaryPeriod)}`}</td><td>${job.numberOfOpenings ?? 1}</td><td>${escapeHtml(job.applicationDeadline || "—")}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.isActive ? "published" : "draft"}</span></td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td>${pendingEmployer ? "" : `<td><button class="button" type="button" data-edit-employer-job="${job.id}">Edit</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">Publish</button>`}</td>`}</tr>`).join("")}</tbody></table></div>${result.total > result.limit ? `<div class="employer-form-actions"><span>Page ${result.page} of ${Math.ceil(result.total / result.limit)} · ${result.total} jobs</span><button class="button" type="button" data-employer-jobs-page="${result.page - 1}"${result.page <= 1 ? " disabled" : ""}>← Previous</button><button class="button" type="button" data-employer-jobs-page="${result.page + 1}"${result.page * result.limit >= result.total ? " disabled" : ""}>Next →</button></div>` : ""}` : `<div class="empty-state"><h2>No job listings yet</h2><p>${pendingEmployer ? "Job creation will be available after administrator approval." : "Create your first draft above. You stay in control of when it goes live."}</p></div>`}
           </section>`;
         if (!pendingEmployer) {
           const form = profileContent.querySelector("#employer-job-form");
@@ -3351,6 +3472,7 @@
       } else if (page === "company" && authState.user.role === "employer") {
         await loadEmployerCompany();
       } else if (page === "jobs" && authState.user.role === "employer") {
+        if (!jobId) state.employerJobsPage = 1;
         await loadEmployerJobs();
       } else if (page === "interviews" && authState.user.role === "employer") {
         await loadEmployerInterviews();
@@ -3441,6 +3563,10 @@
           employmentType: data.get("employmentType"),
           salaryMin: String(data.get("salaryMin") || "").trim() ? Number(data.get("salaryMin")) : null,
           salaryMax: String(data.get("salaryMax") || "").trim() ? Number(data.get("salaryMax")) : null,
+          salaryCurrency: data.get("salaryCurrency"),
+          salaryPeriod: data.get("salaryPeriod"),
+          numberOfOpenings: Number(data.get("numberOfOpenings")),
+          applicationDeadline: String(data.get("applicationDeadline") || "").trim() || null,
           experience: String(data.get("experience") || "").trim() || null,
           description: String(data.get("description") || "").trim() || null
         };
@@ -3830,6 +3956,11 @@
     });
 
     profileContent.addEventListener("click", async (event) => {
+      const employerJobsPage = event.target.closest("[data-employer-jobs-page]");
+      if (employerJobsPage) {
+        await loadEmployerJobs(Number(employerJobsPage.dataset.employerJobsPage));
+        return;
+      }
       const editEmployerJob = event.target.closest("[data-edit-employer-job]");
       if (editEmployerJob) {
         const form = profileContent.querySelector("#employer-job-form");
@@ -3839,7 +3970,7 @@
           return;
         }
         form.elements.jobId.value = String(job.id);
-        for (const field of ["title", "location", "workplaceType", "employmentType", "salaryMin", "salaryMax", "experience", "description"]) {
+        for (const field of ["title", "location", "workplaceType", "employmentType", "salaryMin", "salaryMax", "salaryCurrency", "salaryPeriod", "numberOfOpenings", "applicationDeadline", "experience", "description"]) {
           form.elements[field].value = job[field] ?? "";
         }
         form.querySelector("#employer-job-form-title").textContent = `Edit ${job.title}`;
@@ -4155,6 +4286,8 @@
         ["experience", "#filter-experience", "all"],
         ["company", "#filter-company", "all"],
         ["minimumSalary", "#filter-salary", "0"],
+        ["salaryCurrency", "#filter-salary-currency", "all"],
+        ["salaryPeriod", "#filter-salary-period", "all"],
         ["freshnessDays", "#filter-freshness", "all"],
         ["sort", "#sort-jobs", "newest"]
       ].forEach(([key, selector, defaultValue]) => {
@@ -4283,6 +4416,8 @@
         experience: readFilter("#filter-experience", "all"),
         company: readFilter("#filter-company", "all"),
         minimumSalary: Number(readFilter("#filter-salary", "0")) || undefined,
+        salaryCurrency: readFilter("#filter-salary-currency", "all"),
+        salaryPeriod: readFilter("#filter-salary-period", "all"),
         freshnessDays: Number(readFilter("#filter-freshness", "all")) || undefined,
         sort: readFilter("#sort-jobs", "newest"),
         emailAlerts: form.elements.emailAlerts.checked
@@ -4313,7 +4448,7 @@
       });
     });
 
-    document.querySelectorAll("#filter-workplace, #filter-employment, #filter-experience, #filter-company, #filter-salary, #filter-freshness, #sort-jobs").forEach((control) => {
+    document.querySelectorAll("#filter-workplace, #filter-employment, #filter-experience, #filter-company, #filter-salary, #filter-salary-currency, #filter-salary-period, #filter-freshness, #sort-jobs").forEach((control) => {
       control.addEventListener("change", () => {
         const terms = parseSearchHash(state.searchHash);
         void searchJobs(terms.query, terms.location, 1);
@@ -4325,6 +4460,8 @@
       document.querySelector("#filter-experience").value = "all";
       document.querySelector("#filter-company").value = "all";
       document.querySelector("#filter-salary").value = "0";
+      document.querySelector("#filter-salary-currency").value = "all";
+      document.querySelector("#filter-salary-period").value = "all";
       document.querySelector("#filter-freshness").value = "all";
       const terms = parseSearchHash(state.searchHash);
       void searchJobs(terms.query, terms.location, 1);

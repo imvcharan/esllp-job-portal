@@ -102,6 +102,10 @@ export class PublicJobPagesController {
       },
       datePosted: job.createdAt.toISOString(),
       employmentType: this.schemaEmploymentType(job.employmentType),
+      numberOfOpenings: job.numberOfOpenings,
+      validThrough: job.applicationDeadline
+        ? new Date(`${job.applicationDeadline}T23:59:59+05:30`).toISOString()
+        : undefined,
       hiringOrganization: { "@type": "Organization", name: job.company },
       jobLocationType:
         job.workplaceType === "remote" ? "TELECOMMUTE" : undefined,
@@ -120,12 +124,12 @@ export class PublicJobPagesController {
           ? undefined
           : {
               "@type": "MonetaryAmount",
-              currency: "INR",
+              currency: job.salaryCurrency,
               value: {
                 "@type": "QuantitativeValue",
                 ...(job.salaryMin === null ? {} : { minValue: job.salaryMin }),
                 ...(job.salaryMax === null ? {} : { maxValue: job.salaryMax }),
-                unitText: "YEAR",
+                unitText: job.salaryPeriod.toUpperCase(),
               },
             },
       url: canonical,
@@ -150,19 +154,24 @@ export class PublicJobPagesController {
   <script type="application/ld+json">${jsonLd}</script>
   <style>body{margin:0;padding:32px;font:16px/1.6 system-ui,sans-serif;color:#18322b;background:#f7f8f5}main{max-width:720px;margin:8vh auto;padding:32px;border:1px solid #e1e8e1;border-radius:16px;background:white}h1{line-height:1.2}p{color:#52645c}.details{display:flex;gap:16px;flex-wrap:wrap}.button{display:inline-block;margin-top:20px;padding:12px 18px;border-radius:8px;color:white;background:#183d32;text-decoration:none;font-weight:700}</style>
 </head>
-<body><main><p>esllp · Job opportunity</p><h1>${escapeHtml(job.title)}</h1><p>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p><div class="details"><span>${escapeHtml(job.workplaceType)}</span><span>${escapeHtml(job.employmentType)}</span>${job.experience ? `<span>${escapeHtml(job.experience)}</span>` : ""}</div><p>${escapeHtml(description)}</p><a class="button" href="${escapeHtml(appJobUrl)}">View job and apply</a></main></body>
+<body><main><p>esllp · Job opportunity</p><h1>${escapeHtml(job.title)}</h1><p>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p><div class="details"><span>${escapeHtml(job.workplaceType)}</span><span>${escapeHtml(job.employmentType)}</span>${job.experience ? `<span>${escapeHtml(job.experience)}</span>` : ""}<span>${job.numberOfOpenings} opening${job.numberOfOpenings === 1 ? "" : "s"}</span>${job.applicationDeadline ? `<span>Apply by ${escapeHtml(job.applicationDeadline)}</span>` : ""}${job.salaryMin !== null || job.salaryMax !== null ? `<span>${escapeHtml(job.salaryCurrency)} ${job.salaryMin ?? ""}${job.salaryMin !== null && job.salaryMax !== null ? "–" : ""}${job.salaryMax ?? ""} / ${escapeHtml(job.salaryPeriod)}</span>` : ""}</div><p>${escapeHtml(description)}</p><a class="button" href="${escapeHtml(appJobUrl)}">View job and apply</a></main></body>
 </html>`);
   }
 
   @Get("sitemap.xml")
   async sitemap(@Res() response: Response): Promise<void> {
     const origin = publicOrigin();
-    const jobs = await this.jobsRepository.find({
-      select: { id: true, createdAt: true },
-      where: { isActive: true },
-      order: { createdAt: "DESC", id: "DESC" },
-      take: 50_000,
-    });
+    const jobs = await this.jobsRepository
+      .createQueryBuilder("job")
+      .select(["job.id", "job.createdAt"])
+      .where("job.isActive = :isActive", { isActive: true })
+      .andWhere(
+        "(job.applicationDeadline IS NULL OR job.applicationDeadline >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date)",
+      )
+      .orderBy("job.createdAt", "DESC")
+      .addOrderBy("job.id", "DESC")
+      .take(50_000)
+      .getMany();
     const urls = [
       `<url><loc>${escapeXml(origin)}/</loc></url>`,
       ...jobs.map(

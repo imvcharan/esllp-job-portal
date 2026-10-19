@@ -1,15 +1,18 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Request } from "express";
 import { Repository } from "typeorm";
 import { AccessTokenPayload, AuthenticatedUser } from "./auth.types";
 import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
+import { ALLOW_FORCED_PASSWORD_CHANGE } from "./forced-password-change.decorator";
 
 type AuthenticatedRequest = Request & { user: AuthenticatedUser };
 
@@ -17,6 +20,7 @@ type AuthenticatedRequest = Request & { user: AuthenticatedUser };
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
+    private readonly reflector: Reflector,
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
   ) {}
@@ -45,6 +49,16 @@ export class JwtAuthGuard implements CanActivate {
     if (!user) {
       throw new UnauthorizedException("This account is unavailable");
     }
+    const allowsForcedPasswordChange =
+      this.reflector.getAllAndOverride<boolean>(
+        ALLOW_FORCED_PASSWORD_CHANGE,
+        [context.getHandler(), context.getClass()],
+      );
+    if (user.mustChangePassword && !allowsForcedPasswordChange) {
+      throw new ForbiddenException(
+        "Change your temporary password before continuing.",
+      );
+    }
     if (
       user.role === UserRole.EMPLOYER &&
       ![
@@ -61,6 +75,7 @@ export class JwtAuthGuard implements CanActivate {
       displayName: user.displayName,
       role: user.role,
       employerApprovalStatus: user.employerApprovalStatus,
+      mustChangePassword: user.mustChangePassword,
     };
     return true;
   }

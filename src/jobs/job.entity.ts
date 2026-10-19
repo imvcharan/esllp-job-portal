@@ -31,6 +31,18 @@ export class Job {
   @Column({ name: "salary_max", type: "integer", nullable: true })
   salaryMax!: number | null;
 
+  @Column({ name: "salary_currency", length: 3, default: "INR" })
+  salaryCurrency!: string;
+
+  @Column({ name: "salary_period", length: 10, default: "year" })
+  salaryPeriod!: string;
+
+  @Column({ name: "application_deadline", type: "date", nullable: true })
+  applicationDeadline!: string | null;
+
+  @Column({ name: "number_of_openings", type: "integer", default: 1 })
+  numberOfOpenings!: number;
+
   @Column({ type: "varchar", length: 80, nullable: true })
   experience!: string | null;
 

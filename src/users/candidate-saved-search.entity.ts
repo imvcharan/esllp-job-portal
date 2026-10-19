@@ -17,6 +17,8 @@ export interface CandidateSavedSearchFilters {
   experience?: "early" | "mid" | "senior";
   company?: string;
   minimumSalary?: number;
+  salaryCurrency?: string;
+  salaryPeriod?: string;
   freshnessDays?: number;
   sort?: "newest" | "salary" | "title";
 }

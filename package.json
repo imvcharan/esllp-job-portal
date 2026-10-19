@@ -34,6 +34,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.6.1",
     "helmet": "^8.1.0",
+    "maxmind": "^5.0.7",
     "nodemailer": "^10.1.2",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",

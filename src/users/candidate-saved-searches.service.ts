@@ -13,12 +13,14 @@ import {
 } from "./candidate-saved-search.entity";
 import { CreateCandidateSavedSearchDto } from "./dto/create-candidate-saved-search.dto";
 import { UpdateCandidateSavedSearchDto } from "./dto/update-candidate-saved-search.dto";
+import { AuditService } from "../audit/audit.service";
 
 @Injectable()
 export class CandidateSavedSearchesService {
   constructor(
     @InjectRepository(CandidateSavedSearch)
     private readonly savedSearchesRepository: Repository<CandidateSavedSearch>,
+    private readonly auditService: AuditService,
   ) {}
 
   list(user: AuthenticatedUser) {
@@ -35,7 +37,7 @@ export class CandidateSavedSearchesService {
     if (count >= 25) {
       throw new BadRequestException("You can save up to 25 searches.");
     }
-    return this.savedSearchesRepository.save(
+    const savedSearch = await this.savedSearchesRepository.save(
       this.savedSearchesRepository.create({
         userId: user.id,
         name: dto.name.trim(),
@@ -45,6 +47,14 @@ export class CandidateSavedSearchesService {
         emailAlerts: dto.emailAlerts ?? false,
       }),
     );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.saved_search_created",
+      targetType: "candidate_saved_search",
+      targetId: savedSearch.id,
+      details: { name: savedSearch.name, emailAlerts: savedSearch.emailAlerts },
+    });
+    return savedSearch;
   }
 
   async update(
@@ -64,6 +74,8 @@ export class CandidateSavedSearchesService {
       dto.experience !== undefined ||
       dto.company !== undefined ||
       dto.minimumSalary !== undefined ||
+      dto.salaryCurrency !== undefined ||
+      dto.salaryPeriod !== undefined ||
       dto.freshnessDays !== undefined ||
       dto.sort !== undefined
     ) {
@@ -72,12 +84,30 @@ export class CandidateSavedSearchesService {
         ...this.toFilters(dto),
       };
     }
-    return this.savedSearchesRepository.save(savedSearch);
+    const saved = await this.savedSearchesRepository.save(savedSearch);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.saved_search_updated",
+      targetType: "candidate_saved_search",
+      targetId: saved.id,
+      details: {
+        fields: Object.keys(dto).sort().join(","),
+        fieldCount: Object.keys(dto).length,
+      },
+    });
+    return saved;
   }
 
   async remove(user: AuthenticatedUser, id: number) {
     const savedSearch = await this.findOwned(user, id);
     await this.savedSearchesRepository.remove(savedSearch);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.saved_search_deleted",
+      targetType: "candidate_saved_search",
+      targetId: savedSearch.id,
+      details: { name: savedSearch.name },
+    });
     return { success: true };
   }
 
@@ -123,9 +153,20 @@ export class CandidateSavedSearchesService {
             : job.experience?.includes("+") || years[0] >= 5));
       const companyMatches =
         !filters.company || filters.company.toLocaleLowerCase() === company;
+      const salaryCurrency = filters.minimumSalary
+        ? (filters.salaryCurrency ?? "INR")
+        : filters.salaryCurrency;
+      const salaryPeriod = filters.minimumSalary
+        ? (filters.salaryPeriod ?? "year")
+        : filters.salaryPeriod;
+      const salaryUnitMatches =
+        (!salaryCurrency || salaryCurrency === job.salaryCurrency) &&
+        (!salaryPeriod || salaryPeriod === job.salaryPeriod);
       const salaryMatches =
         !filters.minimumSalary ||
-        (job.salaryMin !== null && job.salaryMin >= filters.minimumSalary);
+        (salaryUnitMatches &&
+          job.salaryMin !== null &&
+          job.salaryMin >= filters.minimumSalary);
       const freshnessMatches =
         !filters.freshnessDays ||
         job.createdAt.getTime() >=
@@ -137,6 +178,7 @@ export class CandidateSavedSearchesService {
         employmentMatches &&
         experienceMatches &&
         companyMatches &&
+        salaryUnitMatches &&
         salaryMatches &&
         freshnessMatches
       );
@@ -180,6 +222,10 @@ export class CandidateSavedSearchesService {
       ...(dto.minimumSalary !== undefined
         ? { minimumSalary: dto.minimumSalary }
         : {}),
+      ...(dto.salaryCurrency
+        ? { salaryCurrency: dto.salaryCurrency }
+        : {}),
+      ...(dto.salaryPeriod ? { salaryPeriod: dto.salaryPeriod } : {}),
       ...(dto.freshnessDays !== undefined
         ? { freshnessDays: dto.freshnessDays }
         : {}),

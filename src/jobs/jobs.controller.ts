@@ -25,6 +25,8 @@ export class JobsController {
     @Query("company") company?: string,
     @Query("minimumSalary", new DefaultValuePipe(0), ParseIntPipe)
     minimumSalary = 0,
+    @Query("salaryCurrency") salaryCurrency?: string,
+    @Query("salaryPeriod") salaryPeriod?: string,
     @Query("freshnessDays", new DefaultValuePipe(0), ParseIntPipe)
     freshnessDays = 0,
     @Query("sort") sort?: string,
@@ -39,6 +41,8 @@ export class JobsController {
       experience,
       company,
       minimumSalary,
+      salaryCurrency,
+      salaryPeriod,
       freshnessDays,
       sort,
     });

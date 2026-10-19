@@ -21,6 +21,7 @@ import { CandidateNotificationsService } from "./candidate-notifications.service
 import { CandidateSavedSearch } from "./candidate-saved-search.entity";
 import { CandidateSavedSearchesController } from "./candidate-saved-searches.controller";
 import { CandidateSavedSearchesService } from "./candidate-saved-searches.service";
+import { AuditModule } from "../audit/audit.module";
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { CandidateSavedSearchesService } from "./candidate-saved-searches.servic
       CandidateSavedSearch,
     ]),
     AuthModule,
+    AuditModule,
   ],
   controllers: [
     CandidateProfileController,

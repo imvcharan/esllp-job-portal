@@ -148,6 +148,7 @@
     .donut-center strong { display: block; font: 800 22px "Manrope", sans-serif; letter-spacing: -.07em; }
     .donut-center small { color: #99a2af; font-size: 8px; }
     .source-legend { display: grid; gap: 9px; }
+    .source-legend .empty-state { display: grid; min-height: 92px; place-items: center; margin: 0; padding: 16px; border: 1px dashed #dfe6eb; border-radius: 8px; color: #7b8797; background: #fafbfd; font-size: 11px; line-height: 1.5; text-align: center; }
     .source-row { display: flex; min-width: 106px; align-items: center; gap: 6px; color: #758092; font-size: 8px; }
     .source-row strong { margin-left: auto; color: #344256; font-size: 9px; }
     .source-row .legend-dot { width: 6px; height: 6px; }
@@ -222,18 +223,19 @@
     .settings-content > p { margin-bottom: 18px; color: #8c97a5; font-size: 9px; }
     .form-row { display: grid; grid-template-columns: 150px minmax(0,1fr); align-items: center; gap: 15px; padding: 13px 0; border-top: 1px solid #f0f2f5; }
     .form-row label { color: #586477; font-size: 9px; font-weight: 600; }
-    .form-row input, .form-row select { width: 100%; max-width: 380px; min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; color: #465469; background: #fff; font-size: 9px; }
+    .form-row input, .form-row select, .form-row textarea { width: 100%; max-width: 380px; min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; color: #465469; background: #fff; font-size: 9px; }
+    .form-row textarea { padding: 9px; resize: vertical; }
     .form-row .toggle { width: 31px; height: 17px; accent-color: var(--teal); }
     .toast { position: fixed; z-index: 80; right: 24px; bottom: 24px; padding: 12px 16px; border-radius: 8px; color: #fff; background: #20354a; box-shadow: 0 9px 30px rgba(23,37,56,.2); font-size: 11px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s ease; }
     .toast.show { opacity: 1; transform: translateY(0); }
     .modal-backdrop { position: fixed; z-index: 70; inset: 0; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(18, 32, 48, .45); backdrop-filter: blur(3px); }
     .modal-backdrop.open { display: flex; }
-    .modal { width: min(440px, 100%); padding: 22px; border-radius: 12px; background: #fff; box-shadow: 0 20px 70px rgba(18,32,48,.24); }
+    .modal { width: min(560px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; padding: 22px; border-radius: 12px; background: #fff; box-shadow: 0 20px 70px rgba(18,32,48,.24); }
     .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 17px; }
     .modal-head h2 { margin: 0; font: 800 17px "Manrope",sans-serif; letter-spacing: -.04em; }
     .modal-close { border: 0; color: #7a8798; background: none; font-size: 20px; }
     .modal .form-row { display: grid; grid-template-columns: 1fr; gap: 7px; }
-    .modal .form-row input, .modal .form-row select { max-width: none; }
+    .modal .form-row input, .modal .form-row select, .modal .form-row textarea { max-width: none; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 17px; }
     @media (max-width: 1120px) {
       .sidebar { width: 218px; }.main { margin-left: 218px; }.topbar { padding-inline: 24px; }.content { padding-inline: 24px; }
@@ -316,12 +318,12 @@
     <form class="auth-card" id="admin-login-form">
       <a class="auth-brand" href="/"><span class="brand-mark">e.</span> esllp <span style="color:#8994a3;font:500 10px 'DM Sans',sans-serif;letter-spacing:0">ADMIN</span></a>
       <h1>Welcome back</h1>
-      <p>Sign in with an admin or superadmin account to open your hiring workspace.</p>
+      <p>Sign in with a staff, admin, or superadmin account to open your hiring workspace.</p>
       <div class="form-row"><label for="admin-email">Email address</label><input id="admin-email" type="email" name="email" autocomplete="username" required maxlength="254" placeholder="you@company.com"></div>
       <div class="form-row"><label for="admin-password">Password</label><input id="admin-password" type="password" name="password" autocomplete="current-password" required maxlength="128" placeholder="Your password"></div>
       <button class="button button-primary auth-submit" type="submit">Sign in to admin <span aria-hidden="true">→</span></button>
       <p class="auth-error" id="auth-error" role="alert"></p>
-      <div class="auth-footnote">For first-time setup, create the superadmin through the one-time CLI bootstrap. Job, account, organization, application, and activity data load from protected APIs after sign-in.</div>
+      <div class="auth-footnote">For first-time setup, use the one-time <a href="/setup-superadmin/">superadmin setup page</a>. Job, account, organization, application, and activity data load from protected APIs after sign-in.</div>
     </form>
   </div>
   <div class="app" id="admin-app">
@@ -339,7 +341,7 @@
       <nav class="nav-list" aria-label="Management pages">
         <a class="nav-link superadmin-only" href="#users" data-view="users" hidden><span class="nav-icon">♙</span><span class="nav-text">User accounts</span></a>
         <a class="nav-link superadmin-only" href="#audit" data-view="audit" hidden><span class="nav-icon">◷</span><span class="nav-text">Audit log</span></a>
-        <a class="nav-link" href="#activity" data-view="activity"><span class="nav-icon">◷</span><span class="nav-text">Recent activity</span></a>
+        <a class="nav-link admin-only" href="#activity" data-view="activity" hidden><span class="nav-icon">◷</span><span class="nav-text">Recent activity</span></a>
         <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Account security</span></a>
         <a class="nav-link" href="mailto:hello@esllp.com?subject=esllp%20portal%20support"><span class="nav-icon">?</span><span class="nav-text">Help center</span></a>
       </nav>
@@ -353,7 +355,7 @@
         <div class="topbar-left"><button class="mobile-menu" id="mobile-menu" type="button" aria-label="Open sidebar" aria-expanded="false">☰</button><div class="crumb">Workspace&nbsp; / &nbsp;<strong id="breadcrumb">Overview</strong></div></div>
         <div class="top-actions">
           <label class="global-search"><span>⌕</span><input id="global-search" type="search" placeholder="Search this page…" aria-label="Search current page"><span class="key-hint">/</span></label>
-          <button class="icon-button" type="button" id="notifications-button" aria-label="Recent platform activity">◷</button>
+          <button class="icon-button admin-only" type="button" id="notifications-button" aria-label="Recent platform activity" hidden>◷</button>
           <button class="icon-button" type="button" aria-label="Log out" data-logout title="Log out">⇥</button>
           <button class="top-avatar" type="button" aria-label="Admin profile" data-toast="Signed in as Arjun Sharma.">AS</button>
         </div>
@@ -372,7 +374,7 @@
             <article class="stat-card"><div class="stat-top"><span>Scheduled interviews</span><span class="stat-icon">◷</span></div><div class="stat-value" data-metric="scheduled-interviews">—</div><div class="stat-note" data-metric-note="scheduled-interviews">Loading live interview records</div></article>
           </div>
           <div class="analytics-grid">
-            <article class="panel">
+            <article class="panel admin-only" hidden>
               <div class="panel-head"><div><h2>Applications by week</h2><p>Weekly application volume from live records</p></div></div>
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i> Applications</span><span class="legend-item"><i class="legend-dot blue"></i> Interviews</span></div>
               <div class="bars" id="weekly-applications-chart" role="img" aria-label="Live weekly application counts"></div>
@@ -406,7 +408,7 @@
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>All listings</h2><button class="button" type="button" data-export>↓&nbsp; Export CSV</button></div>
             <div class="table-toolbar"><input class="table-search page-filter" type="search" placeholder="⌕  Search jobs…" aria-label="Search jobs"><select class="select" id="jobs-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="draft">Draft</option></select><select class="select" id="jobs-company-filter"><option value="all">All companies</option></select></div>
-            <div class="table-wrap"><table class="jobs-table"><thead><tr><th>Job title</th><th>Company</th><th>Location</th><th>Applications</th><th>Status</th><th>Posted</th><th>Actions</th></tr></thead><tbody class="filterable" id="jobs-table-body"></tbody></table></div>
+            <div class="table-wrap"><table class="jobs-table"><thead><tr><th>Job title</th><th>Company</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applications</th><th>Status</th><th>Posted</th><th>Actions</th></tr></thead><tbody class="filterable" id="jobs-table-body"></tbody></table></div>
           </article>
           <div class="demo-note" id="jobs-data-note" hidden></div>
         </section>
@@ -418,6 +420,7 @@
             <div class="panel-title-row"><h2>Candidate accounts</h2><button class="button" type="button" data-export-candidates>↓&nbsp; Export accounts</button></div>
             <div class="table-toolbar"><input class="table-search" id="candidate-search" type="search" placeholder="Search candidate accounts…" aria-label="Search candidate accounts"></div>
             <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Account status</th><th>Email verification</th><th>Joined</th></tr></thead><tbody id="candidate-accounts-body"></tbody></table></div>
+            <div class="table-toolbar"><span id="candidate-page-summary">Candidate records load here.</span><button class="button" id="candidate-prev" type="button">← Previous</button><button class="button" id="candidate-next" type="button">Next →</button></div>
           </article>
           <div class="demo-note" id="candidate-data-note">Candidate account details are restricted to superadmins. Application stage totals are aggregated from live records.</div>
         </section>
@@ -457,15 +460,40 @@
 
         <section class="view" id="view-users" data-title="User accounts">
           <div class="page-heading"><div><div class="page-eyebrow">Superadmin controls</div><h1>User accounts</h1><p>Review accounts and manage roles or access status.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-users>↻&nbsp; Refresh</button></div></div>
-          <div class="table-toolbar"><input class="table-search" id="user-search" type="search" placeholder="Search name or email…" aria-label="Search users"><select class="select" id="user-role-filter"><option value="all">All roles</option><option value="candidate">Candidate</option><option value="employer">Employer</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select><select class="select" id="user-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Role</th><th>Employer approval</th><th>Verification</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="users-table-body" class="filterable"></tbody></table></div></article>
+          <article class="panel superadmin-only" hidden>
+            <div class="panel-title-row"><h2>Create an account</h2></div>
+            <p class="demo-note">New accounts receive a temporary password and must replace it before using the portal. Employer accounts start pending approval.</p>
+            <form id="create-managed-user-form">
+              <div class="form-row"><label for="managed-user-role">Account type</label><select id="managed-user-role" name="role" required><option value="staff">Staff</option><option value="admin">Admin</option><option value="employer">Employer</option></select></div>
+              <div class="form-row"><label for="managed-user-name">Full name</label><input id="managed-user-name" name="displayName" required minlength="2" maxlength="120"></div>
+              <div class="form-row"><label for="managed-user-email">Email</label><input id="managed-user-email" name="email" type="email" required maxlength="254"></div>
+              <div class="form-row"><label for="managed-user-password">Temporary password</label><input id="managed-user-password" name="temporaryPassword" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
+              <div id="managed-employer-fields" hidden>
+                <div class="form-row"><label for="managed-company-name">Company name</label><input id="managed-company-name" name="companyName" minlength="2" maxlength="160"></div>
+                <div class="form-row"><label for="managed-company-website">Company website (optional)</label><input id="managed-company-website" name="companyWebsite" type="url" maxlength="500" placeholder="https://example.com"></div>
+              </div>
+              <button class="button button-primary" type="submit">Create account</button>
+              <p class="demo-note" id="create-managed-user-status" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+          <div class="table-toolbar"><input class="table-search" id="user-search" type="search" placeholder="Search name or email…" aria-label="Search users"><select class="select" id="user-role-filter"><option value="all">All roles</option><option value="candidate">Candidate</option><option value="employer">Employer</option><option value="staff">Staff</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select><select class="select" id="user-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Role</th><th>Employer approval</th><th>Verification</th><th>Password setup</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="users-table-body" class="filterable"></tbody></table></div></article>
           <div class="table-toolbar"><span id="users-page-summary">Loading accounts…</span><button class="button" id="users-prev" type="button">← Previous</button><button class="button" id="users-next" type="button">Next →</button></div>
           <div class="demo-note" id="users-data-note" hidden></div>
         </section>
 
         <section class="view" id="view-audit" data-title="Audit log">
-          <div class="page-heading"><div><div class="page-eyebrow">Superadmin controls</div><h1>Audit log</h1><p>Review security-sensitive account and job changes.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-audit>↻&nbsp; Refresh</button></div></div>
-          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody id="audit-table-body" class="filterable"></tbody></table></div></article>
+          <div class="page-heading"><div><div class="page-eyebrow">Superadmin controls</div><h1>Audit log</h1><p>Search immutable records of security and business changes, including actor, timestamp, client, and approximate location where a local GeoIP database is configured.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-audit>↻&nbsp; Refresh</button><button class="button" type="button" data-export-audit>Export CSV</button></div></div>
+          <form class="table-toolbar" id="audit-filter-form">
+            <input class="table-search" name="q" type="search" placeholder="Search actor, action, target, IP, or details" aria-label="Search audit events">
+            <input class="table-search" name="action" type="search" placeholder="Exact action (optional)" aria-label="Filter by exact action">
+            <input class="table-search" name="country" type="search" placeholder="Country (optional)" aria-label="Filter by country">
+            <label>From <input name="from" type="date"></label><label>To <input name="to" type="date"></label>
+            <button class="button button-dark" type="submit">Apply filters</button>
+            <button class="button" type="reset">Clear</button>
+          </form>
+          <p class="demo-note">Location is approximate IP-based lookup from the locally configured GeoIP database. No browser GPS or third-party IP lookup is used. Audit records cannot be edited or deleted.</p>
+          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Approx. location</th><th>IP / client</th><th>Details</th></tr></thead><tbody id="audit-table-body" class="filterable"></tbody></table></div></article>
           <div class="table-toolbar"><span id="audit-page-summary">Loading audit history…</span><button class="button" id="audit-prev" type="button">← Previous</button><button class="button" id="audit-next" type="button">Next →</button></div>
           <div class="demo-note" id="audit-data-note" hidden></div>
         </section>
@@ -476,16 +504,36 @@
   <div class="modal-backdrop" id="job-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <form class="modal" id="create-job-form">
       <div class="modal-head"><h2 id="modal-title">Create a job listing</h2><button class="modal-close" type="button" aria-label="Close dialog">×</button></div>
-      <div class="form-row"><label for="new-job-title">Job title</label><input id="new-job-title" name="title" required placeholder="e.g. Product Designer"></div>
-      <div class="form-row"><label for="new-job-company">Company</label><input id="new-job-company" name="company" required placeholder="Company name"></div>
-      <div class="form-row"><label for="new-job-location">Location</label><input id="new-job-location" name="location" required placeholder="City or remote"></div>
-      <div class="form-row"><label for="new-job-type">Workplace</label><select id="new-job-type" name="workplaceType"><option value="hybrid">Hybrid</option><option value="remote">Remote</option><option value="onsite">On-site</option></select></div>
+      <div class="form-row"><label for="new-job-title">Job title</label><input id="new-job-title" name="title" minlength="2" maxlength="160" required placeholder="e.g. Product Designer"></div>
+      <div class="form-row"><label for="new-job-company">Company</label><input id="new-job-company" name="company" minlength="2" maxlength="120" required placeholder="Company name"></div>
+      <div class="form-row"><label for="new-job-location">Location</label><input id="new-job-location" name="location" minlength="2" maxlength="120" required placeholder="City or remote"></div>
+      <div class="form-row"><label for="new-job-type">Workplace</label><select id="new-job-type" name="workplaceType"><option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option></select></div>
+      <div class="form-row"><label for="new-job-employment-type">Employment type</label><select id="new-job-employment-type" name="employmentType"><option value="full-time">Full-time</option><option value="part-time">Part-time</option><option value="contract">Contract</option><option value="internship">Internship</option><option value="temporary">Temporary</option></select></div>
+      <div class="form-row"><label for="new-job-salary-min">Minimum salary</label><input id="new-job-salary-min" name="salaryMin" type="number" min="0" max="2000000000" step="1" placeholder="Optional"></div>
+      <div class="form-row"><label for="new-job-salary-max">Maximum salary</label><input id="new-job-salary-max" name="salaryMax" type="number" min="0" max="2000000000" step="1" placeholder="Optional"></div>
+      <div class="form-row"><label for="new-job-salary-currency">Salary currency</label><select id="new-job-salary-currency" name="salaryCurrency"><option value="INR">INR · Indian rupee</option><option value="USD">USD · US dollar</option><option value="GBP">GBP · British pound</option><option value="EUR">EUR · Euro</option><option value="AED">AED · UAE dirham</option><option value="CAD">CAD · Canadian dollar</option><option value="AUD">AUD · Australian dollar</option><option value="SGD">SGD · Singapore dollar</option></select></div>
+      <div class="form-row"><label for="new-job-salary-period">Pay period</label><select id="new-job-salary-period" name="salaryPeriod"><option value="year">Per year</option><option value="month">Per month</option><option value="week">Per week</option><option value="day">Per day</option><option value="hour">Per hour</option></select></div>
+      <div class="form-row"><label for="new-job-openings">Number of openings</label><input id="new-job-openings" name="numberOfOpenings" type="number" min="1" max="2000000000" step="1" value="1" required></div>
+      <div class="form-row"><label for="new-job-deadline">Application deadline</label><input id="new-job-deadline" name="applicationDeadline" type="date"></div>
+      <div class="form-row"><label for="new-job-experience">Experience</label><input id="new-job-experience" name="experience" maxlength="80" placeholder="e.g. 3–5 years"></div>
+      <div class="form-row"><label for="new-job-description">Description</label><textarea id="new-job-description" name="description" maxlength="20000" rows="6" placeholder="Responsibilities, requirements, and benefits"></textarea></div>
       <div class="form-row"><label for="new-job-employer">Assign to employer (optional)</label><select id="new-job-employer" name="employerUserId"><option value="">No employer assigned</option></select></div>
       <p class="form-hint" id="employer-options-note">Only the assigned employer can access applicants for this job.</p>
       <div class="modal-actions"><button class="button modal-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save as draft</button></div>
     </form>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="modal-backdrop" id="force-password-modal" role="dialog" aria-modal="true" aria-labelledby="force-password-title">
+    <form class="modal" id="force-password-form">
+      <div class="modal-head"><h2 id="force-password-title">Set your password</h2></div>
+      <p>This account was created with a temporary password. Change it now to continue.</p>
+      <div class="form-row"><label for="force-current-password">Temporary password</label><input id="force-current-password" name="currentPassword" type="password" autocomplete="current-password" required maxlength="72"></div>
+      <div class="form-row"><label for="force-new-password">New password</label><input id="force-new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" required maxlength="72"></div>
+      <div class="form-row"><label for="force-confirm-password">Confirm new password</label><input id="force-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required maxlength="72"></div>
+      <p class="form-hint" id="force-password-error" role="alert"></p>
+      <div class="modal-actions"><button class="button button-primary" type="submit">Change password</button></div>
+    </form>
+  </div>
 
   <script>
     const navLinks = [...document.querySelectorAll("[data-view]")];
@@ -506,6 +554,9 @@
     let adminInsights = null;
     let usersPage = 1;
     let usersTotal = 0;
+    let candidateUsersPage = 1;
+    let candidateUsersTotal = 0;
+    let editingJobId = null;
     let auditPage = 1;
     let auditTotal = 0;
     let authResolved = false;
@@ -583,14 +634,6 @@
         row.append(cell);
         body.append(row);
       }
-      if (!jobs.length) {
-        const row = document.createElement("tr");
-        const cell = document.createElement("td");
-        cell.colSpan = 4;
-        cell.textContent = "No jobs have been created yet.";
-        row.append(cell);
-        body.append(row);
-      }
     }
 
     function renderJobsTable(jobs) {
@@ -607,7 +650,10 @@
         const row = document.createElement("tr");
         row.dataset.status = job.isActive ? "active" : "draft";
         row.dataset.company = job.company;
-        [job.title, job.company, `${job.location} · ${job.workplaceType}`, String(applicationCounts.get(job.id) || 0)].forEach((value, index) => {
+        const salary = job.salaryMin == null && job.salaryMax == null
+          ? "Not provided"
+          : `${job.salaryCurrency} ${job.salaryMin ?? ""}${job.salaryMin != null && job.salaryMax != null ? "–" : ""}${job.salaryMax ?? ""} / ${job.salaryPeriod}`;
+        [job.title, job.company, `${job.location} · ${job.workplaceType}`, salary, String(job.numberOfOpenings ?? 1), job.applicationDeadline || "—", String(applicationCounts.get(job.id) || 0)].forEach((value, index) => {
           const cell = document.createElement("td");
           cell.textContent = value;
           if (index === 0) cell.className = "role-name";
@@ -622,9 +668,15 @@
         posted.textContent = formatDate(job.createdAt);
         const actions = document.createElement("td");
         {
+          const editButton = document.createElement("button");
+          editButton.className = "button";
+          editButton.type = "button";
+          editButton.textContent = "Edit";
+          editButton.addEventListener("click", () => openJobModal(job));
           const toggleButton = document.createElement("button");
           toggleButton.className = "button";
           toggleButton.type = "button";
+          toggleButton.style.marginLeft = "5px";
           toggleButton.textContent = job.isActive ? "Pause" : "Publish";
           toggleButton.addEventListener("click", async () => {
             toggleButton.disabled = true;
@@ -699,7 +751,7 @@
               archiveButton.disabled = false;
             }
           });
-          actions.append(toggleButton, ownerButton, archiveButton);
+          actions.append(editButton, toggleButton, ownerButton, archiveButton);
         }
         row.append(statusCell, posted, actions);
         body.append(row);
@@ -707,7 +759,7 @@
       if (!jobs.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
-        cell.colSpan = 7;
+        cell.colSpan = 10;
         cell.textContent = "No jobs have been created yet.";
         row.append(cell);
         body.append(row);
@@ -759,24 +811,51 @@
     }
 
     async function loadAdminUsers(page = 1, limit = 25) {
-      const result = await authRequest(`/api/admin/users?page=${page}&limit=${limit}`);
-      if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
-        throw new Error("The users API returned an unexpected response.");
-      }
-      usersPage = result.page;
-      usersTotal = result.total;
-      adminUsers = result.items;
-      renderUsersTable(result.items);
-      setText("#users-page-summary", `${result.total === 0 ? 0 : (result.page - 1) * result.limit + 1}–${Math.min(result.page * result.limit, result.total)} of ${result.total} accounts`);
-      document.querySelector("#users-prev").disabled = result.page <= 1;
-      document.querySelector("#users-next").disabled = result.page * result.limit >= result.total;
+      setText("#users-page-summary", "Loading accounts…");
+      const body = document.querySelector("#users-table-body");
+      body.replaceChildren();
+      const loadingRow = document.createElement("tr");
+      const loadingCell = document.createElement("td");
+      loadingCell.colSpan = 10;
+      loadingCell.textContent = "Loading account records…";
+      loadingRow.append(loadingCell);
+      body.append(loadingRow);
       const note = document.querySelector("#users-data-note");
-      note.hidden = result.total !== 0;
-      if (result.total === 0) {
-        note.textContent = "No accounts are in the database yet.";
-        renderCandidateAccounts([]);
+      note.hidden = true;
+      try {
+        const result = await authRequest(`/api/admin/users?page=${page}&limit=${limit}`);
+        if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+          throw new Error("The users API returned an unexpected response.");
+        }
+        usersPage = result.page;
+        usersTotal = result.total;
+        adminUsers = result.items;
+        renderUsersTable(result.items);
+        setText("#users-page-summary", `${result.total === 0 ? 0 : (result.page - 1) * result.limit + 1}–${Math.min(result.page * result.limit, result.total)} of ${result.total} accounts`);
+        document.querySelector("#users-prev").disabled = result.page <= 1;
+        document.querySelector("#users-next").disabled = result.page * result.limit >= result.total;
+        note.hidden = result.total !== 0;
+        if (result.total === 0) {
+          note.textContent = "No accounts are in the database yet.";
+          renderCandidateAccounts([]);
+        }
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown account-list error.";
+        body.replaceChildren();
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 10;
+        cell.textContent = `Accounts could not be loaded: ${message}`;
+        row.append(cell);
+        body.append(row);
+        setText("#users-page-summary", "Unable to load accounts");
+        note.hidden = false;
+        note.textContent = "Check the connection and access permissions, then select Refresh to try again.";
+        document.querySelector("#users-prev").disabled = true;
+        document.querySelector("#users-next").disabled = true;
+        throw error;
       }
-      return result;
     }
 
     function renderUsersTable(users) {
@@ -794,8 +873,8 @@
         {
           const role = document.createElement("select");
           role.className = "select user-role";
-          const roleOptions = ["candidate", "admin", "superadmin"];
-          if (user.role === "employer") roleOptions.splice(1, 0, "employer");
+          const roleOptions = ["candidate", "staff", "admin", "superadmin"];
+          if (user.role === "employer") roleOptions.splice(2, 0, "employer");
           roleOptions.forEach((value) => role.add(new Option(value, value)));
           role.value = user.role;
           role.disabled = user.id === currentAdminUser.id;
@@ -835,6 +914,9 @@
         }
         const verified = document.createElement("td");
         verified.textContent = user.emailVerified ? "Verified" : "Not verified";
+        const passwordSetup = document.createElement("td");
+        passwordSetup.textContent = user.mustChangePassword ? "Change required" : "Complete";
+        if (user.mustChangePassword) passwordSetup.className = "status review";
         const status = document.createElement("td");
         const statusBadge = document.createElement("span");
         statusBadge.className = `status${user.isActive ? "" : " closed"}`;
@@ -903,13 +985,13 @@
           }
         });
         actions.append(statusButton);
-        row.append(name, email, company, roleCell, approval, verified, status, joined, actions);
+        row.append(name, email, company, roleCell, approval, verified, passwordSetup, status, joined, actions);
         body.append(row);
       });
       if (!users.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
-        cell.colSpan = 9;
+        cell.colSpan = 10;
         cell.textContent = "No user accounts found.";
         row.append(cell);
         body.append(row);
@@ -928,13 +1010,21 @@
       });
     }
 
-    async function loadCandidateAccounts() {
-      const result = await authRequest("/api/admin/users?page=1&limit=100");
-      if (!result || !Array.isArray(result.items)) throw new Error("The users API returned an unexpected response.");
-      const candidates = result.items.filter((user) => user.role === "candidate");
-      renderCandidateAccounts(candidates);
-      document.querySelector("#candidate-data-note").textContent = candidates.length
-        ? `Showing ${candidates.length} candidate accounts from the first 100 accounts${result.total > 100 ? ` of ${result.total} total accounts` : ""}. Application stage totals use live records.`
+    async function loadCandidateAccounts(page = candidateUsersPage) {
+      const result = await authRequest(`/api/admin/users?page=${page}&limit=100&role=candidate`);
+      if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+        throw new Error("The users API returned an unexpected response.");
+      }
+      candidateUsersPage = result.page;
+      candidateUsersTotal = result.total;
+      renderCandidateAccounts(result.items);
+      applySearch(document.querySelector("#global-search").value);
+      const lastAccount = Math.min(result.page * result.limit, result.total);
+      setText("#candidate-page-summary", `${result.total ? (result.page - 1) * result.limit + 1 : 0}–${lastAccount} of ${result.total} candidate accounts`);
+      document.querySelector("#candidate-prev").disabled = result.page <= 1;
+      document.querySelector("#candidate-next").disabled = result.page * result.limit >= result.total;
+      document.querySelector("#candidate-data-note").textContent = result.total
+        ? "Browse all candidate accounts. Application stage totals use live records."
         : "No candidate accounts are in the database yet.";
     }
 
@@ -954,7 +1044,7 @@
         const row = document.createElement("tr");
         const cell = document.createElement("td");
         cell.colSpan = 5;
-        cell.textContent = "No candidate accounts found.";
+        cell.textContent = "No candidate accounts on this user-record page.";
         row.append(cell);
         body.append(row);
       }
@@ -970,12 +1060,12 @@
         let page = 1;
         let total = 0;
         do {
-          const result = await authRequest(`/api/admin/users?page=${page}&limit=100`);
+          const result = await authRequest(`/api/admin/users?page=${page}&limit=100&role=candidate`);
           if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
             throw new Error("The users API returned an unexpected response.");
           }
           total = result.total;
-          candidates.push(...result.items.filter((user) => user.role === "candidate"));
+          candidates.push(...result.items);
           page += 1;
         } while ((page - 1) * 100 < total);
         downloadCsv("esllp-candidate-accounts.csv", ["Name", "Email", "Status", "Email verified", "Joined"], candidates.map((user) => [
@@ -987,8 +1077,18 @@
       }
     }
 
+    function auditFilterParams(page, limit) {
+      const filters = new URLSearchParams({ page: String(page), limit: "50" });
+      const form = document.querySelector("#audit-filter-form");
+      for (const [key, value] of new FormData(form)) {
+        if (typeof value === "string" && value.trim()) filters.set(key, value.trim());
+      }
+      filters.set("limit", String(limit));
+      return filters;
+    }
+
     async function loadAuditLogs(page = auditPage) {
-      const result = await authRequest(`/api/admin/audit-logs?page=${page}&limit=50`);
+      const result = await authRequest(`/api/admin/audit-logs?${auditFilterParams(page, 50)}`);
       if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
         throw new Error("The audit API returned an unexpected response.");
       }
@@ -1001,40 +1101,87 @@
       return result;
     }
 
+    async function exportAuditLogs() {
+      try {
+        const entries = [];
+        let page = 1;
+        let total = 0;
+        do {
+          const result = await authRequest(`/api/admin/audit-logs?${auditFilterParams(page, 100)}`);
+          if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+            throw new Error("The audit API returned an unexpected response.");
+          }
+          total = result.total;
+          entries.push(...result.items);
+          page += 1;
+        } while ((page - 1) * 100 < total);
+        downloadCsv(
+          "esllp-audit-log.csv",
+          ["Time", "Actor", "Actor email", "Role", "Action", "Target type", "Target ID", "City", "Region", "Country", "IP address", "User agent", "Details"],
+          entries.map((entry) => [
+            formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" }),
+            entry.actor?.displayName || (entry.actorUserId === null ? "Unauthenticated / system" : `Account #${entry.actorUserId}`),
+            entry.actor?.email || "",
+            entry.actor?.role || "",
+            entry.action,
+            entry.targetType,
+            entry.targetId,
+            entry.locationCity || "",
+            entry.locationRegion || "",
+            entry.locationCountry || "",
+            entry.ipAddress || "",
+            entry.userAgent || "",
+            entry.details || ""
+          ])
+        );
+        showToast(`${entries.length} audit event(s) exported.`);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to export audit history.");
+      }
+    }
+
     function renderAuditLogs(logs) {
       const body = document.querySelector("#audit-table-body");
       body.replaceChildren();
-      const userNames = new Map(adminUsers.map((user) => [user.id, `${user.displayName} (${user.email})`]));
       const rows = logs;
       rows.forEach((entry) => {
         const row = document.createElement("tr");
+        const time = document.createElement("td");
+        time.textContent = formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" });
+        const actor = document.createElement("td");
+        actor.textContent = entry.actor
+          ? `${entry.actor.displayName} (${entry.actor.email}) · ${entry.actor.role}`
+          : entry.actorUserId === null ? "Unauthenticated / system" : `Account #${entry.actorUserId}`;
+        const action = document.createElement("td");
+        action.textContent = entry.action;
+        const target = document.createElement("td");
+        const targetLink = document.createElement("a");
+        targetLink.href = entry.targetType === "user" ? "#users" : entry.targetType === "job" ? "#jobs" : "#activity";
+        targetLink.textContent = `${entry.targetType} #${entry.targetId}`;
+        target.append(targetLink);
+        const location = document.createElement("td");
+        location.textContent = [entry.locationCity, entry.locationRegion, entry.locationCountry].filter(Boolean).join(", ") || "Unavailable";
+        const client = document.createElement("td");
+        client.textContent = [entry.ipAddress, entry.userAgent].filter(Boolean).join(" · ") || "Unavailable";
         const details = document.createElement("td");
         if (entry.details) {
           try {
             const parsed = JSON.parse(entry.details);
-            details.textContent = Object.entries(parsed).map(([key, value]) => `${key}: ${value}`).join(" · ");
+            details.textContent = JSON.stringify(parsed, null, 2);
           } catch {
-            details.textContent = "Details unavailable";
+            details.textContent = entry.details;
           }
         } else {
           details.textContent = "—";
         }
-        [formatDate(entry.createdAt, { dateStyle: "medium", timeStyle: "short" }),
-          userNames.get(entry.actorUserId) || `Account #${entry.actorUserId}`,
-          entry.action,
-          `${entry.targetType} #${entry.targetId}`].forEach((value) => {
-          const cell = document.createElement("td");
-          cell.textContent = value;
-          row.append(cell);
-        });
-        row.append(details);
+        row.append(time, actor, action, target, location, client, details);
         body.append(row);
       });
       if (!rows.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
-        cell.colSpan = 5;
-        cell.textContent = "No audit events have been recorded yet.";
+        cell.colSpan = 7;
+        cell.textContent = "No audit events match these filters.";
         row.append(cell);
         body.append(row);
       }
@@ -1114,6 +1261,7 @@
         });
         if (!container.childElementCount) {
           const empty = document.createElement("p");
+          empty.className = "empty-state";
           empty.textContent = "No applications have been submitted yet.";
           container.append(empty);
         }
@@ -1216,10 +1364,13 @@
     }
 
     async function refreshOverviewData() {
-      const [jobs, users, insights] = await Promise.all([
+      const [jobs, users, candidates, insights] = await Promise.all([
         authRequest("/api/admin/jobs"),
         currentAdminUser?.role === "superadmin"
           ? authRequest("/api/admin/users?page=1&limit=100")
+          : Promise.resolve(null),
+        currentAdminUser?.role === "superadmin"
+          ? authRequest("/api/admin/users?page=1&limit=100&role=candidate")
           : Promise.resolve(null),
         authRequest("/api/admin/insights")
       ]);
@@ -1234,9 +1385,9 @@
         adminUsers = users.items;
         setText('[data-metric="total-users"]', users.total);
         setText('[data-metric-note="total-users"]', "Live user accounts");
-        const candidates = users.items.filter((user) => user.role === "candidate");
-        renderCandidateAccounts(candidates, candidates.length === 0);
-        if (candidates.length === 0) {
+        if (!Array.isArray(candidates.items)) throw new Error("The candidate accounts API returned an unexpected response.");
+        renderCandidateAccounts(candidates.items);
+        if (candidates.total === 0) {
           document.querySelector("#candidate-data-note").textContent =
             "No candidate accounts are in the database yet.";
         }
@@ -1250,12 +1401,13 @@
         document.querySelector("#candidate-data-note").textContent =
           "Candidate account details are restricted to superadmins. Aggregated application-stage counts remain visible.";
       }
-      await loadAdminActivity();
+      if (currentAdminUser?.role !== "staff") await loadAdminActivity();
     }
 
     async function authRequest(path, options = {}) {
       const response = await fetch(path, {
         ...options,
+        signal: options.signal ?? AbortSignal.timeout(15000),
         credentials: "same-origin",
         headers: {
           ...(options.body ? { "Content-Type": "application/json" } : {}),
@@ -1276,7 +1428,7 @@
     }
 
     async function enterAdmin(session) {
-      if (!["admin", "superadmin"].includes(session.user?.role)) {
+      if (!["staff", "admin", "superadmin"].includes(session.user?.role)) {
         authResolved = true;
         adminAccessToken = null;
         authRequest("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -1302,8 +1454,17 @@
       document.querySelectorAll(".superadmin-only").forEach((link) => {
         link.hidden = session.user.role !== "superadmin";
       });
+      document.querySelectorAll(".admin-only").forEach((item) => {
+        item.hidden = session.user.role === "staff";
+      });
       authGate.hidden = true;
       adminApp.classList.add("authenticated");
+      if (session.user.mustChangePassword) {
+        document.querySelector("#force-password-modal").classList.add("open");
+        document.querySelector("#force-current-password").focus();
+        return;
+      }
+      document.querySelector("#force-password-modal").classList.remove("open");
       showView(location.hash.slice(1) || "overview");
       await refreshOverviewData().catch((error) => showToast(`Dashboard data could not be refreshed: ${error.message}`));
     }
@@ -1327,6 +1488,92 @@
         await enterAdmin(session);
       } catch (error) {
         authError.textContent = error instanceof Error ? error.message : "Unable to sign in.";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    document.querySelector("#force-password-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const error = document.querySelector("#force-password-error");
+      error.textContent = "";
+      if (data.get("newPassword") !== data.get("confirmPassword")) {
+        error.textContent = "The new password and confirmation do not match.";
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      try {
+        await authRequest("/api/auth/change-password", {
+          method: "POST",
+          body: JSON.stringify({
+            currentPassword: data.get("currentPassword"),
+            newPassword: data.get("newPassword")
+          })
+        });
+        adminAccessToken = null;
+        currentAdminUser = null;
+        adminApp.classList.remove("authenticated");
+        document.querySelector("#force-password-modal").classList.remove("open");
+        authGate.hidden = false;
+        document.querySelector("#admin-login-form").reset();
+        form.reset();
+        authError.textContent = "Password changed. Sign in again with your new password.";
+        document.querySelector("#admin-email").focus();
+      } catch (error) {
+        document.querySelector("#force-password-error").textContent =
+          error instanceof Error ? error.message : "Unable to change the password.";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    const managedRoleSelect = document.querySelector("#managed-user-role");
+    const managedEmployerFields = document.querySelector("#managed-employer-fields");
+    const managedCompanyName = document.querySelector("#managed-company-name");
+    function updateManagedEmployerFields() {
+      const isEmployer = managedRoleSelect.value === "employer";
+      managedEmployerFields.hidden = !isEmployer;
+      managedCompanyName.required = isEmployer;
+    }
+    managedRoleSelect.addEventListener("change", updateManagedEmployerFields);
+    updateManagedEmployerFields();
+
+    document.querySelector("#create-managed-user-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const payload = {
+        displayName: String(data.get("displayName") || "").trim(),
+        email: String(data.get("email") || "").trim(),
+        temporaryPassword: data.get("temporaryPassword"),
+        role: data.get("role")
+      };
+      if (payload.role === "employer") {
+        payload.companyName = String(data.get("companyName") || "").trim();
+        payload.companyWebsite = String(data.get("companyWebsite") || "").trim() || undefined;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      const status = document.querySelector("#create-managed-user-status");
+      submit.disabled = true;
+      status.textContent = "";
+      try {
+        const user = await authRequest("/api/admin/users", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        form.reset();
+        updateManagedEmployerFields();
+        status.textContent = `${user.displayName} (${user.email}) was created as ${user.role}. They must change the temporary password at first sign-in.`;
+        showToast("Account created. Share the temporary password directly with the user.");
+        loadAdminUsers(1).catch((error) => showToast(`Account created, but the user list could not refresh: ${error.message}`));
+        loadAuditLogs(1).catch((error) => showToast(`Account created, but the audit list could not refresh: ${error.message}`));
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : "Unable to create the account.";
       } finally {
         submit.disabled = false;
       }
@@ -1365,6 +1612,10 @@
     }
 
     function showView(name) {
+      if (name === "activity" && currentAdminUser?.role === "staff") {
+        showToast("Recent platform activity is available to admins only.");
+        name = "overview";
+      }
       const view = document.querySelector(`#view-${name}`)
         ?? document.querySelector("#view-overview");
       if ((name === "users" || name === "audit") && currentAdminUser?.role !== "superadmin") {
@@ -1498,11 +1749,25 @@
     document.querySelector("[data-refresh-audit]").addEventListener("click", () => {
       loadAuditLogs(auditPage).catch((error) => showToast(`Unable to load audit history: ${error.message}`));
     });
+    document.querySelector("[data-export-audit]").addEventListener("click", exportAuditLogs);
+    document.querySelector("#audit-filter-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      loadAuditLogs(1).catch((error) => showToast(`Unable to filter audit history: ${error.message}`));
+    });
+    document.querySelector("#audit-filter-form").addEventListener("reset", () => {
+      window.setTimeout(() => loadAuditLogs(1).catch((error) => showToast(`Unable to clear audit filters: ${error.message}`)), 0);
+    });
     document.querySelector("#users-prev").addEventListener("click", () => {
       if (usersPage > 1) loadAdminUsers(usersPage - 1).catch((error) => showToast(error.message));
     });
     document.querySelector("#users-next").addEventListener("click", () => {
       if (usersPage * 25 < usersTotal) loadAdminUsers(usersPage + 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#candidate-prev").addEventListener("click", () => {
+      if (candidateUsersPage > 1) loadCandidateAccounts(candidateUsersPage - 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#candidate-next").addEventListener("click", () => {
+      if (candidateUsersPage * 100 < candidateUsersTotal) loadCandidateAccounts(candidateUsersPage + 1).catch((error) => showToast(error.message));
     });
     document.querySelector("#audit-prev").addEventListener("click", () => {
       if (auditPage > 1) loadAuditLogs(auditPage - 1).catch((error) => showToast(error.message));
@@ -1523,10 +1788,37 @@
       }
     });
 
-    document.querySelectorAll("[data-modal-open]").forEach((button) => button.addEventListener("click", () => {
+    function openJobModal(job = null) {
+      const form = document.querySelector("#create-job-form");
+      editingJobId = job?.id ?? null;
+      form.reset();
+      document.querySelector("#modal-title").textContent = job ? "Edit job listing" : "Create a job listing";
+      form.querySelector('[type="submit"]').textContent = job ? "Save changes" : "Save as draft";
+      if (job) {
+        form.elements.title.value = job.title;
+        form.elements.company.value = job.company;
+        form.elements.location.value = job.location;
+        form.elements.workplaceType.value = job.workplaceType || "onsite";
+        form.elements.employmentType.value = job.employmentType || "full-time";
+        form.elements.salaryMin.value = job.salaryMin ?? "";
+        form.elements.salaryMax.value = job.salaryMax ?? "";
+        form.elements.salaryCurrency.value = job.salaryCurrency || "INR";
+        form.elements.salaryPeriod.value = job.salaryPeriod || "year";
+        form.elements.numberOfOpenings.value = job.numberOfOpenings ?? 1;
+        form.elements.applicationDeadline.value = job.applicationDeadline || "";
+        form.elements.experience.value = job.experience || "";
+        form.elements.description.value = job.description || "";
+        const employerSelect = form.elements.employerUserId;
+        if (job.employerUserId && ![...employerSelect.options].some((option) => option.value === String(job.employerUserId))) {
+          employerSelect.add(new Option(`Current employer #${job.employerUserId}`, String(job.employerUserId)));
+        }
+        employerSelect.value = job.employerUserId ? String(job.employerUserId) : "";
+      }
       jobModal.classList.add("open");
       document.querySelector("#new-job-title").focus();
-    }));
+    }
+
+    document.querySelectorAll("[data-modal-open]").forEach((button) => button.addEventListener("click", () => openJobModal()));
     document.querySelectorAll(".modal-close, .modal-cancel").forEach((button) => button.addEventListener("click", () => jobModal.classList.remove("open")));
     jobModal.addEventListener("click", (event) => {
       if (event.target === jobModal) jobModal.classList.remove("open");
@@ -1534,21 +1826,29 @@
     document.querySelector("#create-job-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
-      const job = new FormData(form);
+      const formData = new FormData(form);
       const submit = form.querySelector('[type="submit"]');
       submit.disabled = true;
       try {
-        const created = await authRequest("/api/admin/jobs", {
-          method: "POST",
-          body: JSON.stringify({
-            ...Object.fromEntries(job),
-            employerUserId: String(job.get("employerUserId") || "").trim()
-              ? Number(job.get("employerUserId"))
-              : null
-          })
+        const payload = Object.fromEntries(formData);
+        for (const field of ["salaryMin", "salaryMax"]) {
+          payload[field] = String(payload[field] || "").trim() ? Number(payload[field]) : null;
+        }
+        payload.numberOfOpenings = Number(payload.numberOfOpenings);
+        payload.applicationDeadline = String(payload.applicationDeadline || "").trim() || null;
+        const employerValue = String(payload.employerUserId || "").trim();
+        if (!editingJobId || Number(employerValue || 0) !== adminJobs.find((job) => job.id === editingJobId)?.employerUserId) {
+          payload.employerUserId = employerValue ? Number(employerValue) : null;
+        } else {
+          delete payload.employerUserId;
+        }
+        const saved = await authRequest(editingJobId ? `/api/admin/jobs/${editingJobId}` : "/api/admin/jobs", {
+          method: editingJobId ? "PATCH" : "POST",
+          body: JSON.stringify(payload)
         });
-        showToast(`“${created.title}” saved as draft #${created.id}.`);
+        showToast(editingJobId ? `“${saved.title}” updated.` : `“${saved.title}” saved as draft #${saved.id}.`);
         form.reset();
+        editingJobId = null;
         jobModal.classList.remove("open");
         await loadAdminJobs();
         await refreshOverviewData();
@@ -1607,8 +1907,8 @@
         if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
         downloadCsv(
           "esllp-jobs.csv",
-          ["Job title", "Company", "Location", "Applications", "Status", "Posted"],
-          jobs.map((job) => [job.title, job.company, job.location, adminInsights?.applicationsByJob.find((item) => item.jobId === job.id)?.count ?? 0, job.isActive ? "Active" : "Draft", formatDate(job.createdAt)])
+          ["Job title", "Company", "Location", "Salary", "Openings", "Application deadline", "Applications", "Status", "Posted"],
+          jobs.map((job) => [job.title, job.company, job.location, job.salaryMin == null && job.salaryMax == null ? "Not provided" : `${job.salaryCurrency} ${job.salaryMin ?? ""}${job.salaryMin != null && job.salaryMax != null ? "–" : ""}${job.salaryMax ?? ""} / ${job.salaryPeriod}`, job.numberOfOpenings ?? 1, job.applicationDeadline || "", adminInsights?.applicationsByJob.find((item) => item.jobId === job.id)?.count ?? 0, job.isActive ? "Active" : "Draft", formatDate(job.createdAt)])
         );
         showToast(jobs.length ? "Live job export downloaded." : "An empty export was downloaded; no live jobs exist yet.");
       } catch (error) {

@@ -6,7 +6,9 @@ import { ValidationPipe } from "@nestjs/common";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { RequestMethod } from "@nestjs/common";
+import { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
+import { auditRequestContext } from "./audit/audit-request-context";
 
 async function bootstrap(): Promise<void> {
   if (
@@ -21,8 +23,24 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
+  const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+  if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
+    throw new Error("TRUST_PROXY_HOPS must be a non-negative integer.");
+  }
+  if (trustProxyHops > 0) {
+    app.getHttpAdapter().getInstance().set("trust proxy", trustProxyHops);
+  }
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser());
+  app.use((request: Request, _response: Response, next: NextFunction) => {
+    auditRequestContext.run(
+      {
+        ipAddress: request.ip ?? null,
+        userAgent: request.get("user-agent") ?? null,
+      },
+      () => next(),
+    );
+  });
   app.useStaticAssets(resolve(process.cwd(), "public"), {
     index: "index.html",
   });

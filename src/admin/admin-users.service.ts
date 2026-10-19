@@ -1,13 +1,21 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { IsNull, Repository } from "typeorm";
+import { hash } from "bcryptjs";
 import { AuditService } from "../audit/audit.service";
 import { RefreshSession } from "../auth/refresh-session.entity";
 import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
+import { EmployerOrganization } from "../employers/organization.entity";
+import {
+  EmployerOrganizationMember,
+  OrganizationMemberRole,
+} from "../employers/organization-member.entity";
+import { CreateManagedUserDto } from "./dto/create-managed-user.dto";
 
 type SafeUser = Pick<
   User,
@@ -20,6 +28,7 @@ type SafeUser = Pick<
   | "employerApprovalStatus"
   | "emailVerified"
   | "isActive"
+  | "mustChangePassword"
   | "createdAt"
   | "updatedAt"
 >;
@@ -35,6 +44,7 @@ export class AdminUsersService {
   async list(
     page = 1,
     limit = 25,
+    role?: UserRole,
   ): Promise<{
     items: SafeUser[];
     total: number;
@@ -54,14 +64,119 @@ export class AdminUsersService {
         employerApprovalStatus: true,
         emailVerified: true,
         isActive: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
       },
-      order: { createdAt: "DESC" },
+      where: role ? { role } : {},
+      order: { createdAt: "DESC", id: "DESC" },
       skip: (safePage - 1) * safeLimit,
       take: safeLimit,
     });
     return { items, total, page: safePage, limit: safeLimit };
+  }
+
+  async create(
+    actorUserId: number,
+    dto: CreateManagedUserDto,
+    ipAddress?: string,
+  ): Promise<SafeUser> {
+    const email = dto.email.trim().toLowerCase();
+    const displayName = dto.displayName.trim();
+    const companyName = dto.role === UserRole.EMPLOYER
+      ? dto.companyName?.trim()
+      : undefined;
+    if (displayName.length < 2) {
+      throw new BadRequestException(
+        "Name must contain at least 2 non-space characters.",
+      );
+    }
+    if (Buffer.byteLength(dto.temporaryPassword, "utf8") > 72) {
+      throw new BadRequestException(
+        "Password must be no longer than 72 UTF-8 bytes.",
+      );
+    }
+    if (dto.role === UserRole.EMPLOYER && !companyName) {
+      throw new BadRequestException(
+        "Company name is required for employer accounts.",
+      );
+    }
+    if (companyName && companyName.length < 2) {
+      throw new BadRequestException(
+        "Company name must contain at least 2 non-space characters.",
+      );
+    }
+
+    const passwordHash = await hash(dto.temporaryPassword, 12);
+    const saved = await this.usersRepository.manager.transaction(
+      async (manager) => {
+        const users = manager.getRepository(User);
+        if (await users.findOneBy({ email })) {
+          throw new ConflictException(
+            "An account with this email already exists.",
+          );
+        }
+        const user = await users.save(
+          users.create({
+            email,
+            displayName,
+            passwordHash,
+            role: dto.role,
+            companyName: companyName ?? null,
+            companyWebsite:
+              dto.role === UserRole.EMPLOYER
+                ? dto.companyWebsite?.trim() || null
+                : null,
+            employerApprovalStatus:
+              dto.role === UserRole.EMPLOYER
+                ? EmployerApprovalStatus.PENDING
+                : EmployerApprovalStatus.NOT_APPLICABLE,
+            emailVerified: true,
+            isActive: true,
+            mustChangePassword: true,
+          }),
+        );
+
+        if (dto.role === UserRole.EMPLOYER) {
+          const organizations = manager.getRepository(EmployerOrganization);
+          const organization = await organizations.save(
+            organizations.create({
+              name: companyName!,
+              slug: `${this.slugify(companyName!)}-${user.id}`,
+              website: dto.companyWebsite?.trim() || null,
+              industry: null,
+              companySize: null,
+              description: null,
+              planKey: "free",
+              subscriptionStatus: "free",
+            }),
+          );
+          await manager.getRepository(EmployerOrganizationMember).save({
+            organizationId: organization.id,
+            userId: user.id,
+            email: user.email,
+            role: OrganizationMemberRole.OWNER,
+            status: "active",
+          });
+        }
+        return user;
+      },
+    );
+
+    await this.auditService.record({
+      actorUserId,
+      action: "user.created_by_superadmin",
+      targetType: "user",
+      targetId: saved.id,
+      details: {
+        email: saved.email,
+        role: saved.role,
+        companyName: saved.companyName,
+        mustChangePassword: saved.mustChangePassword,
+      },
+      ipAddress,
+    });
+    return this.toSafeUser(saved);
   }
 
   async changeRole(
@@ -243,8 +358,18 @@ export class AdminUsersService {
       employerApprovalStatus: user.employerApprovalStatus,
       emailVerified: user.emailVerified,
       isActive: user.isActive,
+      mustChangePassword: user.mustChangePassword,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  private slugify(value: string): string {
+    return value
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "company";
   }
 }

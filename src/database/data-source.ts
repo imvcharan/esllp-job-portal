@@ -30,6 +30,9 @@ import { UserNotification } from "../employers/user-notification.entity";
 import { RazorpayWebhookEvent } from "../employers/razorpay-webhook-event.entity";
 import { CandidateSavedSearch } from "../users/candidate-saved-search.entity";
 import { CreateCandidateSavedSearches1729000000011 } from "./migrations/1729000000011-CreateCandidateSavedSearches";
+import { ExpandJobListingDetails1729000000012 } from "./migrations/1729000000012-ExpandJobListingDetails";
+import { ExpandAuditLogDetails1729000000013 } from "./migrations/1729000000013-ExpandAuditLogDetails";
+import { ManagedAccountsPasswordChange1729000000014 } from "./migrations/1729000000014-ManagedAccountsPasswordChange";
 
 export const AppDataSource = new DataSource({
   ...getDatabaseConfig(),
@@ -65,6 +68,9 @@ export const AppDataSource = new DataSource({
     EmployerRegistrationApproval1729000000009,
     EmployerSaasWorkspace1729000000010,
     CreateCandidateSavedSearches1729000000011,
+    ExpandJobListingDetails1729000000012,
+    ExpandAuditLogDetails1729000000013,
+    ManagedAccountsPasswordChange1729000000014,
   ],
   synchronize: false,
 });

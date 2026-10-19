@@ -1,14 +1,17 @@
 import { PartialType } from "@nestjs/mapped-types";
 import {
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
 } from "class-validator";
+import { JOB_SALARY_CURRENCIES, JOB_SALARY_PERIODS } from "../../jobs/job.constants";
 
 export class CreateEmployerJobDto {
   @IsString()
@@ -42,6 +45,27 @@ export class CreateEmployerJobDto {
   @Min(0)
   @Max(2_000_000_000)
   salaryMax?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(JOB_SALARY_CURRENCIES)
+  salaryCurrency?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(JOB_SALARY_PERIODS)
+  salaryPeriod?: string;
+
+  @IsOptional()
+  @IsDateString({ strict: true, strictSeparator: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  applicationDeadline?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2_000_000_000)
+  numberOfOpenings?: number;
 
   @IsOptional()
   @IsString()

@@ -11,6 +11,7 @@ import { User } from "../users/user.entity";
 import { EmailDeliveryService } from "./email-delivery.service";
 import { EmployerOrganization } from "../employers/organization.entity";
 import { EmployerOrganizationMember } from "../employers/organization-member.entity";
+import { AuditModule } from "../audit/audit.module";
 
 const localDevelopmentSecret =
   "local-development-only-secret-change-before-deploying-2026";
@@ -32,6 +33,7 @@ const localDevelopmentSecret =
       EmployerOrganization,
       EmployerOrganizationMember,
     ]),
+    AuditModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, EmailDeliveryService, JwtAuthGuard, RolesGuard],

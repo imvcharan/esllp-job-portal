@@ -14,6 +14,7 @@ import {
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
 import { CandidateSavedSearchesService } from "../users/candidate-saved-searches.service";
+import { currentJobDeadlineDate } from "./job.constants";
 
 @Injectable()
 export class JobsService {
@@ -43,6 +44,8 @@ export class JobsService {
     experience?: string;
     company?: string;
     minimumSalary?: number;
+    salaryCurrency?: string;
+    salaryPeriod?: string;
     freshnessDays?: number;
     sort?: string;
   }) {
@@ -51,6 +54,9 @@ export class JobsService {
     const queryBuilder = this.jobsRepository
       .createQueryBuilder("job")
       .where("job.isActive = :isActive", { isActive: true })
+      .andWhere(
+        "(job.applicationDeadline IS NULL OR job.applicationDeadline >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date)",
+      )
       .take(limit)
       .skip((page - 1) * limit);
 
@@ -89,9 +95,27 @@ export class JobsService {
       });
     }
     if (filters.minimumSalary && filters.minimumSalary > 0) {
-      queryBuilder.andWhere("job.salaryMin >= :minimumSalary", {
-        minimumSalary: filters.minimumSalary,
-      });
+      queryBuilder
+        .andWhere("job.salaryMin >= :minimumSalary", {
+          minimumSalary: filters.minimumSalary,
+        })
+        .andWhere("job.salaryCurrency = :salaryCurrency", {
+          salaryCurrency: filters.salaryCurrency ?? "INR",
+        })
+        .andWhere("job.salaryPeriod = :salaryPeriod", {
+          salaryPeriod: filters.salaryPeriod ?? "year",
+        });
+    } else {
+      if (filters.salaryCurrency) {
+        queryBuilder.andWhere("job.salaryCurrency = :salaryCurrency", {
+          salaryCurrency: filters.salaryCurrency,
+        });
+      }
+      if (filters.salaryPeriod) {
+        queryBuilder.andWhere("job.salaryPeriod = :salaryPeriod", {
+          salaryPeriod: filters.salaryPeriod,
+        });
+      }
     }
     if (filters.freshnessDays && filters.freshnessDays > 0) {
       queryBuilder.andWhere(
@@ -117,7 +141,13 @@ export class JobsService {
 
     if (filters.sort === "salary") {
       queryBuilder
-        .orderBy("COALESCE(job.salaryMax, job.salaryMin)", "DESC", "NULLS LAST")
+        .orderBy("job.salaryCurrency", "ASC")
+        .addOrderBy("job.salaryPeriod", "ASC")
+        .addOrderBy(
+          "COALESCE(job.salaryMax, job.salaryMin)",
+          "DESC",
+          "NULLS LAST",
+        )
         .addOrderBy("job.createdAt", "DESC");
     } else if (filters.sort === "title") {
       queryBuilder
@@ -132,6 +162,9 @@ export class JobsService {
       .createQueryBuilder("job")
       .select("DISTINCT job.company", "company")
       .where("job.isActive = :isActive", { isActive: true })
+      .andWhere(
+        "(job.applicationDeadline IS NULL OR job.applicationDeadline >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date)",
+      )
       .orderBy("job.company", "ASC")
       .getRawMany<{ company: string }>();
     return {
@@ -154,6 +187,7 @@ export class JobsService {
   ): Promise<
     Job & { notificationDelivery?: { sent: number; failed: number } }
   > {
+    this.assertDeadlineAllowsPublishing(dto.isActive, dto.applicationDeadline);
     const employerOrganizationId = await this.getEmployerOrganizationId(
       dto.employerUserId,
     );
@@ -174,6 +208,10 @@ export class JobsService {
         employmentType: dto.employmentType ?? "full-time",
         salaryMin,
         salaryMax,
+        salaryCurrency: dto.salaryCurrency ?? "INR",
+        salaryPeriod: dto.salaryPeriod ?? "year",
+        applicationDeadline: dto.applicationDeadline ?? null,
+        numberOfOpenings: dto.numberOfOpenings ?? 1,
         experience: dto.experience?.trim() || null,
         description: dto.description?.trim() || null,
         isActive: dto.isActive ?? false,
@@ -215,6 +253,11 @@ export class JobsService {
       );
     }
     const wasActive = job.isActive;
+    const nextDeadline =
+      dto.applicationDeadline === undefined
+        ? job.applicationDeadline
+        : dto.applicationDeadline;
+    this.assertDeadlineAllowsPublishing(dto.isActive, nextDeadline);
     const salaryMin =
       dto.salaryMin === undefined ? job.salaryMin : dto.salaryMin;
     const salaryMax =
@@ -274,7 +317,14 @@ export class JobsService {
   }
 
   findOne(id: number): Promise<Job | null> {
-    return this.jobsRepository.findOneBy({ id, isActive: true });
+    return this.jobsRepository
+      .createQueryBuilder("job")
+      .where("job.id = :id", { id })
+      .andWhere("job.isActive = :isActive", { isActive: true })
+      .andWhere(
+        "(job.applicationDeadline IS NULL OR job.applicationDeadline >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date)",
+      )
+      .getOne();
   }
 
   private async getEmployerOrganizationId(
@@ -292,6 +342,7 @@ export class JobsService {
         "Assigned job owner must be an active employer account.",
       );
     }
+
     const ownerMembership = await this.organizationMembers.findOne({
       where: {
         userId: employer.id,
@@ -306,6 +357,21 @@ export class JobsService {
       );
     }
     return ownerMembership.organizationId;
+  }
+
+  private assertDeadlineAllowsPublishing(
+    isActive: boolean | undefined,
+    applicationDeadline: string | null | undefined,
+  ): void {
+    if (
+      isActive === true &&
+      applicationDeadline &&
+      applicationDeadline < currentJobDeadlineDate()
+    ) {
+      throw new BadRequestException(
+        "A job with a past application deadline cannot be published.",
+      );
+    }
   }
 
   async notifyMatchingCandidates(job: Job) {

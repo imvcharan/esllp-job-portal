@@ -1,14 +1,17 @@
 import {
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
 } from "class-validator";
+import { JOB_SALARY_CURRENCIES, JOB_SALARY_PERIODS } from "../job.constants";
 
 export class CreateJobDto {
   @IsString()
@@ -47,6 +50,27 @@ export class CreateJobDto {
   @Min(0)
   @Max(2_000_000_000)
   salaryMax?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(JOB_SALARY_CURRENCIES)
+  salaryCurrency?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(JOB_SALARY_PERIODS)
+  salaryPeriod?: string;
+
+  @IsOptional()
+  @IsDateString({ strict: true, strictSeparator: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  applicationDeadline?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2_000_000_000)
+  numberOfOpenings?: number;
 
   @IsOptional()
   @IsString()

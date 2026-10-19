@@ -8,6 +8,7 @@ import {
   MaxLength,
   Min,
 } from "class-validator";
+import { JOB_SALARY_CURRENCIES, JOB_SALARY_PERIODS } from "../../jobs/job.constants";
 
 const employmentTypes = [
   "full-time",
@@ -57,6 +58,14 @@ export class CreateCandidateSavedSearchDto {
   @Min(0)
   @Max(2_000_000_000)
   minimumSalary?: number;
+
+  @IsOptional()
+  @IsIn(JOB_SALARY_CURRENCIES)
+  salaryCurrency?: string;
+
+  @IsOptional()
+  @IsIn(JOB_SALARY_PERIODS)
+  salaryPeriod?: string;
 
   @IsOptional()
   @IsInt()
