@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   DefaultValuePipe,
   Get,
   Param,
@@ -57,6 +58,15 @@ export class AdminUsersController {
       dto,
       request.ip,
     );
+  }
+
+  @Delete(":id")
+  remove(
+    @Param("id", ParseIntPipe) id: number,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.adminUsersService.remove(id, actor.id, request.ip);
   }
 
   @Patch(":id/role")

@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { AuditService } from "../audit/audit.service";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -15,6 +21,9 @@ import {
 } from "../employers/organization-member.entity";
 import { CandidateSavedSearchesService } from "../users/candidate-saved-searches.service";
 import { currentJobDeadlineDate, jobPublicationError } from "./job.constants";
+import { CandidateApplication } from "../users/candidate-application.entity";
+import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
+import { Report, ReportTargetType } from "../reports/report.entity";
 
 @Injectable()
 export class JobsService {
@@ -332,6 +341,53 @@ export class JobsService {
       ipAddress,
     });
     return archived;
+  }
+
+  async permanentlyDelete(
+    id: number,
+    actor: AuthenticatedUser,
+    ipAddress?: string,
+  ): Promise<{ success: true }> {
+    const deletedJob = await this.jobsRepository.manager.transaction(
+      async (manager) => {
+        const jobs = manager.getRepository(Job);
+        const job = await jobs.findOne({
+          where: { id },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (!job) {
+          throw new NotFoundException(`Job ${id} was not found`);
+        }
+        const [applications, savedJobs, reports] = await Promise.all([
+          manager.getRepository(CandidateApplication).countBy({ jobId: id }),
+          manager.getRepository(CandidateSavedJob).countBy({ jobId: id }),
+          manager.getRepository(Report).countBy({
+            targetType: ReportTargetType.JOB,
+            targetId: id,
+          }),
+        ]);
+        if (applications || savedJobs || reports) {
+          throw new ConflictException(
+            "This job has linked applications, saved-job records, or reports and cannot be permanently deleted. Archive it instead to preserve history.",
+          );
+        }
+        const deletedJob = { title: job.title };
+        await this.auditService.record(
+          {
+            actorUserId: actor.id,
+            action: "job.permanently_deleted",
+            targetType: "job",
+            targetId: id,
+            details: deletedJob,
+            ipAddress,
+          },
+          manager,
+        );
+        await jobs.delete(id);
+        return deletedJob;
+      },
+    );
+    return { success: true };
   }
 
   findOne(id: number): Promise<Job | null> {

@@ -11,6 +11,19 @@ import { AuditService } from "../audit/audit.service";
 import { RefreshSession } from "../auth/refresh-session.entity";
 import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
 import { EmployerOrganization } from "../employers/organization.entity";
+import { EmployerApplicationNote } from "../employers/employer-application-note.entity";
+import { EmployerApplicationTag } from "../employers/employer-application-tag.entity";
+import { EmployerInterview } from "../employers/employer-interview.entity";
+import { UserNotification } from "../employers/user-notification.entity";
+import { Job } from "../jobs/job.entity";
+import { Report, ReportTargetType } from "../reports/report.entity";
+import { CandidateApplicationMessage } from "../users/candidate-application-message.entity";
+import { CandidateApplicationStatus } from "../users/candidate-application-status.entity";
+import { CandidateApplication } from "../users/candidate-application.entity";
+import { CandidateDeletionRequest } from "../users/candidate-deletion-request.entity";
+import { CandidateProfile } from "../users/candidate-profile.entity";
+import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
+import { CandidateSavedSearch } from "../users/candidate-saved-search.entity";
 import {
   EmployerOrganizationMember,
   OrganizationMemberRole,
@@ -83,9 +96,8 @@ export class AdminUsersService {
   ): Promise<SafeUser> {
     const email = dto.email.trim().toLowerCase();
     const displayName = dto.displayName.trim();
-    const companyName = dto.role === UserRole.EMPLOYER
-      ? dto.companyName?.trim()
-      : undefined;
+    const companyName =
+      dto.role === UserRole.EMPLOYER ? dto.companyName?.trim() : undefined;
     if (displayName.length < 2) {
       throw new BadRequestException(
         "Name must contain at least 2 non-space characters.",
@@ -177,6 +189,149 @@ export class AdminUsersService {
       ipAddress,
     });
     return this.toSafeUser(saved);
+  }
+
+  async remove(
+    targetUserId: number,
+    actorUserId: number,
+    ipAddress?: string,
+  ): Promise<{ success: true }> {
+    if (actorUserId === targetUserId) {
+      throw new BadRequestException(
+        "You cannot permanently delete your own account.",
+      );
+    }
+
+    const deletedUser = await this.usersRepository.manager.transaction(
+      async (manager) => {
+        const users = manager.getRepository(User);
+        const user = await users.findOne({
+          where: { id: targetUserId },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (!user) {
+          throw new NotFoundException("User was not found");
+        }
+        if (user.role === UserRole.SUPERADMIN && user.isActive) {
+          const activeSuperadmins = await users.countBy({
+            role: UserRole.SUPERADMIN,
+            isActive: true,
+          });
+          if (activeSuperadmins <= 1) {
+            throw new BadRequestException(
+              "The last active superadmin cannot be permanently deleted.",
+            );
+          }
+        }
+
+        const [
+          applications,
+          applicationMessages,
+          applicationStatusHistory,
+          jobs,
+          savedJobs,
+          savedSearches,
+          candidateProfiles,
+          employerMemberships,
+          invitations,
+          interviews,
+          applicationNotes,
+          applicationTags,
+          notifications,
+          deletionRequests,
+          reports,
+        ] = await Promise.all([
+          manager
+            .getRepository(CandidateApplication)
+            .countBy({ userId: targetUserId }),
+          manager
+            .getRepository(CandidateApplicationMessage)
+            .countBy({ senderUserId: targetUserId }),
+          manager
+            .getRepository(CandidateApplicationStatus)
+            .countBy({ changedByUserId: targetUserId }),
+          manager.getRepository(Job).countBy({ employerUserId: targetUserId }),
+          manager
+            .getRepository(CandidateSavedJob)
+            .countBy({ userId: targetUserId }),
+          manager
+            .getRepository(CandidateSavedSearch)
+            .countBy({ userId: targetUserId }),
+          manager
+            .getRepository(CandidateProfile)
+            .countBy({ userId: targetUserId }),
+          manager
+            .getRepository(EmployerOrganizationMember)
+            .countBy({ userId: targetUserId }),
+          manager
+            .getRepository(EmployerOrganizationMember)
+            .countBy({ invitedByUserId: targetUserId }),
+          manager
+            .getRepository(EmployerInterview)
+            .countBy({ scheduledByUserId: targetUserId }),
+          manager
+            .getRepository(EmployerApplicationNote)
+            .countBy({ authorUserId: targetUserId }),
+          manager
+            .getRepository(EmployerApplicationTag)
+            .countBy({ createdByUserId: targetUserId }),
+          manager
+            .getRepository(UserNotification)
+            .countBy({ userId: targetUserId }),
+          manager.getRepository(CandidateDeletionRequest).findOne({
+            where: [
+              { requesterUserId: targetUserId },
+              { reviewedByUserId: targetUserId },
+            ],
+          }),
+          manager.getRepository(Report).findOne({
+            where: [
+              { reporterUserId: targetUserId },
+              { resolvedByUserId: targetUserId },
+              { targetType: ReportTargetType.USER, targetId: targetUserId },
+            ],
+          }),
+        ]);
+        const linkedRecordLabels = [
+          applications && "candidate applications",
+          applicationMessages && "application messages",
+          applicationStatusHistory && "application status history",
+          jobs && "job listings",
+          savedJobs && "saved jobs",
+          savedSearches && "saved searches",
+          candidateProfiles && "candidate profile data",
+          employerMemberships && "employer organization memberships",
+          invitations && "employer invitations",
+          interviews && "interviews",
+          applicationNotes && "application notes",
+          applicationTags && "application tags",
+          notifications && "notifications",
+          deletionRequests && "privacy requests",
+          reports && "moderation reports",
+        ].filter((label): label is string => Boolean(label));
+        if (linkedRecordLabels.length) {
+          throw new ConflictException(
+            `This account has linked ${linkedRecordLabels[0]} and cannot be permanently deleted. Deactivate it instead to preserve history.`,
+          );
+        }
+
+        const deletedUser = { email: user.email, role: user.role };
+        await this.auditService.record(
+          {
+            actorUserId,
+            action: "user.permanently_deleted",
+            targetType: "user",
+            targetId: targetUserId,
+            details: deletedUser,
+            ipAddress,
+          },
+          manager,
+        );
+        await users.delete(targetUserId);
+        return deletedUser;
+      },
+    );
+    return { success: true };
   }
 
   async changeRole(
@@ -365,11 +520,13 @@ export class AdminUsersService {
   }
 
   private slugify(value: string): string {
-    return value
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "company";
+    return (
+      value
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "company"
+    );
   }
 }

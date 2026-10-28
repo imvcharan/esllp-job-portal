@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { AuditLog } from './audit-log.entity';
 import { User } from '../users/user.entity';
 import { AuditLocationService } from './audit-location.service';
@@ -16,19 +16,25 @@ export class AuditService {
     private readonly locationService: AuditLocationService,
   ) {}
 
-  record(input: {
-    actorUserId: number | null;
-    action: string;
-    targetType: string;
-    targetId: string | number;
-    details?: Record<string, string | number | boolean | null>;
-    ipAddress?: string;
-  }): Promise<AuditLog> {
+  record(
+    input: {
+      actorUserId: number | null;
+      action: string;
+      targetType: string;
+      targetId: string | number;
+      details?: Record<string, string | number | boolean | null>;
+      ipAddress?: string;
+    },
+    manager?: EntityManager,
+  ): Promise<AuditLog> {
     const requestContext = auditRequestContext.getStore();
     const ipAddress = input.ipAddress ?? requestContext?.ipAddress ?? null;
     const location = this.locationService.lookup(ipAddress);
-    return this.auditRepository.save(
-      this.auditRepository.create({
+    const repository = manager
+      ? manager.getRepository(AuditLog)
+      : this.auditRepository;
+    return repository.save(
+      repository.create({
         actorUserId: input.actorUserId,
         action: input.action,
         targetType: input.targetType,

@@ -12,6 +12,9 @@ import { EmployerOrganizationMember } from "../employers/organization-member.ent
 import { CandidateSavedSearch } from "../users/candidate-saved-search.entity";
 import { CandidateSavedSearchesService } from "../users/candidate-saved-searches.service";
 import { PublicJobPagesController } from "./public-job-pages.controller";
+import { CandidateApplication } from "../users/candidate-application.entity";
+import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
+import { Report } from "../reports/report.entity";
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { PublicJobPagesController } from "./public-job-pages.controller";
       CandidateProfile,
       EmployerOrganizationMember,
       CandidateSavedSearch,
+      CandidateApplication,
+      CandidateSavedJob,
+      Report,
     ]),
     AuthModule,
     AuditModule,

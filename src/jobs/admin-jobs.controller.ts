@@ -68,4 +68,13 @@ export class AdminJobsController {
     }
     return { success: true };
   }
+
+  @Delete(':id/permanent')
+  permanentlyDelete(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.jobsService.permanentlyDelete(id, actor, request.ip);
+  }
 }
