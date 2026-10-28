@@ -14,7 +14,7 @@ import {
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
 import { CandidateSavedSearchesService } from "../users/candidate-saved-searches.service";
-import { currentJobDeadlineDate } from "./job.constants";
+import { currentJobDeadlineDate, jobPublicationError } from "./job.constants";
 
 @Injectable()
 export class JobsService {
@@ -188,6 +188,10 @@ export class JobsService {
     Job & { notificationDelivery?: { sent: number; failed: number } }
   > {
     this.assertDeadlineAllowsPublishing(dto.isActive, dto.applicationDeadline);
+    if (dto.isActive) {
+      const readinessError = jobPublicationError(dto);
+      if (readinessError) throw new BadRequestException(readinessError);
+    }
     const employerOrganizationId = await this.getEmployerOrganizationId(
       dto.employerUserId,
     );
@@ -258,6 +262,20 @@ export class JobsService {
         ? job.applicationDeadline
         : dto.applicationDeadline;
     this.assertDeadlineAllowsPublishing(dto.isActive, nextDeadline);
+    if (
+      (dto.isActive === true && !wasActive) ||
+      (wasActive &&
+        (dto.title !== undefined ||
+          dto.location !== undefined ||
+          dto.description !== undefined))
+    ) {
+      const readinessError = jobPublicationError({
+        title: dto.title ?? job.title,
+        location: dto.location ?? job.location,
+        description: dto.description ?? job.description,
+      });
+      if (readinessError) throw new BadRequestException(readinessError);
+    }
     const salaryMin =
       dto.salaryMin === undefined ? job.salaryMin : dto.salaryMin;
     const salaryMax =

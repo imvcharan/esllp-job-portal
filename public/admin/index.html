@@ -170,6 +170,7 @@
     .status.closed { color: #778394; background: #eff2f5; }
     .table-search { width: 130px; min-height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; font-size: 9px; }
     .activity-list { padding: 0 17px 9px; }
+    .activity-list > .activity-empty { display: grid; min-height: 96px; place-items: center; margin: 0; padding: 22px; border: 1px dashed #dce8e3; border-radius: 8px; color: #64766e; background: #f7faf8; font-size: 11px; line-height: 1.6; text-align: center; }
     .activity { display: grid; grid-template-columns: 28px 1fr; gap: 9px; padding: 11px 0; border-bottom: 1px solid #f0f2f5; }
     .activity:last-child { border-bottom: 0; }
     .activity-icon { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 8px; color: var(--teal); background: #e8f5f1; font-size: 11px; }
@@ -181,6 +182,9 @@
     .activity small { display: block; margin-top: 4px; color: #a0a8b3; font-size: 8px; }
     .demo-note { display: flex; align-items: center; gap: 8px; margin-top: 15px; padding: 10px 12px; border: 1px solid #e6eee9; border-radius: 8px; color: #758477; background: #f7faf7; font-size: 9px; }
     .demo-note span { color: #4c936f; font-size: 13px; }
+    #view-users > .panel.superadmin-only { padding: 0 18px 18px; }
+    #view-users > .panel.superadmin-only > .panel-title-row { margin-inline: -18px; }
+    #create-managed-user-status:empty { display: none; }
 
     .table-panel { overflow: hidden; }
     .table-toolbar { display: flex; align-items: center; gap: 8px; padding: 0 18px 14px; }
@@ -333,6 +337,7 @@
       <nav class="nav-list" aria-label="Workspace pages">
         <a class="nav-link active" href="#overview" data-view="overview"><span class="nav-icon">▦</span><span class="nav-text">Overview</span></a>
         <a class="nav-link" href="#jobs" data-view="jobs"><span class="nav-icon">▤</span><span class="nav-text">Job listings</span></a>
+        <a class="nav-link" href="#reports" data-view="reports"><span class="nav-icon">⚑</span><span class="nav-text">Reports</span></a>
         <a class="nav-link" href="#candidates" data-view="candidates"><span class="nav-icon">♙</span><span class="nav-text">Candidates</span></a>
         <a class="nav-link" href="#companies" data-view="companies"><span class="nav-icon">▣</span><span class="nav-text">Companies</span></a>
         <a class="nav-link" href="#analytics" data-view="analytics"><span class="nav-icon">⌁</span><span class="nav-text">Analytics</span></a>
@@ -340,6 +345,7 @@
       <div class="nav-label" style="margin-top:26px">Manage</div>
       <nav class="nav-list" aria-label="Management pages">
         <a class="nav-link superadmin-only" href="#users" data-view="users" hidden><span class="nav-icon">♙</span><span class="nav-text">User accounts</span></a>
+        <a class="nav-link superadmin-only" href="#privacy" data-view="privacy" hidden><span class="nav-icon">⌑</span><span class="nav-text">Privacy requests</span></a>
         <a class="nav-link superadmin-only" href="#audit" data-view="audit" hidden><span class="nav-icon">◷</span><span class="nav-text">Audit log</span></a>
         <a class="nav-link admin-only" href="#activity" data-view="activity" hidden><span class="nav-icon">◷</span><span class="nav-text">Recent activity</span></a>
         <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Account security</span></a>
@@ -411,6 +417,37 @@
             <div class="table-wrap"><table class="jobs-table"><thead><tr><th>Job title</th><th>Company</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applications</th><th>Status</th><th>Posted</th><th>Actions</th></tr></thead><tbody class="filterable" id="jobs-table-body"></tbody></table></div>
           </article>
           <div class="demo-note" id="jobs-data-note" hidden></div>
+        </section>
+
+        <section class="view" id="view-reports" data-title="Reports">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Trust &amp; safety</div><h1>Reports</h1><p>Review user-submitted reports and record moderation outcomes.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-reports>↻&nbsp; Refresh</button></div>
+          </div>
+          <article class="panel table-panel">
+            <div class="table-toolbar">
+              <select class="select" id="reports-status-filter" aria-label="Filter reports by status">
+                <option value="">All statuses</option><option value="open">Open</option>
+                <option value="reviewing">Reviewing</option><option value="actioned">Actioned</option>
+                <option value="dismissed">Dismissed</option>
+              </select>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>Submitted</th><th>Reported item</th><th>Reason &amp; details</th><th>Status</th><th>Resolution note</th><th>Actions</th></tr></thead><tbody id="reports-table-body"></tbody></table></div>
+            <div class="table-toolbar"><span id="reports-page-summary">Reports load here.</span><button class="button" id="reports-prev" type="button">← Previous</button><button class="button" id="reports-next" type="button">Next →</button></div>
+          </article>
+          <div class="demo-note" id="reports-data-note" hidden></div>
+        </section>
+
+        <section class="view" id="view-privacy" data-title="Privacy requests">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Superadmin controls</div><h1>Privacy requests</h1><p>Review candidate account deletion requests. This workflow records review only; it does not delete accounts or retained hiring records.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-privacy>↻&nbsp; Refresh</button></div>
+          </div>
+          <article class="panel table-panel">
+            <div class="table-wrap"><table><thead><tr><th>Requested</th><th>Candidate</th><th>Details</th><th>Status</th><th>Review note</th><th>Actions</th></tr></thead><tbody id="privacy-requests-table-body"></tbody></table></div>
+            <div class="table-toolbar"><span id="privacy-requests-page-summary">Requests load here.</span><button class="button" id="privacy-prev" type="button">← Previous</button><button class="button" id="privacy-next" type="button">Next →</button></div>
+          </article>
+          <div class="demo-note" id="privacy-requests-data-note" hidden></div>
         </section>
 
         <section class="view" id="view-candidates" data-title="Candidates">
@@ -559,6 +596,10 @@
     let editingJobId = null;
     let auditPage = 1;
     let auditTotal = 0;
+    let reportsPage = 1;
+    let reportsTotal = 0;
+    let privacyRequestsPage = 1;
+    let privacyRequestsTotal = 0;
     let authResolved = false;
     let toastTimer;
     function formatDate(value, options = { dateStyle: "medium" }) {
@@ -808,6 +849,136 @@
       const note = document.querySelector("#jobs-data-note");
       note.hidden = jobs.length > 0;
       note.textContent = jobs.length ? "" : "No job listings have been created yet. Create a job draft to get started.";
+    }
+
+    async function loadAdminReports(page = reportsPage) {
+      const status = document.querySelector("#reports-status-filter").value;
+      const params = new URLSearchParams({ page: String(page), limit: "25" });
+      if (status) params.set("status", status);
+      const result = await authRequest(`/api/admin/reports?${params}`);
+      if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+        throw new Error("The reports API returned an unexpected response.");
+      }
+      reportsPage = result.page;
+      reportsTotal = result.total;
+      renderReports(result.items);
+      const start = result.total === 0 ? 0 : (result.page - 1) * result.limit + 1;
+      setText("#reports-page-summary", `${start}–${Math.min(result.page * result.limit, result.total)} of ${result.total} reports`);
+      document.querySelector("#reports-prev").disabled = result.page <= 1;
+      document.querySelector("#reports-next").disabled = result.page * result.limit >= result.total;
+      const note = document.querySelector("#reports-data-note");
+      note.hidden = result.total !== 0;
+      note.textContent = result.total ? "" : "No reports match this filter.";
+    }
+
+    async function loadPrivacyRequests(page = privacyRequestsPage) {
+      const result = await authRequest(`/api/admin/privacy-requests?page=${page}&limit=25`);
+      if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+        throw new Error("The privacy request API returned an unexpected response.");
+      }
+      privacyRequestsPage = result.page;
+      privacyRequestsTotal = result.total;
+      renderPrivacyRequests(result.items);
+      const start = result.total === 0 ? 0 : (result.page - 1) * result.limit + 1;
+      setText("#privacy-requests-page-summary", `${start}–${Math.min(result.page * result.limit, result.total)} of ${result.total} requests`);
+      document.querySelector("#privacy-prev").disabled = result.page <= 1;
+      document.querySelector("#privacy-next").disabled = result.page * result.limit >= result.total;
+      const note = document.querySelector("#privacy-requests-data-note");
+      note.hidden = result.total !== 0;
+      note.textContent = result.total ? "" : "No candidate deletion requests have been submitted.";
+    }
+
+    function renderPrivacyRequests(requests) {
+      const body = document.querySelector("#privacy-requests-table-body");
+      if (!requests.length) {
+        body.innerHTML = '<tr><td colspan="6">No requests on this page.</td></tr>';
+        return;
+      }
+      body.innerHTML = requests.map((request) => {
+        const actions = request.status === "open"
+          ? `<button class="button" type="button" data-privacy-action data-request-id="${request.id}" data-next-status="reviewing">Begin review</button><button class="button" type="button" data-privacy-action data-request-id="${request.id}" data-next-status="deferred">Defer</button>`
+          : request.status === "reviewing"
+            ? `<button class="button" type="button" data-privacy-action data-request-id="${request.id}" data-next-status="deferred">Defer</button>`
+            : "Deferred";
+        return `<tr>
+          <td>${escapeHtml(formatDate(request.createdAt))}</td>
+          <td>${escapeHtml(request.requester?.displayName || "Account unavailable")}<br>${escapeHtml(request.requester?.email || "")}</td>
+          <td>${escapeHtml(request.details || "—")}</td>
+          <td>${escapeHtml(request.status)}</td>
+          <td>${escapeHtml(request.reviewNote || "—")}</td>
+          <td>${request.status === "open" || request.status === "reviewing"
+            ? `<input class="table-search" type="text" maxlength="1000" data-privacy-note="${request.id}" aria-label="Review note for request ${request.id}" placeholder="${request.status === "open" ? "Note (required to defer)" : "Note (required to defer)"}">${actions}`
+            : "—"}</td>
+        </tr>`;
+      }).join("");
+      body.querySelectorAll("[data-privacy-action]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          const id = button.dataset.requestId;
+          const note = body.querySelector(`[data-privacy-note="${CSS.escape(id)}"]`)?.value.trim();
+          try {
+            await authRequest(`/api/admin/privacy-requests/${encodeURIComponent(id)}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                status: button.dataset.nextStatus,
+                reviewNote: note || undefined
+              })
+            });
+            showToast(button.dataset.nextStatus === "deferred"
+              ? "Request deferred. No account data was deleted."
+              : "Privacy request review started.");
+            await loadPrivacyRequests(privacyRequestsPage);
+          } catch (error) {
+            button.disabled = false;
+            showToast(`Privacy request could not be updated: ${error.message}`);
+          }
+        });
+      });
+    }
+
+    function renderReports(reports) {
+      const body = document.querySelector("#reports-table-body");
+      if (!reports.length) {
+        body.innerHTML = '<tr><td colspan="6">No reports on this page.</td></tr>';
+        return;
+      }
+      body.innerHTML = reports.map((report) => {
+        const actions = report.status === "open"
+          ? `<button class="button" type="button" data-report-action data-report-id="${report.id}" data-next-status="reviewing">Start review</button><button class="button" type="button" data-report-action data-report-id="${report.id}" data-next-status="dismissed">Dismiss</button>`
+          : report.status === "reviewing"
+            ? `<button class="button button-primary" type="button" data-report-action data-report-id="${report.id}" data-next-status="actioned">Record action</button><button class="button" type="button" data-report-action data-report-id="${report.id}" data-next-status="dismissed">Dismiss</button>`
+            : "Complete";
+        return `<tr class="filterable">
+          <td>${escapeHtml(formatDate(report.createdAt))}</td>
+          <td>${escapeHtml(report.target?.label || `${report.targetType} #${report.targetId}`)}</td>
+          <td><strong>${escapeHtml(report.reason)}</strong>${report.details ? `<p>${escapeHtml(report.details)}</p>` : ""}</td>
+          <td>${escapeHtml(report.status)}</td>
+          <td>${report.status === "open" || report.status === "reviewing"
+            ? `<input class="table-search" type="text" maxlength="1000" data-report-note="${report.id}" aria-label="Resolution note for report ${report.id}" placeholder="Optional note">`
+            : escapeHtml(report.resolutionNote || "—")}</td>
+          <td>${actions}</td>
+        </tr>`;
+      }).join("");
+      body.querySelectorAll("[data-report-action]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          const id = button.dataset.reportId;
+          try {
+            await authRequest(`/api/admin/reports/${encodeURIComponent(id)}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                status: button.dataset.nextStatus,
+                resolutionNote: body.querySelector(`[data-report-note="${CSS.escape(id)}"]`)?.value.trim()
+              })
+            });
+            showToast("Report status updated.");
+            await loadAdminReports(reportsPage);
+          } catch (error) {
+            button.disabled = false;
+            showToast(`Report could not be updated: ${error.message}`);
+          }
+        });
+      });
     }
 
     async function loadAdminUsers(page = 1, limit = 25) {
@@ -1359,7 +1530,7 @@
         item.append(icon, content);
         list.append(item);
       });
-      if (!activity.length) list.innerHTML = "<p>No platform activity has been recorded yet.</p>";
+      if (!activity.length) list.innerHTML = '<p class="activity-empty">No platform activity has been recorded yet.</p>';
       renderOverviewActivity(activity);
     }
 
@@ -1618,7 +1789,7 @@
       }
       const view = document.querySelector(`#view-${name}`)
         ?? document.querySelector("#view-overview");
-      if ((name === "users" || name === "audit") && currentAdminUser?.role !== "superadmin") {
+      if ((name === "users" || name === "audit" || name === "privacy") && currentAdminUser?.role !== "superadmin") {
         showToast("This page is available to superadmins only.");
         return;
       }
@@ -1632,6 +1803,12 @@
       applySearch(document.querySelector("#global-search").value);
       if (view.id === "view-jobs" && adminAccessToken) {
         loadAdminJobs().catch((error) => showToast(error.message));
+      }
+      if (view.id === "view-reports" && adminAccessToken) {
+        loadAdminReports(1).catch((error) => showToast(`Unable to load reports: ${error.message}`));
+      }
+      if (view.id === "view-privacy" && adminAccessToken) {
+        loadPrivacyRequests(1).catch((error) => showToast(`Unable to load privacy requests: ${error.message}`));
       }
       if (view.id === "view-companies" && adminAccessToken) {
         loadAdminCompanies().catch((error) => showToast(`Unable to load companies: ${error.message}`));
@@ -1691,6 +1868,27 @@
     });
     document.querySelector("[data-refresh-companies]").addEventListener("click", () => {
       loadAdminCompanies().catch((error) => showToast(`Unable to load companies: ${error.message}`));
+    });
+    document.querySelector("[data-refresh-reports]").addEventListener("click", () => {
+      loadAdminReports().catch((error) => showToast(`Unable to load reports: ${error.message}`));
+    });
+    document.querySelector("[data-refresh-privacy]").addEventListener("click", () => {
+      loadPrivacyRequests().catch((error) => showToast(`Unable to load privacy requests: ${error.message}`));
+    });
+    document.querySelector("#reports-status-filter").addEventListener("change", () => {
+      loadAdminReports(1).catch((error) => showToast(`Unable to load reports: ${error.message}`));
+    });
+    document.querySelector("#reports-prev").addEventListener("click", () => {
+      if (reportsPage > 1) loadAdminReports(reportsPage - 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#reports-next").addEventListener("click", () => {
+      if (reportsPage * 25 < reportsTotal) loadAdminReports(reportsPage + 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#privacy-prev").addEventListener("click", () => {
+      if (privacyRequestsPage > 1) loadPrivacyRequests(privacyRequestsPage - 1).catch((error) => showToast(error.message));
+    });
+    document.querySelector("#privacy-next").addEventListener("click", () => {
+      if (privacyRequestsPage * 25 < privacyRequestsTotal) loadPrivacyRequests(privacyRequestsPage + 1).catch((error) => showToast(error.message));
     });
     document.querySelector("[data-refresh-insights]").addEventListener("click", () => {
       loadAdminInsights().catch((error) => showToast(`Unable to load analytics: ${error.message}`));

@@ -22,6 +22,14 @@ import { CandidateSavedSearch } from "./candidate-saved-search.entity";
 import { CandidateSavedSearchesController } from "./candidate-saved-searches.controller";
 import { CandidateSavedSearchesService } from "./candidate-saved-searches.service";
 import { AuditModule } from "../audit/audit.module";
+import { CandidateDeletionRequest } from "./candidate-deletion-request.entity";
+import {
+  AdminPrivacyRequestsController,
+  CandidateAccountController,
+} from "./candidate-account.controller";
+import { CandidateAccountService } from "./candidate-account.service";
+import { CandidateApplicationOffer } from "./candidate-application-offer.entity";
+import { CandidateApplicationMessage } from "./candidate-application-message.entity";
 
 @Module({
   imports: [
@@ -30,11 +38,14 @@ import { AuditModule } from "../audit/audit.module";
       CandidateSavedJob,
       CandidateApplication,
       CandidateApplicationStatus,
+      CandidateApplicationOffer,
+      CandidateApplicationMessage,
       User,
       Job,
       EmployerOrganizationMember,
       UserNotification,
       CandidateSavedSearch,
+      CandidateDeletionRequest,
     ]),
     AuthModule,
     AuditModule,
@@ -45,6 +56,8 @@ import { AuditModule } from "../audit/audit.module";
     CandidateApplicationsController,
     CandidateNotificationsController,
     CandidateSavedSearchesController,
+    CandidateAccountController,
+    AdminPrivacyRequestsController,
   ],
   providers: [
     CandidateProfileService,
@@ -53,6 +66,7 @@ import { AuditModule } from "../audit/audit.module";
     CandidateNotificationsService,
     CandidateSavedSearchesService,
     CandidateFileStorageService,
+    CandidateAccountService,
   ],
   exports: [CandidateApplicationsService, CandidateFileStorageService],
 })

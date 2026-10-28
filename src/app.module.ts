@@ -40,6 +40,14 @@ import { CreateCandidateSavedSearches1729000000011 } from "./database/migrations
 import { ExpandJobListingDetails1729000000012 } from "./database/migrations/1729000000012-ExpandJobListingDetails";
 import { ExpandAuditLogDetails1729000000013 } from "./database/migrations/1729000000013-ExpandAuditLogDetails";
 import { ManagedAccountsPasswordChange1729000000014 } from "./database/migrations/1729000000014-ManagedAccountsPasswordChange";
+import { CreateReports1729000000015 } from "./database/migrations/1729000000015-CreateReports";
+import { Report } from "./reports/report.entity";
+import { ReportsModule } from "./reports/reports.module";
+import { CandidateDeletionRequest } from "./users/candidate-deletion-request.entity";
+import { CandidateDeletionRequests1729000000016 } from "./database/migrations/1729000000016-CandidateDeletionRequests";
+import { CandidateApplicationOffer } from "./users/candidate-application-offer.entity";
+import { CandidateApplicationMessage } from "./users/candidate-application-message.entity";
+import { CandidateWorkflowEnhancements1729000000017 } from "./database/migrations/1729000000017-CandidateWorkflowEnhancements";
 
 @Module({
   imports: [
@@ -56,6 +64,8 @@ import { ManagedAccountsPasswordChange1729000000014 } from "./database/migration
         CandidateApplication,
         AuthToken,
         CandidateApplicationStatus,
+        CandidateApplicationOffer,
+        CandidateApplicationMessage,
         EmployerOrganization,
         EmployerOrganizationMember,
         EmployerApplicationNote,
@@ -64,6 +74,8 @@ import { ManagedAccountsPasswordChange1729000000014 } from "./database/migration
         UserNotification,
         RazorpayWebhookEvent,
         CandidateSavedSearch,
+        Report,
+        CandidateDeletionRequest,
       ],
       migrations: [
         CreateJobsTable1729000000000,
@@ -81,6 +93,9 @@ import { ManagedAccountsPasswordChange1729000000014 } from "./database/migration
         ExpandJobListingDetails1729000000012,
         ExpandAuditLogDetails1729000000013,
         ManagedAccountsPasswordChange1729000000014,
+        CreateReports1729000000015,
+        CandidateDeletionRequests1729000000016,
+        CandidateWorkflowEnhancements1729000000017,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -90,6 +105,7 @@ import { ManagedAccountsPasswordChange1729000000014 } from "./database/migration
     JobsModule,
     CandidateProfileModule,
     EmployersModule,
+    ReportsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

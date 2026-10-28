@@ -29,6 +29,7 @@ import {
   AcceptTeamInviteDto,
   CreateEmployerSubscriptionDto,
   CreateEmployerInterviewDto,
+  CreateEmployerOfferDto,
   CreateEmployerNoteDto,
   EmployerApplicantsQueryDto,
   EmployerTagDto,
@@ -38,6 +39,8 @@ import {
 } from "./dto/employer-workflow.dto";
 import { UpdateApplicationStatusDto } from "../users/dto/update-application-status.dto";
 import { EmployersService } from "./employers.service";
+import { CreateCandidateApplicationMessageDto } from "../users/dto/create-candidate-application-message.dto";
+import { ResolveCandidateWithdrawalDto } from "../users/dto/resolve-candidate-withdrawal.dto";
 import {
   AllowPendingEmployerReadOnly,
   EmployerApprovalGuard,
@@ -201,6 +204,65 @@ export class EmployersController {
       applicationId,
       body.status,
       body.note,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("applications/:applicationId/offer")
+  createApplicationOffer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Body() dto: CreateEmployerOfferDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.createApplicationOffer(
+      user,
+      applicationId,
+      dto,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("applications/:applicationId/withdrawal")
+  resolveWithdrawal(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Body() dto: ResolveCandidateWithdrawalDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.resolveWithdrawalRequest(
+      user,
+      applicationId,
+      dto,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Get("applications/:applicationId/messages")
+  @Header("Cache-Control", "private, no-store")
+  applicationMessages(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.listApplicationMessages(
+      user,
+      applicationId,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("applications/:applicationId/messages")
+  sendApplicationMessage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Body() dto: CreateCandidateApplicationMessageDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.sendApplicationMessage(
+      user,
+      applicationId,
+      dto,
       optionalOrganizationId(organizationId),
     );
   }

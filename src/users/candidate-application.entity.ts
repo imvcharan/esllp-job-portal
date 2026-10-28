@@ -2,7 +2,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -12,9 +11,6 @@ import { Job } from "../jobs/job.entity";
 import { User } from "./user.entity";
 
 @Entity({ name: "candidate_applications" })
-@Index("UQ_candidate_applications_user_job", ["userId", "jobId"], {
-  unique: true,
-})
 export class CandidateApplication {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -50,6 +46,21 @@ export class CandidateApplication {
 
   @Column({ name: "withdrawn_at", type: "timestamptz", nullable: true })
   withdrawnAt!: Date | null;
+
+  @Column({
+    name: "withdrawal_requested_at",
+    type: "timestamptz",
+    nullable: true,
+  })
+  withdrawalRequestedAt!: Date | null;
+
+  @Column({
+    name: "withdrawal_requested_from_status",
+    type: "varchar",
+    length: 20,
+    nullable: true,
+  })
+  withdrawalRequestedFromStatus!: string | null;
 
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;

@@ -1,0 +1,1757 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A detailed guide to candidate, employer, and administrator workflows in the esllp job portal."
+    />
+    <meta name="theme-color" content="#f4f7f5" />
+    <title>esllp Portal — Feature & Workflow Guide</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172b28;
+        --muted: #62736e;
+        --paper: #f4f7f5;
+        --white: #fff;
+        --line: #dfe8e3;
+        --green: #176b4b;
+        --green-dark: #10543a;
+        --mint: #eaf4ed;
+        --blue: #315f7b;
+        --blue-pale: #edf4f8;
+        --gold: #87601a;
+        --gold-pale: #fff6df;
+        --red: #8b3c3c;
+        --red-pale: #fff0ed;
+        --shadow: 0 12px 34px rgba(25, 50, 40, 0.07);
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 24px;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        line-height: 1.65;
+      }
+      a {
+        color: var(--green);
+        text-underline-offset: 3px;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      .masthead {
+        padding: 48px 24px 38px;
+        color: #eff9f0;
+        background:
+          radial-gradient(
+            circle at 84% 10%,
+            rgba(214, 242, 119, 0.22),
+            transparent 28%
+          ),
+          linear-gradient(130deg, #123e31, #176b4b 65%, #235e53);
+      }
+      .masthead-inner,
+      .layout {
+        width: min(1240px, calc(100% - 40px));
+        margin-inline: auto;
+      }
+      .masthead-inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 24px;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #d6f277;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: "Segoe UI", Arial, sans-serif;
+        line-height: 1.2;
+      }
+      h1 {
+        max-width: 850px;
+        margin: 0;
+        font-size: clamp(32px, 5vw, 52px);
+        letter-spacing: -0.045em;
+      }
+      .masthead p {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #d5e8df;
+        font-size: 16px;
+      }
+      .masthead-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px;
+      }
+      .masthead-actions button {
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid rgba(255, 255, 255, 0.38);
+        border-radius: 8px;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.09);
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .masthead-actions button:hover {
+        background: rgba(255, 255, 255, 0.17);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        align-items: start;
+        gap: 26px;
+        padding-block: 28px 64px;
+      }
+      .toc {
+        position: sticky;
+        top: 20px;
+        max-height: calc(100vh - 40px);
+        overflow: auto;
+        padding: 17px 13px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--white);
+        box-shadow: var(--shadow);
+      }
+      .toc h2 {
+        margin: 0 8px 10px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .toc a {
+        display: block;
+        padding: 6px 9px;
+        border-radius: 6px;
+        color: #4d625a;
+        font-size: 12px;
+        text-decoration: none;
+      }
+      .toc a:hover,
+      .toc a:focus-visible {
+        color: var(--green-dark);
+        background: var(--mint);
+        outline: none;
+      }
+      .toc .toc-sub {
+        padding-left: 22px;
+        color: #73827d;
+        font-size: 11px;
+      }
+      main {
+        min-width: 0;
+      }
+      .intro-card,
+      .section-card {
+        margin-bottom: 20px;
+        padding: clamp(20px, 3vw, 30px);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--white);
+        box-shadow: var(--shadow);
+      }
+      .intro-card {
+        border-left: 5px solid #91b845;
+      }
+      .intro-card h2 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+      .intro-card p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .section-card {
+        scroll-margin-top: 18px;
+      }
+      .section-card > :last-child {
+        margin-bottom: 0;
+      }
+      .section-title {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+        margin: 0 0 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid var(--line);
+      }
+      .section-number {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 10px;
+        color: var(--green-dark);
+        background: var(--mint);
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .section-title h2 {
+        margin: 0;
+        font-size: clamp(21px, 2.8vw, 28px);
+        letter-spacing: -0.025em;
+      }
+      .section-title p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      h3 {
+        margin: 25px 0 9px;
+        font-size: 17px;
+      }
+      p {
+        margin: 8px 0 12px;
+      }
+      ul,
+      ol {
+        margin: 9px 0 17px;
+        padding-left: 22px;
+      }
+      li {
+        margin: 5px 0;
+      }
+      .steps {
+        counter-reset: step;
+        display: grid;
+        gap: 11px;
+        margin: 12px 0 19px;
+        padding: 0;
+        list-style: none;
+      }
+      .steps > li {
+        position: relative;
+        min-height: 42px;
+        margin: 0;
+        padding: 10px 13px 10px 52px;
+        border: 1px solid #e7eeea;
+        border-radius: 9px;
+        background: #fbfdfb;
+        counter-increment: step;
+      }
+      .steps > li::before {
+        position: absolute;
+        top: 9px;
+        left: 12px;
+        display: grid;
+        width: 27px;
+        height: 27px;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        background: var(--green);
+        content: counter(step);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .steps strong {
+        color: #203d32;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin: 13px 0 18px;
+      }
+      .mini-card {
+        min-width: 0;
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fbfdfb;
+      }
+      .mini-card h3 {
+        margin: 0 0 7px;
+        font-size: 15px;
+      }
+      .mini-card p,
+      .mini-card ul {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .mini-card ul {
+        padding-left: 18px;
+      }
+      .callout {
+        margin: 15px 0;
+        padding: 13px 15px;
+        border: 1px solid #dce9e2;
+        border-radius: 9px;
+        color: #38584a;
+        background: #f1f8f3;
+        font-size: 13px;
+      }
+      .callout strong {
+        color: #244837;
+      }
+      .callout.info {
+        border-color: #dce8ee;
+        color: #405e70;
+        background: var(--blue-pale);
+      }
+      .callout.warning {
+        border-color: #f0e2bd;
+        color: #75591e;
+        background: var(--gold-pale);
+      }
+      .callout.privacy {
+        border-color: #f0d9d4;
+        color: #75433d;
+        background: var(--red-pale);
+      }
+      .pill {
+        display: inline-block;
+        margin: 2px 3px 2px 0;
+        padding: 2px 8px;
+        border-radius: 999px;
+        color: #315c4a;
+        background: var(--mint);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .flow {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0 18px;
+      }
+      .flow span {
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fbfdfb;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .flow b {
+        color: #8a9b92;
+        font-size: 15px;
+      }
+      table {
+        width: 100%;
+        margin: 12px 0 19px;
+        border-collapse: collapse;
+        text-align: left;
+      }
+      th,
+      td {
+        padding: 10px 11px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        color: #42564d;
+        background: #f2f7f3;
+        font-size: 12px;
+      }
+      td {
+        color: #4e6058;
+        font-size: 13px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      .role-label {
+        display: inline-block;
+        min-width: 88px;
+        color: #233f32;
+        font-weight: 800;
+      }
+      .feature-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 16px;
+        padding: 0;
+        list-style: none;
+      }
+      .feature-list li {
+        position: relative;
+        margin: 0;
+        padding-left: 23px;
+        color: #4e6058;
+      }
+      .feature-list li::before {
+        position: absolute;
+        left: 1px;
+        color: var(--green);
+        content: "✓";
+        font-weight: 900;
+      }
+      .filter-box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #fff;
+      }
+      .filter-box label {
+        flex: 0 0 auto;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .filter-box input {
+        width: 100%;
+        min-width: 0;
+        min-height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink);
+      }
+      .filter-status {
+        min-height: 18px;
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      [data-searchable][hidden] {
+        display: none !important;
+      }
+      .page-footer {
+        padding: 20px;
+        color: #687970;
+        text-align: center;
+        font-size: 12px;
+      }
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .toc {
+          position: static;
+          max-height: none;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 1px 8px;
+        }
+        .toc h2 {
+          grid-column: 1 / -1;
+        }
+        .toc .toc-sub {
+          padding-left: 9px;
+        }
+      }
+      @media (max-width: 600px) {
+        .masthead {
+          padding: 34px 18px 28px;
+        }
+        .masthead-inner,
+        .layout {
+          width: min(100% - 24px, 1240px);
+        }
+        .masthead-inner {
+          grid-template-columns: 1fr;
+        }
+        .masthead-actions {
+          justify-content: flex-start;
+        }
+        .layout {
+          padding-top: 13px;
+        }
+        .toc {
+          grid-template-columns: 1fr;
+          padding: 13px 10px;
+        }
+        .toc h2 {
+          grid-column: auto;
+        }
+        .cards,
+        .feature-list {
+          grid-template-columns: 1fr;
+        }
+        .section-card {
+          padding: 19px 16px;
+        }
+        table {
+          min-width: 620px;
+        }
+        .filter-box {
+          align-items: stretch;
+          flex-direction: column;
+        }
+      }
+      @media print {
+        :root {
+          --paper: #fff;
+        }
+        body {
+          background: #fff;
+          color: #111;
+          font-size: 10pt;
+        }
+        .masthead {
+          padding: 18px 0;
+          color: #111;
+          background: #fff;
+          border-bottom: 2px solid #176b4b;
+        }
+        .masthead-inner,
+        .layout {
+          width: 100%;
+        }
+        .masthead p,
+        .eyebrow {
+          color: #333;
+        }
+        .masthead-actions,
+        .filter-box,
+        .filter-status {
+          display: none !important;
+        }
+        .layout {
+          display: block;
+          padding: 12px 0;
+        }
+        .toc {
+          position: static;
+          max-height: none;
+          display: block;
+          margin-bottom: 15px;
+          box-shadow: none;
+        }
+        .toc a {
+          display: inline-block;
+          padding: 2px 6px;
+        }
+        .intro-card,
+        .section-card {
+          break-inside: avoid;
+          box-shadow: none;
+        }
+        .section-card {
+          break-inside: auto;
+        }
+        a {
+          color: #174e37;
+        }
+        .page-footer {
+          padding: 10px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="masthead-inner">
+        <div>
+          <p class="eyebrow">Product guide · Candidate · Employer · Admin</p>
+          <h1>esllp Portal Feature &amp; Workflow Guide</h1>
+          <p>
+            A practical, step-by-step reference for using the live job portal:
+            create and secure accounts, find and apply for roles, run an
+            employer hiring pipeline, and administer the platform.
+          </p>
+        </div>
+        <div class="masthead-actions">
+          <button type="button" onclick="window.print()">
+            Print / Save PDF
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="toc" aria-label="Guide contents">
+        <h2>Contents</h2>
+        <a href="#start">How to use this guide</a>
+        <a href="#roles">Roles &amp; access</a>
+        <a href="#accounts">Accounts &amp; sign-in</a>
+        <a href="#candidate">Candidate workflows</a>
+        <a class="toc-sub" href="#candidate-profile">Profile &amp; privacy</a>
+        <a class="toc-sub" href="#candidate-search">Search &amp; save jobs</a>
+        <a class="toc-sub" href="#candidate-apply">Apply &amp; track</a>
+        <a href="#employer">Employer workflows</a>
+        <a class="toc-sub" href="#employer-approval"
+          >Registration &amp; approval</a
+        >
+        <a class="toc-sub" href="#employer-jobs">Company &amp; job listings</a>
+        <a class="toc-sub" href="#employer-pipeline"
+          >Applicants &amp; interviews</a
+        >
+        <a class="toc-sub" href="#employer-team">Team &amp; billing</a>
+        <a href="#admin">Admin workflows</a>
+        <a class="toc-sub" href="#admin-jobs"
+          >Jobs, candidates &amp; companies</a
+        >
+        <a class="toc-sub" href="#admin-accounts">Accounts &amp; approval</a>
+        <a class="toc-sub" href="#admin-reports"
+          >Reports &amp; privacy requests</a
+        >
+        <a class="toc-sub" href="#admin-audit"
+          >Analytics, activity &amp; audit</a
+        >
+        <a href="#troubleshooting">Common questions</a>
+        <a href="#boundaries">Feature boundaries</a>
+      </nav>
+
+      <main>
+        <div class="filter-box">
+          <label for="guide-filter">Find a topic</label>
+          <input
+            id="guide-filter"
+            type="search"
+            placeholder="Try “resume”, “approval”, “interview”, “audit”…"
+            autocomplete="off"
+          />
+        </div>
+        <p class="filter-status" id="filter-status" aria-live="polite"></p>
+
+        <section class="intro-card" id="start" data-searchable>
+          <h2>How to use this guide</h2>
+          <p>
+            This guide describes user-visible workflows currently implemented in
+            the repository. Use the contents links to jump by role, or search
+            topics above. A capability described as available may still depend
+            on deployment configuration—for example, email delivery, private
+            file storage, or Razorpay checkout. Where an action is
+            role-restricted, the guide calls that out. Candidate deletion
+            requests are reviewed but do not trigger automatic deletion. Labels
+            may vary slightly as the interface evolves.
+          </p>
+        </section>
+
+        <section class="section-card" id="roles" data-searchable>
+          <div class="section-title">
+            <span class="section-number">01</span>
+            <div>
+              <h2>Roles &amp; access at a glance</h2>
+              <p>Access is enforced by the server as well as the interface.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th>Primary workspace</th>
+                  <th>Typical access</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="role-label">Candidate</span></td>
+                  <td>Candidate workspace</td>
+                  <td>
+                    Manage own profile and documents, search and save jobs,
+                    submit applications, follow application status, and manage
+                    notifications.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="role-label">Employer</span></td>
+                  <td>Employer workspace</td>
+                  <td>
+                    Manage company-owned listings and applicants, coordinate
+                    interviews and team access, review notifications, and manage
+                    plan settings according to company role.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="role-label">Staff</span></td>
+                  <td>Admin workspace</td>
+                  <td>
+                    Manage job listings and review platform-level hiring
+                    metrics, companies, and candidate-stage aggregates.
+                    Candidate account details are reserved for superadmins.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="role-label">Admin</span></td>
+                  <td>Admin workspace</td>
+                  <td>Staff workspace plus recent platform activity.</td>
+                </tr>
+                <tr>
+                  <td><span class="role-label">Superadmin</span></td>
+                  <td>Admin workspace</td>
+                  <td>
+                    Admin capabilities plus user-account administration and the
+                    protected audit log.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout info">
+            <strong>Company roles are separate from platform roles.</strong>
+            Employer organization membership can additionally be Owner, Admin,
+            Recruiter, Hiring manager, or Billing. Company roles scope employer
+            actions inside an organization; they do not grant access to the
+            platform admin dashboard.
+          </div>
+        </section>
+
+        <section class="section-card" id="accounts" data-searchable>
+          <div class="section-title">
+            <span class="section-number">02</span>
+            <div>
+              <h2>Accounts, verification &amp; sign-in</h2>
+              <p>
+                Shared registration, authentication, recovery, and session
+                workflows.
+              </p>
+            </div>
+          </div>
+          <h3>Create a candidate account</h3>
+          <ol class="steps">
+            <li>
+              From the public homepage, choose <strong>Create account</strong>,
+              then select the candidate account option.
+            </li>
+            <li>
+              Enter your name, email address, and password. The password must
+              meet the form's minimum length requirement.
+            </li>
+            <li>
+              Submit registration. The portal sends an email verification link;
+              open it to verify the address before signing in.
+            </li>
+            <li>
+              If the message does not arrive, use
+              <strong>Resend verification</strong> from the sign-in flow and
+              check the address and spam folder.
+            </li>
+          </ol>
+          <h3>Create an employer account</h3>
+          <ol class="steps">
+            <li>
+              Choose <strong>For employers</strong> or the employer account
+              option during registration.
+            </li>
+            <li>
+              Enter your name, work email, password, company name, and
+              optionally the company website.
+            </li>
+            <li>
+              Verify your email address using the link sent to your inbox.
+            </li>
+            <li>
+              Wait for an administrator to approve the employer account. Until
+              approval, employer access is limited to a read-only overview,
+              company profile, and existing job listings.
+            </li>
+          </ol>
+          <div class="callout warning">
+            <strong>Invited teammate?</strong> Open the company's invitation
+            link and register with the exact email address to which the
+            invitation was sent. Invitations expire after 30 days. Email
+            verification and employer approval are still required before
+            employer actions unlock.
+          </div>
+          <h3>Sign in, recover, and sign out</h3>
+          <ul>
+            <li>
+              Use <strong>Log in</strong> with the account email and password.
+              The portal sends each role to its own workspace.
+            </li>
+            <li>
+              Use <strong>Forgot password?</strong> to request a reset email,
+              then follow the link and choose a replacement password.
+            </li>
+            <li>
+              Use <strong>Resend verification</strong> if an account still needs
+              email verification.
+            </li>
+            <li>
+              Use the account's <strong>Change password</strong> form to change
+              a known password. Existing refresh sessions are revoked, so sign
+              in again afterward.
+            </li>
+            <li>
+              Use <strong>Log out</strong> when finished, especially on shared
+              devices.
+            </li>
+          </ul>
+          <div class="callout">
+            <strong>First admin account:</strong> When no superadmin exists and
+            the deployment has enabled one-time setup, the configured superadmin
+            can be created at <code>/setup-superadmin/</code>. Setup is closed
+            after the first superadmin is created.
+          </div>
+        </section>
+
+        <section class="section-card" id="candidate" data-searchable>
+          <div class="section-title">
+            <span class="section-number">03</span>
+            <div>
+              <h2>Candidate workflows</h2>
+              <p>
+                Build a profile, find relevant roles, apply with explicit
+                sharing choices, and follow progress.
+              </p>
+            </div>
+          </div>
+
+          <h3 id="candidate-profile">3.1 Build and manage your profile</h3>
+          <ol class="steps">
+            <li>
+              Sign in as a candidate and open <strong>My profile</strong>. The
+              profile strength indicator reflects completion of key sections.
+            </li>
+            <li>
+              Add or update your name, professional headline, preferred
+              location, optional phone, summary, and skills. Skills are entered
+              as comma-separated values.
+            </li>
+            <li>
+              Add work experience and education entries. You can add, edit, or
+              remove entries; the editor supports multiple entries in each
+              section.
+            </li>
+            <li>
+              Set target job titles, preferred employment types, and workplace
+              arrangements (on-site, hybrid, or remote).
+            </li>
+            <li>
+              Add professional links such as LinkedIn, portfolio/website, and
+              GitHub.
+            </li>
+            <li>
+              Choose <strong>Save profile</strong> and wait for the confirmation
+              that the server saved your changes.
+            </li>
+          </ol>
+          <div class="cards">
+            <article class="mini-card">
+              <h3>Profile photo</h3>
+              <p>
+                Upload a JPEG, PNG, or WebP image up to 6 MB. Reposition and
+                zoom in the crop tool, save the crop, or remove the photo later.
+                The stored image is private.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>Resume</h3>
+              <p>
+                Upload a valid PDF up to 8 MB, replace it, or remove it. The
+                resume is private and is <strong>not</strong> attached to
+                applications automatically.
+              </p>
+            </article>
+          </div>
+          <div class="callout privacy">
+            <strong>Profile privacy is opt-in.</strong> Your profile remains
+            private unless you enable profile sharing in privacy preferences and
+            separately choose to share it when submitting an application. The
+            employer receives a snapshot for that application. Resume attachment
+            is a separate per-application choice.
+          </div>
+          <h3>Profile and email preferences</h3>
+          <ul>
+            <li>
+              <strong>Allow sharing my profile details when I apply:</strong>
+              permits the profile-sharing option in an application; it does not
+              share your profile by itself.
+            </li>
+            <li>
+              <strong>Email me application status and interview updates:</strong>
+              controls those email updates. In-app notifications remain available
+              when email is turned off.
+            </li>
+            <li>
+              <strong>Email me about matching new jobs:</strong> enables
+              job-alert emails based on target role titles and selected work
+              preferences when a matching job is published.
+            </li>
+            <li>
+              Candidate account email is displayed read-only in the profile
+              editor.
+            </li>
+          </ul>
+
+          <h3 id="candidate-search">3.2 Discover, search, and save jobs</h3>
+          <ol class="steps">
+            <li>
+              Open <strong>Find jobs</strong> in the candidate workspace or
+              search from the public homepage.
+            </li>
+            <li>
+              Search by role, skill, or company, and optionally by location. Use
+              available filters to narrow by work arrangement, employment type,
+              experience, company, salary and pay period, or listing freshness.
+            </li>
+            <li>
+              Change sort order where available and use pagination to browse
+              additional results.
+            </li>
+            <li>
+              Open a listing to review company, location, compensation (when
+              supplied), experience, deadline, openings, and job description.
+            </li>
+            <li>
+              Select the save control on a published job to add it to
+              <strong>Saved jobs</strong>. Use the same control again to remove
+              it.
+            </li>
+            <li>
+              Open <strong>Saved jobs</strong> to revisit a saved role from your
+              account on another device. Remove a saved role if it is no longer
+              relevant or has closed.
+            </li>
+          </ol>
+          <div class="callout info">
+            <strong>Guest saves:</strong> saves made before sign-in may exist
+            only in that browser. Sign in to sync eligible published-job saves
+            to your account. Preview/sample roles are not live vacancies and
+            cannot be applied to.
+          </div>
+          <h3>Save a search and enable alerts</h3>
+          <ol class="steps">
+            <li>
+              Run a job search and select the desired query, location, and
+              filters.
+            </li>
+            <li>
+              Choose <strong>Save this search</strong>, enter a name, and save
+              it to your account. Up to 25 searches can be saved.
+            </li>
+            <li>
+              Open <strong>Saved searches</strong> to run a saved search again,
+              update its alert preference, or delete it.
+            </li>
+            <li>
+              Enable <strong>Instant email alerts</strong> on a saved search to
+              receive an email when a newly published job matches its saved
+              criteria. Alerts depend on email delivery being configured for the
+              deployment.
+            </li>
+          </ol>
+
+          <h3 id="candidate-apply">3.3 Submit an application</h3>
+          <ol class="steps">
+            <li>
+              Open a live published job from search results or a saved-job list.
+              Sample/preview roles are informational only.
+            </li>
+            <li>
+              Review the job details and confirm it is still open and within its
+              application deadline.
+            </li>
+            <li>Optionally enter a short note or cover letter.</li>
+            <li>
+              Choose whether to attach the resume currently stored in your
+              profile. This choice is optional and must be made for each
+              application.
+            </li>
+            <li>
+              Your account name is always shared with the employer. If profile
+              sharing is enabled in your preferences, choose separately whether
+              to share your additional profile snapshot and contact details.
+            </li>
+            <li>
+              Submit once. The application starts at
+              <span class="pill">Submitted</span> and appears under
+              <strong>Applications</strong>.
+            </li>
+          </ol>
+          <div class="callout warning">
+            <strong>One active application per job:</strong> duplicate active
+            applications are prevented. If the employer confirms your withdrawal
+            and the job remains open, you may apply again; your earlier
+            application history remains in your account.
+          </div>
+          <h3>Track, update, or withdraw applications</h3>
+          <ul>
+            <li>
+              Open <strong>Applications</strong> to see the job, company,
+              location, submission date, current status, and status history.
+            </li>
+            <li>
+              Statuses may include <span class="pill">Submitted</span>
+              <span class="pill">In review</span>
+              <span class="pill">Interview</span>
+              <span class="pill">Offer</span>
+              <span class="pill">Offer expired</span>
+              <span class="pill">Rejected</span>
+              <span class="pill">Withdrawn</span>.
+            </li>
+            <li>
+              Where the employer adds a candidate-facing note, it appears in the
+              status timeline.
+            </li>
+            <li>
+              Request withdrawal at any active stage. The application remains in
+              a pending-withdrawal state until the employer confirms or declines
+              your request. If confirmed, you may reapply while the job remains
+              open.
+            </li>
+            <li>
+              Use the application message thread to contact the hiring team.
+              Messages are text-only and visible to the candidate and authorized
+              members of the employer's company team.
+            </li>
+            <li>
+              When you receive an offer, review the employer-entered summary and
+              deadline, then accept or decline before it expires. The summary is
+              not a generated contract. Expired offers cannot be accepted or
+              declined and appear as Offer expired.
+            </li>
+            <li>
+              Open <strong>Notifications</strong> to review application status,
+              messages, offers, and interview updates, open related pages, and
+              mark notifications as read. In-app updates remain available when
+              application email updates are turned off.
+            </li>
+          </ul>
+          <h3>Candidate account security</h3>
+          <p>
+            Change your password from the candidate profile's Account security
+            section. After a successful change, sign in again. Password-reset
+            and email-verification links are sent by email and must be completed
+            before their intended action can finish.
+          </p>
+          <h3>Export your data or request account deletion</h3>
+          <ul>
+            <li>
+              Open <strong>My profile</strong> and choose
+              <strong>Download my data</strong> to save a JSON export of your
+              account details, profile, application history, saved
+              jobs/searches, notifications, offer details and responses, and
+              application messages. Private storage object paths and file
+              contents are not included.
+            </li>
+            <li>
+              Use <strong>Request account deletion review</strong> to submit a
+              request to the Superadmin queue. The request is reviewed manually;
+              submitting it does not disable sign-in or delete account data,
+              applications, or files.
+            </li>
+            <li>
+              Deletion and retention rules still require an approved
+              privacy/legal policy. Contact support if you need an update about
+              a request.
+            </li>
+          </ul>
+        </section>
+
+        <section class="section-card" id="employer" data-searchable>
+          <div class="section-title">
+            <span class="section-number">04</span>
+            <div>
+              <h2>Employer workflows</h2>
+              <p>
+                Set up an approved company workspace, publish vacancies,
+                collaborate on candidates, and coordinate the team.
+              </p>
+            </div>
+          </div>
+
+          <h3 id="employer-approval">4.1 Register and get approved</h3>
+          <div class="flow">
+            <span>Register employer</span><b>→</b><span>Verify email</span
+            ><b>→</b><span>Administrator review</span><b>→</b
+            ><span>Approved hiring access</span>
+          </div>
+          <ul>
+            <li>
+              Register with your name, work email, password, company name, and
+              optional website.
+            </li>
+            <li>
+              Verify the email address. Administrators cannot approve an
+              employer until the address is verified.
+            </li>
+            <li>
+              While approval is pending, sign in to see a read-only overview and
+              review the company profile and any existing job listings.
+              Publishing, editing, applicant review, team, interviews, and
+              billing are unavailable until approval.
+            </li>
+            <li>
+              After an administrator approves the account, sign in again if
+              necessary. Employer tools are then available subject to your
+              organization role and plan.
+            </li>
+            <li>
+              If rejected, contact the platform administrator or support for
+              next steps; the rejected account cannot use employer tools.
+            </li>
+          </ul>
+          <h3>4.2 Choose an organization</h3>
+          <p>
+            If your user belongs to more than one company organization, use the
+            organization selector in the workspace to switch context. Company
+            jobs, applications, team membership, and plan limits are scoped to
+            the selected organization. Only organizations where you hold a
+            membership are available.
+          </p>
+
+          <h3 id="employer-jobs">4.3 Complete the company profile</h3>
+          <ol class="steps">
+            <li>Open <strong>Company profile</strong> after approval.</li>
+            <li>
+              Review or update organization information, such as company name,
+              website, industry, company size, and company description.
+            </li>
+            <li>Save the profile and check the confirmation message.</li>
+          </ol>
+          <h3>Create, edit, publish, and close a job</h3>
+          <ol class="steps">
+            <li>
+              Open <strong>Manage jobs</strong> and choose
+              <strong>Create a job draft</strong>.
+            </li>
+            <li>
+              Enter the required job title and location. Add workplace type,
+              employment type, salary range, salary currency and pay period,
+              number of openings, application deadline, experience, and
+              description as appropriate.
+            </li>
+            <li>
+              Choose <strong>Save draft</strong>. A draft remains private to the
+              company and does not consume a published-job slot.
+            </li>
+            <li>
+              Use <strong>Edit</strong> to revise a listing. Review the full
+              listing before publishing.
+            </li>
+            <li>
+              Add a job description of at least 100 characters before
+              publishing. Salary disclosure is optional; clearly describe the
+              role, location/work arrangement, and requirements. Choose
+              <strong>Publish</strong> to make it discoverable to candidates,
+              subject to plan capacity and approval.
+            </li>
+            <li>
+              Choose <strong>Close</strong> when the role is no longer accepting
+              applications. Closed roles are no longer open listings.
+            </li>
+          </ol>
+          <p>
+            The job list shows role, location, salary, openings, deadline,
+            application count, published/draft status, and creation date. Use
+            pagination when the company has more listings than fit on one page.
+          </p>
+          <div class="callout warning">
+            <strong>Plan limits:</strong> The workspace displays active-job and
+            seat limits. Drafts do not use a published job slot. If capacity is
+            reached, review Plan &amp; billing or ask the company owner/billing
+            manager.
+          </div>
+
+          <h3 id="employer-pipeline">4.4 Review and manage applicants</h3>
+          <ol class="steps">
+            <li>
+              Open <strong>Applicants</strong>. Search by candidate or role,
+              then filter by pipeline stage and job listing.
+            </li>
+            <li>
+              Review the application stage, job, submission date, optional
+              candidate note, and application history.
+            </li>
+            <li>
+              Review profile details only when the candidate chose to share
+              their profile with that application. If profile sharing was not
+              selected, the application says the details were not shared.
+            </li>
+            <li>
+              Open a temporary private resume link only when the candidate chose
+              to attach a resume to that application. No resume is attached by
+              default.
+            </li>
+            <li>
+              Move an eligible application to In review or Rejected. Scheduling
+              an interview automatically moves a Submitted or In review
+              application to Interview; the candidate receives an in-app update.
+              Add an optional status note when appropriate.
+            </li>
+            <li>
+              Use <strong>Send offer</strong> to enter an offer summary and
+              response deadline. The candidate can accept or decline; this
+              feature does not produce a contract or determine legal effect.
+            </li>
+            <li>
+              Resolve a pending candidate withdrawal request by confirming or
+              declining it. Declining restores the previous pipeline stage;
+              confirming permits the candidate to apply again while the job
+              remains open.
+            </li>
+            <li>
+              Use the application message thread for text-only communication
+              with the candidate. Company-authorized hiring members can see the
+              thread.
+            </li>
+            <li>
+              Select eligible applicants and use the bulk status form to update
+              several records on the current page. Optionally add a
+              candidate-facing note.
+            </li>
+            <li>
+              Add internal team notes for company-only context. These are
+              distinct from candidate-facing status notes.
+            </li>
+            <li>
+              Add tags to help organize applicants, and remove a tag when it is
+              no longer useful.
+            </li>
+          </ol>
+          <div class="callout privacy">
+            <strong>Candidate privacy:</strong> Review only applications for
+            jobs owned by your organization. Profile snapshots and attached
+            resumes are exposed only according to the candidate's application
+            choices. Internal notes are for your company team; do not put
+            sensitive or unrelated information there.
+          </div>
+          <h3>Application stage transitions</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Current stage</th>
+                  <th>Next stages available to employer</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Submitted</td>
+                  <td>In review, Interview, Offer, Rejected</td>
+                  <td>
+                    Scheduling an interview moves the stage automatically. Offer
+                    requires an offer summary and deadline.
+                  </td>
+                </tr>
+                <tr>
+                  <td>In review</td>
+                  <td>Interview, Offer, Rejected</td>
+                  <td>Changes are added to the application history.</td>
+                </tr>
+                <tr>
+                  <td>Interview</td>
+                  <td>Offer, Rejected</td>
+                  <td>Scheduling and stage are synchronized.</td>
+                </tr>
+                <tr>
+                  <td>Offer</td>
+                  <td>Accepted, Declined</td>
+                  <td>
+                    The candidate responds to the offer summary before the
+                    deadline.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Rejected, Withdrawn, Offer accepted/declined</td>
+                  <td>No further employer transition</td>
+                  <td>
+                    A withdrawal request must be confirmed or declined by the
+                    employer.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Schedule and manage interviews</h3>
+          <ul>
+            <li>
+              From an applicant's record, choose a start date/time, duration,
+              and optionally a meeting URL to schedule an interview.
+            </li>
+            <li>
+              Open <strong>Interviews</strong> to review upcoming interview
+              records.
+            </li>
+            <li>
+              Cancel an interview if plans change. Interview updates can appear
+              in the candidate's notifications and hiring updates.
+            </li>
+            <li>
+              Check the candidate's notification area for interview invitations
+              and application updates.
+            </li>
+          </ul>
+
+          <h3 id="employer-team">4.5 Invite teammates and manage access</h3>
+          <ol class="steps">
+            <li>
+              Open <strong>Team &amp; access</strong>. Owner and Admin members
+              can invite a teammate by work email and choose a company role.
+            </li>
+            <li>
+              Choose the role that matches the work:
+              <strong>Recruiter</strong> (manage jobs and candidates),
+              <strong>Hiring manager</strong> (review candidates),
+              <strong>Billing</strong> (manage subscription), or
+              <strong>Admin</strong> (manage company and team).
+            </li>
+            <li>
+              Send the invitation. The invited person follows the email link and
+              registers using the invited email address. Links expire after 30
+              days; an owner/admin can resend an invitation.
+            </li>
+            <li>
+              After the teammate accepts, verifies email, and receives required
+              employer approval, their organization access reflects the assigned
+              company role.
+            </li>
+            <li>
+              Use the member controls to adjust an existing member's company
+              access when authorized.
+            </li>
+          </ol>
+          <h3>4.6 Plan, billing &amp; employer notifications</h3>
+          <ul>
+            <li>
+              Open <strong>Plan &amp; billing</strong> to see the current plan,
+              subscription status, period end, active-job usage, seat allowance,
+              and available plans.
+            </li>
+            <li>
+              Eligible owners or members with billing permission can choose a
+              paid plan when checkout is configured. Complete the Razorpay
+              checkout and return to the workspace to verify the subscription.
+            </li>
+            <li>
+              Only the company owner or a member with billing access can change
+              subscription settings. If the action is disabled, ask an
+              authorized member.
+            </li>
+            <li>
+              Use <strong>Cancel at renewal</strong> to stop a paid subscription
+              at its renewal boundary when available. If a subscription is
+              halted/cancelled, the organization returns to Free limits; excess
+              active jobs may be closed and are not automatically republished
+              after an upgrade.
+            </li>
+            <li>
+              Open <strong>Notifications</strong> for new application,
+              interview, and company updates. Mark an unread item as read.
+            </li>
+          </ul>
+          <div class="callout info">
+            <strong>Deployment dependency:</strong> Paid checkout is available
+            only when Razorpay keys, plan IDs, configured prices, and a verified
+            webhook are set up on the server. Do not enter payment credentials
+            into the portal or share them with teammates.
+          </div>
+        </section>
+
+        <section class="section-card" id="admin" data-searchable>
+          <div class="section-title">
+            <span class="section-number">05</span>
+            <div>
+              <h2>Admin workflows</h2>
+              <p>
+                Operational and moderation workflows in the protected admin
+                dashboard.
+              </p>
+            </div>
+          </div>
+          <h3>Sign in and understand role scope</h3>
+          <ol class="steps">
+            <li>
+              Open <code>/admin/</code> and sign in with an active Staff, Admin,
+              or Superadmin account.
+            </li>
+            <li>
+              Use the sidebar to open Overview, Job listings, Reports,
+              Candidates, Companies, Analytics, and Account security.
+            </li>
+            <li>
+              Admins and Superadmins also have Recent activity. Superadmins
+              additionally have User accounts, Privacy requests, and Audit log.
+            </li>
+            <li>
+              Use Refresh on pages that provide it to fetch current records. Use
+              the page search field to filter the visible table/list.
+            </li>
+          </ol>
+          <div class="callout warning">
+            <strong>Least privilege:</strong> Staff/Admin cannot open
+            superadmin-only user administration or audit routes. Candidate
+            account details are restricted to Superadmins; staff/admin users see
+            only aggregate candidate and application-stage metrics in that area.
+          </div>
+
+          <h3 id="admin-jobs">5.1 Review and manage job listings</h3>
+          <ul>
+            <li>
+              <strong>Overview:</strong> review active job, account,
+              application, and scheduled-interview counts; application-stage
+              summary; top listings; and available recent activity. Use
+              <strong>Create a job</strong> to add a listing.
+            </li>
+            <li>
+              <strong>Job listings:</strong> search by title/company/location
+              and filter by active or draft state and company.
+            </li>
+            <li>
+              Create or edit a listing with its role, company, location,
+              workplace/employment type, salary details, openings, deadline,
+              experience, description, and employer assignment as applicable.
+            </li>
+            <li>
+              Change listing fields with the edit action. Archive a listing to
+              remove it from active administration/search results. Use CSV
+              export for the job list.
+            </li>
+            <li>
+              Active jobs are candidate-visible; drafts are not. Verify status
+              and listing content after saving.
+            </li>
+          </ul>
+          <h3>5.2 Review candidate pipeline and companies</h3>
+          <ul>
+            <li>
+              <strong>Candidates:</strong> view application-stage totals
+              (including interview and offer counts). Superadmins can search,
+              paginate, and export candidate account details, including account
+              status and email verification.
+            </li>
+            <li>
+              <strong>Companies:</strong> review registered organization,
+              industry, plan, open-job count, team size, and join date. Refresh
+              to retrieve the latest list.
+            </li>
+            <li>
+              Candidate page stage totals are aggregates, not a substitute for
+              opening an employer's company-scoped applicant pipeline.
+            </li>
+          </ul>
+          <h3>5.3 Review analytics and activity</h3>
+          <ul>
+            <li>
+              <strong>Analytics:</strong> review total applications, scheduled
+              interviews, candidate accounts, and employer organizations;
+              compare weekly application counts and current application stages.
+            </li>
+            <li>
+              Source attribution, hires, and time-to-hire are not tracked, so
+              they are intentionally not reported.
+            </li>
+            <li>
+              <strong>Recent activity:</strong> Admins and Superadmins can
+              review recent job, account, and employer workflow events.
+              Sensitive audit detail belongs in the Superadmin Audit log.
+            </li>
+            <li>
+              When no events exist yet, the activity page shows an empty-state
+              message rather than an activity record.
+            </li>
+          </ul>
+
+          <h3 id="admin-accounts">5.4 Manage accounts (Superadmin)</h3>
+          <ol class="steps">
+            <li>
+              Open <strong>User accounts</strong>. Search by name/email, filter
+              by role and active status, and use pagination to locate an
+              account.
+            </li>
+            <li>
+              Review company, role, employer approval, email verification,
+              password setup, account status, and join date.
+            </li>
+            <li>
+              To create a managed Staff, Admin, or Employer account, enter name,
+              email, role, and a temporary password. Employer accounts also
+              require a company name; website is optional.
+            </li>
+            <li>
+              Give the temporary password to the intended user through an
+              approved secure channel. On first sign-in, the user must replace
+              it before proceeding.
+            </li>
+            <li>
+              For an employer created by Superadmin, the account starts pending
+              approval and a company organization is created. Approve it only
+              after verifying the email and reviewing the request.
+            </li>
+            <li>
+              Use role controls to assign an allowed platform role, or
+              activate/deactivate an account as appropriate. Deactivation
+              revokes refresh sessions.
+            </li>
+          </ol>
+          <div class="callout privacy">
+            <strong>Guardrails:</strong> An employer cannot be created by
+            changing an existing account's role; use employer registration or
+            the managed employer-account form, then review employer approval
+            separately. The last active Superadmin cannot be demoted or
+            deactivated, and an administrator cannot deactivate their own
+            account.
+          </div>
+          <h3 id="admin-reports">5.5 Review reports and privacy requests</h3>
+          <ul>
+            <li>
+              <strong>Reports:</strong> staff, admins, and superadmins can
+              filter the queue by status, review job/company/user report
+              metadata, start review, record an action, or dismiss a report. Add
+              an optional resolution note before changing status.
+            </li>
+            <li>
+              Report statuses follow
+              <strong>Open → Reviewing → Actioned</strong> or
+              <strong>Dismissed</strong>. A completed report cannot be edited.
+              Report creation and status changes are recorded in the audit log.
+            </li>
+            <li>
+              The public job detail page currently lets signed-in candidates and
+              employers report a job listing. Company and account targets are
+              supported by the authenticated API but do not yet have public
+              reporting controls.
+            </li>
+            <li>
+              <strong>Privacy requests:</strong> only Superadmins can review
+              candidate deletion requests. They can start review or defer a
+              request with an explanation. This queue does not delete accounts
+              or files; approved deletion, anonymization, retention, and backup
+              rules must be defined and carried out separately.
+            </li>
+          </ul>
+          <h3>Review and decide an employer approval</h3>
+          <ol class="steps">
+            <li>
+              Locate the employer in User accounts and inspect company identity,
+              email verification, and account status.
+            </li>
+            <li>
+              Approve only after the employer has verified their email. Approval
+              enables company actions subject to membership permissions and plan
+              limits.
+            </li>
+            <li>
+              Reject if the request should not proceed. Rejection revokes active
+              refresh sessions and employer access.
+            </li>
+            <li>
+              Record any required operational follow-up through the established
+              support process. Approval/rejection is recorded in the audit
+              history.
+            </li>
+          </ol>
+
+          <h3 id="admin-audit">5.6 Inspect the audit log (Superadmin)</h3>
+          <ul>
+            <li>
+              Open <strong>Audit log</strong> to search records by actor,
+              action, target, IP/client details, or text.
+            </li>
+            <li>
+              Optionally filter by exact action, country, and date range. Apply
+              filters, clear them, refresh, and page through matching records.
+            </li>
+            <li>
+              Export matching records as CSV when needed for an authorized
+              review.
+            </li>
+            <li>
+              Audit entries are immutable through the interface: they cannot be
+              edited or deleted.
+            </li>
+            <li>
+              Approximate location is based on IP lookup using a locally
+              configured GeoIP database, when present. It is not browser GPS,
+              and the application does not send IPs to a third-party location
+              lookup for this display.
+            </li>
+          </ul>
+          <h3>Admin password security</h3>
+          <p>
+            Open <strong>Account security</strong>, enter the current password,
+            a new password, and its confirmation. After a successful change, the
+            dashboard signs you out; sign in with the new password.
+          </p>
+        </section>
+
+        <section class="section-card" id="troubleshooting" data-searchable>
+          <div class="section-title">
+            <span class="section-number">06</span>
+            <div>
+              <h2>Common questions &amp; troubleshooting</h2>
+              <p>
+                What to check when a workflow is blocked or a page is empty.
+              </p>
+            </div>
+          </div>
+          <div class="cards">
+            <article class="mini-card">
+              <h3>“I can't sign in.”</h3>
+              <p>
+                Confirm the email address and password, complete email
+                verification if requested, and use password recovery if needed.
+                A deactivated account or expired session may require
+                administrator assistance.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>“My employer tools are read-only.”</h3>
+              <p>
+                Check the workspace status. Pending employers can view
+                overview/company/jobs only. Complete email verification and wait
+                for Superadmin approval.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>“I can't attach a resume.”</h3>
+              <p>
+                Upload a valid PDF to your candidate profile first. It must be
+                no larger than 8 MB. Then explicitly select it on the
+                application form.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>“The employer cannot see my profile.”</h3>
+              <p>
+                Profile visibility requires both enabling profile sharing in
+                preferences and choosing to share on that application. It is
+                never automatic.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>“I don't see a job I saved.”</h3>
+              <p>
+                Closed/unpublished listings may no longer be available. Guest
+                saves and preview listings may be local to the browser; sign in
+                to sync eligible published jobs.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>“I can't publish a job or invite a teammate.”</h3>
+              <p>
+                Confirm employer approval, selected organization, your company
+                role, and plan job/seat limits. Ask the organization Owner/Admin
+                for access changes.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>“Paid plan checkout is unavailable.”</h3>
+              <p>
+                The deployment must configure Razorpay credentials, plan
+                IDs/prices, and the webhook. Contact the portal operator; never
+                put payment secrets in browser code.
+              </p>
+            </article>
+            <article class="mini-card">
+              <h3>“No activity has been recorded yet.”</h3>
+              <p>
+                This means there are no recent platform activity events
+                available to show. It is an empty state, not an error. Refresh
+                later after platform workflows have generated events.
+              </p>
+            </article>
+          </div>
+          <p>
+            For application failures, note the job title, approximate time, and
+            the message shown. For account access or company approval, contact
+            the portal administrator/support using the support link provided in
+            the app.
+          </p>
+        </section>
+
+        <section class="section-card" id="boundaries" data-searchable>
+          <div class="section-title">
+            <span class="section-number">07</span>
+            <div>
+              <h2>Feature boundaries &amp; deployment notes</h2>
+              <p>
+                Distinguish live behavior from configuration-dependent behavior
+                and metrics the product does not claim.
+              </p>
+            </div>
+          </div>
+          <ul class="feature-list">
+            <li>
+              Candidate resume and photo files are private; uploads require the
+              server's private storage integration.
+            </li>
+            <li>
+              Verification, password recovery, status updates, and matching job
+              alerts require functioning email delivery.
+            </li>
+            <li>
+              Employer subscriptions require server-side Razorpay configuration
+              and verified webhook processing.
+            </li>
+            <li>
+              Pending employer accounts have read-only access; employer approval
+              is not automatic.
+            </li>
+            <li>
+              Candidate profile and resume sharing are opt-in and tied to each
+              application.
+            </li>
+            <li>
+              Job search results contain live published listings; sample/preview
+              content is not a live opening.
+            </li>
+            <li>
+              Administrative analytics show live counts and stages, not source
+              attribution, completed hires, or time-to-hire.
+            </li>
+            <li>
+              The protected audit log is for Superadmins and is not editable or
+              deletable from the portal.
+            </li>
+            <li>
+              Platform administrator roles and company membership roles are
+              different access layers.
+            </li>
+            <li>
+              Some features may be hidden or unavailable when the signed-in role
+              lacks permission.
+            </li>
+          </ul>
+          <div class="callout info">
+            <strong>For operators:</strong> This is an end-user workflow guide,
+            not a deployment runbook. Keep credentials, environment values,
+            private storage secrets, and payment keys out of this document and
+            out of frontend code.
+          </div>
+        </section>
+        <footer class="page-footer">
+          esllp Job Portal · Workflow guide · Standalone HTML; no external
+          libraries or runtime services required.
+        </footer>
+      </main>
+    </div>
+    <script>
+      const guideFilter = document.querySelector("#guide-filter");
+      const searchableSections = [
+        ...document.querySelectorAll("[data-searchable]"),
+      ];
+      const filterStatus = document.querySelector("#filter-status");
+
+      guideFilter.addEventListener("input", () => {
+        const query = guideFilter.value.trim().toLocaleLowerCase();
+        let matches = 0;
+        searchableSections.forEach((section) => {
+          const matched =
+            !query || section.textContent.toLocaleLowerCase().includes(query);
+          section.hidden = !matched;
+          if (matched) matches += 1;
+        });
+        filterStatus.textContent = query
+          ? `${matches} section${matches === 1 ? "" : "s"} match “${guideFilter.value.trim()}”.`
+          : "";
+      });
+    </script>
+  </body>
+</html>

@@ -39,7 +39,11 @@ export class EmployerApplicantsQueryDto {
     "in_review",
     "interview",
     "offer",
+    "offer_expired",
+    "offer_accepted",
+    "offer_declined",
     "rejected",
+    "withdrawal_requested",
     "withdrawn",
   ])
   status?: string;
@@ -90,6 +94,16 @@ export class CreateEmployerInterviewDto {
   @IsString()
   @MaxLength(5000)
   notes?: string;
+}
+
+export class CreateEmployerOfferDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(5000)
+  termsSummary!: string;
+
+  @IsISO8601()
+  expiresAt!: string;
 }
 
 export class InviteTeamMemberDto {

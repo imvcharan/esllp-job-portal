@@ -16,19 +16,19 @@ explicit so those gaps are found before they become expensive rework.
 
 - **Market:** India first; design data and interfaces so other markets can be
   added without hard-coding India-specific assumptions throughout the product.
-- **Web:** Migrate the public and account-facing experience to Next.js, React,
-  and TypeScript. The current static homepage is a starting point, not the
-  target frontend architecture.
-- **Mobile:** Build one React Native app with Expo for iOS and Android. Both
-  candidates and employers need mobile workflows.
+- **Web:** Complete and verify the current responsive web portal first.
+  Reassess a Next.js/React/TypeScript migration after the existing web journeys
+  meet the local acceptance gates.
+- **Mobile:** React Native/Expo for iOS and Android is a follow-on workstream,
+  not a prerequisite for the responsive-web-first release.
 - **Backend:** Keep the existing NestJS API and extend it; do not rewrite it or
   split it into microservices without evidence that the current architecture
   cannot meet a measured need.
 - **Database:** Use PostgreSQL and TypeORM. Use reviewed schema migrations; never
   enable TypeORM schema synchronization in production.
-- **Launch business model:** Free listings and applications in v1. No billing,
-  subscriptions, or payment collection in launch scope. Revisit monetization
-  after product validation.
+- **Launch business model:** Paid employer plans are in scope. Keep paid
+  checkout behind complete Razorpay configuration and staging verification;
+  never imply that payment is available in an environment where it is not.
 - **Admin:** Keep administrative and superadmin work in a protected web
   dashboard. A native admin app is not part of v1.
 
@@ -48,15 +48,17 @@ explicit so those gaps are found before they become expensive rework.
 
 ### Explicit v1 boundaries
 
-- Candidate and employer journeys are available on responsive web and mobile.
+- Candidate and employer journeys are available on responsive web for the
+  initial release; native apps are deferred.
 - Admin/moderation functionality is web-only.
 - English is the initial interface language unless product discovery changes
   that decision. Structure text and formatting for later localization; decide
   which Indian languages to support before committing translated content.
-- Launch with free job listings/applications; do not imply future paid features
-  exist.
+- Paid employer plans are in scope. Keep checkout unavailable until plan
+  configuration, verified webhooks, and staging payment tests are complete;
+  candidates are not charged to apply.
 - Do not build unrequested social networks, AI ranking, automated hiring
-  decisions, payroll, background checks, or payment features into v1.
+  decisions, payroll, or background checks into v1.
 - Email verification, password recovery, application messaging, push
   notifications, company verification, and report handling are real product
   flows only when their server and operations support is delivered. Never
@@ -64,17 +66,17 @@ explicit so those gaps are found before they become expensive rework.
 
 ## 2. Technology and system shape
 
-| Area | Direction | Notes |
-|---|---|---|
-| Public and account web | Next.js + React + TypeScript | Search-engine-friendly public job pages; responsive candidate and employer workspaces. |
-| iOS and Android | React Native + Expo + TypeScript | One native client for candidate and employer workflows. |
-| API | Existing NestJS + TypeScript | REST API; server owns validation, permissions, and business rules. |
-| API contract | OpenAPI and generated TypeScript client/models | Web and mobile consume the same versioned contract; avoid hand-maintained duplicate request types. |
-| Database | PostgreSQL + TypeORM | Use migrations, indexes, constraints, transactions, backups, and restore tests. |
-| Uploads | Private object storage | Resume files are private; issue authorized, short-lived access, not public URLs. |
-| Email and push | Provider-backed adapters behind API modules | Select providers after delivery, cost, India availability, and privacy requirements are evaluated. |
-| Admin | Existing protected admin/API foundations, expanded as needed | Continue enforcing server authorization; UI gating is not authorization. |
-| Hosting | Separate web, API, database, and object storage deployments | Choose provider after region, budget, data residency, support, and traffic needs are confirmed. |
+| Area                   | Direction                                                    | Notes                                                                                              |
+| ---------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Public and account web | Current responsive client; reassess Next.js later            | Search-engine-friendly public job pages; responsive candidate and employer workspaces.             |
+| iOS and Android        | React Native + Expo + TypeScript (follow-on)                 | Native candidate/employer app only after responsive-web release scope passes.                      |
+| API                    | Existing NestJS + TypeScript                                 | REST API; server owns validation, permissions, and business rules.                                 |
+| API contract           | OpenAPI and generated TypeScript client/models               | Web and mobile consume the same versioned contract; avoid hand-maintained duplicate request types. |
+| Database               | PostgreSQL + TypeORM                                         | Use migrations, indexes, constraints, transactions, backups, and restore tests.                    |
+| Uploads                | Private object storage                                       | Resume files are private; issue authorized, short-lived access, not public URLs.                   |
+| Email and push         | Provider-backed adapters behind API modules                  | Select providers after delivery, cost, India availability, and privacy requirements are evaluated. |
+| Admin                  | Existing protected admin/API foundations, expanded as needed | Continue enforcing server authorization; UI gating is not authorization.                           |
+| Hosting                | Separate web, API, database, and object storage deployments  | Choose provider after region, budget, data residency, support, and traffic needs are confirmed.    |
 
 Keep UI components separate between web and native. Share generated API
 contracts, validation rules where portable, and domain documentation—not
@@ -101,37 +103,39 @@ releasable.
 
 ## 3. Current baseline (repository inspection)
 
-- NestJS serves static public and admin HTML and exposes the API under `/api`.
-- The served homepage now includes candidate sign-up/sign-in screens that call
-  the existing registration, login, refresh, and logout endpoints while
-  retaining the homepage's current layout and ocean theme. This is the first
-  web implementation slice, not the planned Next.js migration.
-- Candidate profile storage now includes name, email, headline, location,
-  optional phone, summary, and skills. Authenticated candidate-only profile
-  read/update APIs and a matching responsive web editor are implemented and
-  verified against the local database.
-- Candidate registration, login, access-token authentication, refresh-cookie
-  rotation, logout, role guards, and rate limiting exist.
-- Public active-job listing/search and admin job management exist.
-- Superadmin user administration and audit-log endpoints exist.
-- TypeORM migrations and PostgreSQL configuration exist; startup runs migrations.
-- Candidate experience/education/preferences completeness, resume storage,
-  employer organizations/memberships, applicant review, email
-  verification, password recovery, notifications, and moderation workflows
-  are not yet complete persistent product capabilities.
-- The existing browser roadmap described frontend gaps; this document
-  supersedes it as the overall web-and-mobile delivery roadmap.
-- The existing static homepage now has responsive candidate and employer
-  workspace shells, with candidate profile editing, published-job search,
-  job details, account-synced saved jobs, and candidate application
-  submission/history inside the candidate shell. Application status is
-  currently limited to submitted; resume attachments, withdrawal, employer
-  review/status transitions, and notification workflows remain unavailable.
-  Employer hiring actions are explicitly unavailable until their APIs and
-  workflows are delivered.
-- No Next.js client, Expo mobile client, or employer organization/job workflow
-  has been delivered yet.
-- See [README.md](./README.md) for the existing setup and API details.
+This section records implemented repository capabilities, not production
+readiness. The older status notes in this section were stale and contradicted
+the current API and workflow guide; use the following baseline instead.
+
+- NestJS serves the responsive static public/admin HTML and exposes the API
+  under `/api`. The Next.js migration and Expo mobile clients remain planned.
+- Candidate/employer registration, login, refresh-cookie rotation, logout,
+  email verification, password recovery, forced password changes, role guards,
+  and rate limits are implemented. SMTP delivery still requires deployment
+  configuration and verification.
+- Public job search supports filtering, sorting, pagination, share pages,
+  sitemap, and structured data. Admins manage listings; approved employers
+  manage organization-owned jobs and company details.
+- Candidate profile and preferences, private photo/resume storage, saved jobs
+  and searches, consent-based application data sharing, application history
+  and withdrawal, notifications, and interview updates are implemented.
+- Employer organization membership, invitations, applicant review/status
+  changes, notes/tags, interviews, notifications, plan limits, and Razorpay
+  subscription flows are implemented. Paid checkout still requires configured
+  plans, verified webhooks, and staging checks.
+- Staff/admin/superadmin dashboards, employer approval, user administration,
+  analytics, and the protected audit log are implemented.
+- TypeORM migrations and PostgreSQL configuration exist; startup runs pending
+  migrations. The existing backend and static web client are the supported
+  local product surfaces.
+- Repository gaps still include database integration/browser end-to-end tests,
+  company/user reporting controls and appeal/feedback workflows, an approved
+  account deletion/retention policy, malware scanning/quarantine for uploads,
+  and complete operational observability/recovery/support readiness.
+  Provider-backed production configuration and verification are not evidenced
+  by repository code.
+- See [README.md](./README.md) for setup, API, storage, email, billing, and
+  deployment configuration details.
 
 Do not remove an existing screen/API until the replacement has parity for its
 required behavior, permission checks, tests, and operational ownership.
@@ -143,9 +147,10 @@ deploy a public website/API, publish an App Store or Play Store release, or
 point real users at the product until the local acceptance gates in this
 roadmap pass and the product owner explicitly approves the release.
 
-- Local is the first complete integration environment: API, database, web,
-  mobile clients, admin, uploads, and test email/notification behavior must
-  work together using non-production accounts and synthetic data.
+- Local is the first complete integration environment: API, database,
+  responsive web, admin, uploads, and test email/notification behavior must
+  work together using non-production accounts and synthetic data. Mobile is
+  deferred from the initial release scope.
 - Use isolated local configuration and data. Never copy production personal
   data, passwords, tokens, resumes, or secrets into local development.
 - Physical phones can reach a development server over the same trusted Wi-Fi
@@ -187,8 +192,10 @@ demonstrable exit gate; adjust scope only by recording the tradeoff and impact.
 - [ ] Define local-first environments and isolated local configuration,
       synthetic seed data, safe secret handling, database migration policy,
       and the later staging/production promotion and rollback process.
-- [ ] Add or confirm CI gates for formatting, lint, type-check, API tests,
-      web build, and mobile checks. Keep environment credentials out of Git.
+- [x] Add a CI build-and-unit-test gate on pushes and pull requests; keep
+      environment credentials out of Git.
+- [ ] Extend CI with formatting, lint, explicit type-check, API/database
+      integration, browser, and mobile checks.
 - [ ] Choose cloud, email, file storage, analytics/monitoring, and push
       providers based on documented requirements; do not choose solely by
       convenience.
@@ -201,7 +208,7 @@ contracts and the local-first environment plan are reviewed; a new developer
 can run the existing API, database, and checks locally from documented
 instructions without production credentials or data.
 
-### Phase 1 — API hardening and web migration foundation
+### Phase 1 — API hardening and responsive-web foundation
 
 **Deliver**
 
@@ -210,17 +217,12 @@ instructions without production credentials or data.
       authorization. Fix launch blockers before adding clients.
 - [ ] Add OpenAPI generation and a checked/generated TypeScript client, plus
       contract checks that fail when clients and API drift.
-- [ ] Define browser session handling and native auth/token-refresh behavior
-      before implementing client login. Browser refresh credentials remain
-      HttpOnly, Secure in production, and appropriately SameSite; native
-      credentials use platform secure storage, not AsyncStorage.
-- [ ] Create the Next.js application and deployment/build path. Decide and
-      document the incremental route migration and API origin configuration.
-- [ ] Create and run the Expo app locally. Defer EAS cloud release builds and
-      store submission until the local acceptance gate passes.
-- [ ] Make local API URLs configurable per environment. Document how an
-      emulator and a physical phone connect to the developer's local API, and
-      prevent production builds from accidentally using a localhost endpoint.
+- [x] Implement the browser session flow using short-lived access tokens and
+      an HttpOnly refresh cookie that is Secure in production.
+- [ ] Complete an API/authentication review and add contract documentation;
+      native credential storage applies only if mobile is later approved.
+- [x] Keep the static responsive client and API same-origin in the local
+      NestJS app; document the API origin if a separate frontend is introduced.
 - [ ] Add common design tokens, typography, responsive breakpoints, form
       patterns, accessible controls, error/empty/loading states, and analytics
       event conventions.
@@ -228,27 +230,25 @@ instructions without production credentials or data.
       error-reporting strategy that excludes credentials, tokens, and resume
       content.
 
-**Exit gate:** Web and mobile shells run against the local API; API contract
-is reproducible; auth behavior is documented and tested; local development
-uses no production secrets or data. A staging deployment is not a prerequisite
-for starting feature work.
+**Exit gate:** The responsive web client runs against the local API; auth
+behavior is documented and tested; local development uses no production
+secrets or data. A staging deployment is not a prerequisite for feature work.
 
 ### Phase 2 — Public discovery and job-search web
 
 **Deliver**
 
-- [ ] Rebuild public homepage, search results, filters, sorting, pagination,
-      and job-detail routes in Next.js using the real jobs API.
-- [ ] Preserve useful existing search behavior and direct links; add canonical,
-      shareable job URLs, page titles/descriptions, social metadata, and
-      appropriate structured data for public listings.
-- [ ] Make search, location, filters, sorting, and pagination URL-addressable
-      and work with browser back/forward navigation.
-- [ ] Clearly handle no results, API failure, stale/unavailable listings, and
-      retry. Any sample job is unmistakably preview-only and never actionable.
-- [ ] Establish job content rules: required fields, salary/currency/pay period
-      provenance, location/work arrangement, publish/expiry timestamps, and
-      moderation status.
+- [x] Implement public homepage, search results, filters, sorting, pagination,
+      and job-detail routes against the jobs API in the current responsive web
+      client.
+- [x] Add shareable job pages, canonical metadata, sitemap, and structured
+      data for public listings.
+- [x] Keep search and filters URL-addressable and preserve direct job links.
+- [x] Handle no results, API failures, unavailable listings, and preview-only
+      sample jobs without treating samples as actionable vacancies.
+- [x] Support job content including salary/currency/pay period, location/work
+      arrangement, application deadlines, and publication status.
+- [ ] Add browser-level route, SEO, and search acceptance tests.
 - [ ] Preserve accessibility and responsive behavior across small phones,
       tablets, and desktop.
 
@@ -265,33 +265,39 @@ empty or successful results; core journeys pass automated browser tests.
 - [x] Add candidate-only profile read/update APIs with ownership and role
       checks, validation, transactionally saved account name, and private-by-
       default profile behavior.
-- [ ] Extend profiles with experience, education, role preferences, work
-      preferences, and optional compensation expectations.
-- [ ] Add additional profile audit/security events where appropriate and
-      define employer visibility when employer workflows are introduced.
-- [ ] Implement email verification and password recovery with expiring,
-      single-use tokens, rate limits, abuse controls, safe responses, and
-      delivery monitoring.
-- [ ] Implement private resume upload/replacement/removal and authorized
-      download using object storage; validate size and content/type, block
-      unsafe paths, record metadata, and define malware scanning/quarantine.
-- [ ] Define what happens to candidate data and files when an account is
-      disabled, deleted, or subject to a legal retention hold.
+- [x] Extend profiles with experience, education, desired role titles, and
+      employment/workplace preferences.
+- [ ] Add optional compensation expectations to candidate profiles.
+- [x] Add profile/application audit events and enforce candidate consent for
+      employer visibility.
+- [x] Implement email verification and password recovery with expiring,
+      single-use tokens, rate limits, and safe responses. Provider delivery
+      monitoring/retry remains a release task.
+- [x] Implement private resume upload/replacement/removal and authorized
+      download using object storage with file size/type validation and private
+      storage paths.
+- [ ] Configure malware scanning/quarantine for uploaded files before
+      production use.
+- [ ] Define approved retention, anonymization, and deletion behavior for
+      candidate data/files and legal holds. A candidate export and
+      superadmin-reviewed deletion-request queue exist; requests do not delete
+      accounts or files.
 
 **Clients**
 
 - [x] Build web sign-up, sign-in, logout, password visibility, validation,
       refresh-cookie session restoration, and role-based dashboard routing.
-- [ ] Add email verification and password recovery screens when the matching
-      backend flows are implemented.
+- [x] Add email verification and password recovery screens for the available
+      backend flows.
 - [x] Build a responsive candidate profile editor with server-backed save,
       session refresh/recovery, and honest private-by-default disclosure.
-- [ ] Build guided save-and-resume onboarding, profile preview, and honest
-      completeness feedback based only on saved data.
-- [ ] Add privacy/visibility controls with a clear explanation of when an
+- [x] Show profile completeness feedback based on saved profile data.
+- [ ] Build guided save-and-resume onboarding and a candidate profile preview.
+- [x] Add privacy/visibility controls with a clear explanation of when an
       employer can access profile or resume information.
-- [ ] Add resume upload progress, file constraints, retry, replacement,
-      removal, and actionable error states.
+- [x] Add resume file constraints, replacement/removal, and actionable error
+      states.
+- [ ] Add upload progress and retry behavior.
 
 **Exit gate:** A candidate can securely register, recover access, manage a
 persisted profile/resume, and control visibility on web; unauthorized accounts
@@ -301,28 +307,29 @@ cannot read or modify another candidate's data; files are private and tested.
 
 **API/data**
 
-- [ ] Add employer onboarding, organization/company records, memberships,
+- [x] Add employer onboarding, organization/company records, memberships,
       invitation acceptance/revocation, and role-based permissions.
-- [ ] Enforce tenant isolation: every organization-scoped operation verifies
+- [x] Enforce tenant isolation: every organization-scoped operation verifies
       both membership and the required permission.
-- [ ] Define employer verification and moderation states, evidence, review
-      ownership, appeal path, and public badge rules.
-- [ ] Expand job data and APIs for responsibilities, qualifications, location,
+- [ ] Define a complete employer verification/moderation policy with evidence,
+      review ownership, appeal path, and public badge rules. Current email
+      verification and admin approval are implemented.
+- [x] Support core job listing fields for location,
       work arrangement, employment type, experience, compensation, application
-      questions, visibility, moderation, publication, and expiry.
-- [ ] Implement explicit draft, pending review (if required), published,
-      paused, closed, expired, rejected, and archived transitions. Record who
-      changed state and when.
-- [ ] Add safe job search/update indexes and pagination; test query behavior
-      with realistic data volume.
+      visibility, publication, and expiry.
+- [ ] Add application questions and explicit moderation/pause/rejection
+      transitions. Current job states cover draft, active/published, closed,
+      expired, and archived behavior; changes are audited.
+- [x] Add bounded job-search pagination and database indexes for core lookup.
+- [ ] Test query behavior with realistic data volume.
 
 **Clients**
 
-- [ ] Build company setup/edit, team/member management, job posting, draft
-      save, preview, publish, edit, pause, close, and archive flows on web.
+- [x] Build company setup/edit, team/member management, job posting, draft
+      save, preview, publish, edit, and close flows on web.
 - [ ] Build company public pages using employer-supplied data and clearly
       sourced verification status.
-- [ ] Keep public job search and job details aligned with server publication
+- [x] Keep public job search and job details aligned with server publication
       and moderation state.
 
 **Exit gate:** An authorized employer can manage only their organization's
@@ -339,18 +346,19 @@ verification or moderation cases.
 - [x] Add candidate-only application list/read/submit APIs with candidate/job
       uniqueness, published-job eligibility, optional validated note, and
       retry-safe submission.
-- [ ] Define application eligibility, required fields/documents, employer
-      questions, duplicate behavior, withdrawal rules, and immutable
-      submission snapshot requirements.
-- [ ] Add application, answer, status-history, and event records. Enforce
+- [x] Define application eligibility, optional note, consent choices,
+      duplicate behavior, withdrawal rules, and application profile snapshots.
+- [ ] Add employer-defined application questions and required documents.
+- [x] Add application, status-history, and event records. Enforce
       candidate ownership and employer tenant access on every operation.
-- [ ] Define status lifecycle (for example submitted, viewed, shortlisted,
-      interview, offer, rejected, withdrawn) and permitted transitions.
-      Publish the final list and definitions before UI implementation.
-- [ ] Add audit trail for employer decisions and access to sensitive
+- [x] Define and enforce the status lifecycle (submitted, in review,
+      interview, offer response, rejected, withdrawal request/confirmation)
+      and permitted transitions; synchronize interview scheduling with stage.
+- [x] Add an audit trail for employer decisions and access to sensitive
       application/resume data.
-- [ ] Add notification preferences and email/push events only after delivery,
-      retry, deduplication, unsubscribe, and failure handling are implemented.
+- [x] Add in-app notifications for application status, offers, messages,
+      withdrawals, and interviews; respect candidate email preferences.
+- [ ] Add delivery retry/deduplication and push notification handling.
 
 **Clients**
 
@@ -359,18 +367,18 @@ verification or moderation cases.
       remain browser-local; published guest saves sync on sign-in.
 - [x] Build candidate application submission with an optional validated note;
       show success only after an API response and keep retries idempotent.
-- [x] Build candidate application history with submitted status and job links;
-      employer-driven status updates and withdrawal remain future work.
-- [x] Add a review-and-confirm step before submission and disclose that resume
-      uploads are not yet supported.
-- [ ] Add full status explanations, employer-driven updates, and
-      supported withdrawal, and notification preferences.
-- [ ] Build employer applicant inbox with job context, filtering/search,
+- [x] Build candidate application history with status history and job links.
+- [x] Add a review-and-confirm step, clear account-name disclosure, opt-in
+      profile sharing, optional resume attachment, withdrawal requests, and
+      reapplication after confirmed withdrawal.
+- [x] Add employer-driven status updates, status explanations, and notification
+      preferences.
+- [x] Build employer applicant inbox with job context, filtering/search,
       pagination, authorized candidate/application detail, and resume access.
-- [ ] Add stage changes, notes, shortlist/reject actions, history, and
-      interview scheduling only with explicit confirmation and delivery state.
-- [ ] Provide appropriate privacy notices and avoid exposing candidate data
-      beyond what the application workflow requires.
+- [x] Add stage changes, notes, tags, status history, synchronized interview
+      scheduling, candidate/employer messaging, and offer response tracking.
+- [x] Provide privacy notices and limit candidate data to application
+      workflow requirements.
 
 **Exit gate:** Candidate and employer can complete the whole application
 lifecycle; permissions, duplicate requests, transitions, audit history,
@@ -415,20 +423,27 @@ after the full local acceptance gate.
 
 ### Phase 7 — Administration, trust, safety, and support
 
-- [ ] Complete admin dashboards for jobs, accounts, organizations,
-      applications (only where operationally justified), reports, verification
-      queues, and audit history.
-- [ ] Define least-privilege admin roles, sensitive-action confirmation,
-      reason capture, immutable audit logging, and emergency access process.
-- [ ] Add report-job/company/user intake, triage, action, appeal, and reporter
-      feedback states with abuse prevention.
+- [x] Provide protected admin dashboards for jobs, accounts, organizations,
+      reports, employer approvals, analytics, and audit history.
+- [ ] Complete application-specific admin moderation queues where
+      operationally justified.
+- [x] Enforce role-restricted admin actions and immutable audit logging.
+- [ ] Add sensitive-action reason capture and an emergency access process.
+- [ ] Complete report job/company/user intake, appeal, and reporter feedback
+      states with abuse prevention. Job reports have a web intake form;
+      authenticated API intake supports job/company/user targets; admins can
+      triage, action, or dismiss. Public company/account report controls,
+      appeals, and reporter feedback are not implemented.
 - [ ] Define fraud/scam handling and response procedures for suspicious
       listings, impersonation, spam, and compromised accounts.
 - [ ] Publish real About, Help/Support, Privacy, Terms, employer contact, and
       reporting destinations. Add a support contact and response ownership.
-- [ ] Implement account export/deletion and data retention behavior as
-      approved by legal/privacy stakeholders, including backup retention
-      implications.
+- [x] Add candidate JSON data export and a superadmin-reviewed deletion request
+      queue.
+- [ ] Define approved account deletion/anonymization, data retention, and
+      backup/vendor data handling with legal/privacy stakeholders; implement
+      the approved policy. The current deletion-request workflow does not
+      delete or anonymize data.
 - [ ] Ensure verification, freshness, match, salary, and performance claims
       are based on traceable real data; do not fabricate them.
 
@@ -442,14 +457,16 @@ retention/privacy policy; public trust claims are evidence-backed.
 
 - [ ] Run the complete test suite locally against isolated databases and
       synthetic candidate, employer, admin, job, and application data.
+- [x] Add an initial GitHub Actions build/unit-test job and eight focused
+      service-level tests. Database integration and browser end-to-end tests
+      are still missing.
 - [ ] Complete end-to-end tests across web, API, admin, database, uploads,
       email capture/sandbox, and push sandbox/test mode.
 - [ ] Test candidate registration-to-application, employer
       organization-to-hiring, admin moderation, account recovery/deletion,
       duplicate requests, permissions, and tenant isolation.
-- [ ] Test responsive web layouts and accessibility; test Android locally and
-      iOS through Expo Go where possible. Record the limits of simulator/Expo
-      Go coverage and schedule signed device tests after the local gate.
+- [ ] Test responsive web layouts and accessibility. Native Android/iOS checks
+      are deferred until native apps are approved.
 - [ ] Run formatting, lint, type checks, unit/integration/contract tests,
       production builds for web/API, and available mobile checks. No known
       failing test may be waived without a recorded owner and approval.
@@ -495,11 +512,13 @@ gate.
 - [ ] Run a limited pilot with real candidates and employers only after public
       deployment is authorized; resolve critical workflow blockers before
       broad rollout.
-- [ ] Release web/API and mobile stores progressively where supported; monitor
-      user feedback, crashes, errors, and support reports and keep a rollback
-      or disable plan.
+- [ ] Release the responsive web/API progressively; monitor user feedback,
+      errors, and support reports and keep a rollback or disable plan. Mobile
+      store release is deferred.
+- [ ] Verify paid plans, displayed pricing, Razorpay webhooks, cancellation,
+      and failure handling in staging before enabling checkout for real users.
 - [ ] Review launch metrics and feedback; prioritize improvements from
-      evidence. Revisit monetization only after the free launch is validated.
+      evidence.
 
 **Public launch exit gate:** No unresolved critical launch blockers; local and
 staging evidence, security/privacy review, restore/rollback drills, monitoring,
@@ -656,14 +675,16 @@ with Apple before release.
 Recommended sequence:
 
 1. Discovery, policies, API contracts, environment/CI foundation.
-2. API hardening and Next.js/Expo shells.
-3. Public web search and job details.
+2. API hardening and local CI/test coverage.
+3. Verify the existing responsive web search and job-detail flows.
 4. Candidate account, profile, privacy, and resume.
 5. Employer organizations, company profiles, and job lifecycle.
 6. Saved jobs, applications, applicant review, and notifications.
-7. Candidate and employer mobile feature parity.
-8. Admin/moderation/support completion and production-readiness.
-9. Pilot, store review, staged launch, and measured iteration.
+7. Complete report handling, privacy policy, and admin/support workflows.
+8. Reassess mobile apps after responsive-web acceptance; native clients are
+   deferred from initial scope.
+9. Complete local/staging release gates and paid-plan verification, then pilot
+   and iterate.
 
 For execution, break every unchecked item into a ticket with: owner,
 prerequisites, API/UI/data deliverables, acceptance tests, security/privacy
@@ -677,15 +698,13 @@ be ready.
 - Validate candidate and employer demand, core launch cities/industries, and
   job acquisition strategy; a portal needs credible job supply as well as
   software.
-- Confirm employer mobile scope in user research. This roadmap includes core
-  employer mobile management; if usage data does not justify it, ship a
-  responsive employer web workflow first and record that as an explicit
-  release tradeoff.
+- Reassess native candidate/employer mobile scope after responsive-web
+  acceptance; mobile is explicitly deferred from initial scope.
 - Confirm the initial language(s), phone/email verification requirements, and
   legal/privacy review with qualified advisors.
 - Confirm hosting and data-residency requirements, budget, expected launch
   traffic, backup objectives, support hours, and incident owner.
 - Confirm which notification channels and application states deliver real
-  value before building provider integrations.
-- Revisit paid employer features only after validating the free product and
-  deciding billing, tax/invoice, refund, and support requirements.
+  value before adding push delivery.
+- Confirm paid-plan pricing, tax/invoice, refund, and billing-support
+  requirements before enabling Razorpay for real users.

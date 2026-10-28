@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, Repository } from "typeorm";
+import { DataSource, Not, Repository } from "typeorm";
 import { EmailDeliveryService } from "../auth/email-delivery.service";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { Job } from "../jobs/job.entity";
@@ -19,11 +19,14 @@ import { EmployerOrganizationMember } from "../employers/organization-member.ent
 import { UserNotification } from "../employers/user-notification.entity";
 import { currentJobDeadlineDate } from "../jobs/job.constants";
 import { AuditService } from "../audit/audit.service";
+import { CandidateApplicationOffer } from "./candidate-application-offer.entity";
+import { CandidateApplicationMessage } from "./candidate-application-message.entity";
+import { CreateCandidateApplicationMessageDto } from "./dto/create-candidate-application-message.dto";
 
 const EMPLOYER_TRANSITIONS: Record<string, string[]> = {
-  submitted: ["in_review", "interview", "offer", "rejected"],
-  in_review: ["interview", "offer", "rejected"],
-  interview: ["offer", "rejected"],
+  submitted: ["in_review", "interview", "rejected"],
+  in_review: ["interview", "rejected"],
+  interview: ["rejected"],
 };
 
 @Injectable()
@@ -36,6 +39,10 @@ export class CandidateApplicationsService {
     private readonly applicationsRepository: Repository<CandidateApplication>,
     @InjectRepository(CandidateApplicationStatus)
     private readonly statusesRepository: Repository<CandidateApplicationStatus>,
+    @InjectRepository(CandidateApplicationOffer)
+    private readonly offersRepository: Repository<CandidateApplicationOffer>,
+    @InjectRepository(CandidateApplicationMessage)
+    private readonly messagesRepository: Repository<CandidateApplicationMessage>,
     @InjectRepository(Job)
     private readonly jobsRepository: Repository<Job>,
     @InjectRepository(CandidateProfile)
@@ -64,11 +71,14 @@ export class CandidateApplicationsService {
       .take(limit)
       .getManyAndCount();
     const histories = await this.getHistories(applications);
+    const records = await this.getWorkflowRecords(applications);
     return {
       items: applications.map((application) =>
         this.toCandidateResponse(
           application,
           histories.get(application.id) ?? [],
+          records.offers.get(application.id) ?? null,
+          records.messages.get(application.id) ?? [],
         ),
       ),
       total,
@@ -79,15 +89,19 @@ export class CandidateApplicationsService {
 
   async getForJob(user: AuthenticatedUser, jobId: number) {
     const application = await this.applicationsRepository.findOne({
-      where: { userId: user.id, jobId },
+      where: { userId: user.id, jobId, status: Not("withdrawn") },
       relations: { job: true },
+      order: { createdAt: "DESC", id: "DESC" },
     });
     if (!application) return { application: null };
     const histories = await this.getHistories([application]);
+    const records = await this.getWorkflowRecords([application]);
     return {
       application: this.toCandidateResponse(
         application,
         histories.get(application.id) ?? [],
+        records.offers.get(application.id) ?? null,
+        records.messages.get(application.id) ?? [],
       ),
     };
   }
@@ -98,8 +112,9 @@ export class CandidateApplicationsService {
     dto: SubmitCandidateApplicationDto,
   ) {
     const existingApplication = await this.applicationsRepository.findOne({
-      where: { userId: user.id, jobId },
+      where: { userId: user.id, jobId, status: Not("withdrawn") },
       relations: { job: true },
+      order: { createdAt: "DESC", id: "DESC" },
     });
     if (existingApplication) {
       return this.toCandidateResponse(
@@ -188,9 +203,9 @@ export class CandidateApplicationsService {
       created = insertResult.identifiers.length > 0;
 
       const applications = manager.getRepository(CandidateApplication);
-      const application = await applications.findOneBy({
-        userId: user.id,
-        jobId,
+      const application = await applications.findOne({
+        where: { userId: user.id, jobId, status: Not("withdrawn") },
+        order: { createdAt: "DESC", id: "DESC" },
       });
       if (!application) {
         throw new Error("Submitted application could not be loaded");
@@ -213,8 +228,9 @@ export class CandidateApplicationsService {
     });
 
     const application = await this.applicationsRepository.findOne({
-      where: { userId: user.id, jobId },
+      where: { userId: user.id, jobId, status: Not("withdrawn") },
       relations: { job: true },
+      order: { createdAt: "DESC", id: "DESC" },
     });
     if (!application) {
       throw new Error("Submitted application could not be loaded");
@@ -229,9 +245,14 @@ export class CandidateApplicationsService {
       });
       await this.notifyEmployer(application.job);
     }
-    return this.toCandidateResponse(application, [
-      ...((await this.getHistories([application])).get(application.id) ?? []),
-    ]);
+    const histories = await this.getHistories([application]);
+    const records = await this.getWorkflowRecords([application]);
+    return this.toCandidateResponse(
+      application,
+      histories.get(application.id) ?? [],
+      records.offers.get(application.id) ?? null,
+      records.messages.get(application.id) ?? [],
+    );
   }
 
   async withdraw(user: AuthenticatedUser, applicationId: number) {
@@ -245,21 +266,55 @@ export class CandidateApplicationsService {
       if (!application) {
         throw new NotFoundException("Application was not found");
       }
-      if (application.status !== "submitted") {
+      if (
+        !["submitted", "in_review", "interview", "offer"].includes(
+          application.status,
+        )
+      ) {
         throw new BadRequestException(
-          "Only applications that are still submitted can be withdrawn.",
+          "This application can no longer be withdrawn.",
         );
       }
-      application.status = "withdrawn";
-      application.withdrawnAt = new Date();
+      const previousStatus = application.status;
+      application.status = "withdrawal_requested";
+      application.withdrawalRequestedAt = new Date();
+      application.withdrawalRequestedFromStatus = previousStatus;
       await applications.save(application);
       await manager.getRepository(CandidateApplicationStatus).save({
         applicationId,
-        fromStatus: "submitted",
-        toStatus: "withdrawn",
-        note: null,
+        fromStatus: previousStatus,
+        toStatus: "withdrawal_requested",
+        note: "Candidate requested withdrawal; employer confirmation is pending.",
         changedByUserId: user.id,
       });
+      const recipientIds = application.job.organizationId
+        ? (
+            await manager.getRepository(EmployerOrganizationMember).find({
+              where: {
+                organizationId: application.job.organizationId,
+                status: "active",
+              },
+            })
+          )
+            .map((member) => member.userId)
+            .filter((id): id is number => id !== null)
+        : application.job.employerUserId
+          ? [application.job.employerUserId]
+          : [];
+      if (recipientIds.length) {
+        await manager.getRepository(UserNotification).save(
+          [...new Set(recipientIds)].map((userId) =>
+            manager.getRepository(UserNotification).create({
+              userId,
+              type: "withdrawal_requested",
+              title: "Candidate requested withdrawal",
+              message: `A candidate requested to withdraw from ${application.job.title}.`,
+              link: "/#dashboard/applicants",
+              readAt: null,
+            }),
+          ),
+        );
+      }
     });
     const application = await this.applicationsRepository.findOne({
       where: { id: applicationId, userId: user.id },
@@ -268,15 +323,18 @@ export class CandidateApplicationsService {
     if (!application) throw new NotFoundException("Application was not found");
     await this.auditService.record({
       actorUserId: user.id,
-      action: "candidate.application_withdrawn",
+      action: "candidate.application_withdrawal_requested",
       targetType: "application",
       targetId: application.id,
       details: { jobId: application.jobId },
     });
     const histories = await this.getHistories([application]);
+    const records = await this.getWorkflowRecords([application]);
     return this.toCandidateResponse(
       application,
       histories.get(application.id) ?? [],
+      records.offers.get(application.id) ?? null,
+      records.messages.get(application.id) ?? [],
     );
   }
 
@@ -327,7 +385,7 @@ export class CandidateApplicationsService {
     note?: string,
     organizationId?: number,
   ) {
-    if (!["in_review", "interview", "offer", "rejected"].includes(status)) {
+    if (!["in_review", "interview", "rejected"].includes(status)) {
       throw new BadRequestException(
         "Choose a valid employer application status.",
       );
@@ -370,6 +428,16 @@ export class CandidateApplicationsService {
             note: note?.trim() || null,
             changedByUserId: employer.id,
           });
+        await manager.getRepository(UserNotification).save(
+          manager.getRepository(UserNotification).create({
+            userId: application.userId,
+            type: "application_status",
+            title: "Application status updated",
+            message: `Your application for ${application.job.title} is now ${status.replace("_", " ")}.`,
+            link: "/#dashboard/applications",
+            readAt: null,
+          }),
+        );
         return { application, history };
       },
     );
@@ -417,6 +485,184 @@ export class CandidateApplicationsService {
     };
   }
 
+  async respondToOffer(
+    user: AuthenticatedUser,
+    applicationId: number,
+    decision: "accepted" | "declined",
+  ) {
+    const result = await this.dataSource.transaction(async (manager) => {
+      const application = await manager
+        .getRepository(CandidateApplication)
+        .createQueryBuilder("application")
+        .innerJoinAndSelect("application.job", "job")
+        .where("application.id = :applicationId", { applicationId })
+        .andWhere("application.userId = :userId", { userId: user.id })
+        .setLock("pessimistic_write")
+        .getOne();
+      if (!application)
+        throw new NotFoundException("Application was not found.");
+      if (application.status !== "offer")
+        throw new BadRequestException(
+          "There is no open offer for this application.",
+        );
+      const offer = await manager
+        .getRepository(CandidateApplicationOffer)
+        .findOne({
+          where: { applicationId },
+          lock: { mode: "pessimistic_write" },
+        });
+      if (!offer || offer.status !== "pending")
+        throw new BadRequestException(
+          "This offer is no longer awaiting a response.",
+        );
+      if (offer.expiresAt.getTime() <= Date.now()) {
+        offer.status = "expired";
+        await manager.getRepository(CandidateApplicationOffer).save(offer);
+        return { expired: true as const };
+      }
+      offer.status = decision;
+      offer.respondedAt = new Date();
+      await manager.getRepository(CandidateApplicationOffer).save(offer);
+      const status =
+        decision === "accepted" ? "offer_accepted" : "offer_declined";
+      application.status = status;
+      await manager.getRepository(CandidateApplication).save(application);
+      await manager.getRepository(CandidateApplicationStatus).save({
+        applicationId,
+        fromStatus: "offer",
+        toStatus: status,
+        note: `Candidate ${decision} the offer.`,
+        changedByUserId: user.id,
+      });
+      const recipientIds = application.job.organizationId
+        ? (
+            await manager.getRepository(EmployerOrganizationMember).find({
+              where: {
+                organizationId: application.job.organizationId,
+                status: "active",
+              },
+            })
+          )
+            .map((member) => member.userId)
+            .filter((id): id is number => id !== null)
+        : application.job.employerUserId
+          ? [application.job.employerUserId]
+          : [];
+      if (recipientIds.length) {
+        await manager.getRepository(UserNotification).save(
+          [...new Set(recipientIds)].map((userId) =>
+            manager.getRepository(UserNotification).create({
+              userId,
+              type: "offer_response",
+              title: "Candidate responded to an offer",
+              message: `A candidate ${decision} the offer for ${application.job.title}.`,
+              link: "/#dashboard/applicants",
+              readAt: null,
+            }),
+          ),
+        );
+      }
+      return { expired: false as const, status };
+    });
+    if (result.expired)
+      throw new BadRequestException(
+        "This offer has expired and can no longer be accepted.",
+      );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: `candidate.application_offer_${decision}`,
+      targetType: "application",
+      targetId: applicationId,
+    });
+    return { applicationId, status: result.status };
+  }
+
+  async listMessages(user: AuthenticatedUser, applicationId: number) {
+    const application = await this.applicationsRepository.findOneBy({
+      id: applicationId,
+      userId: user.id,
+    });
+    if (!application) throw new NotFoundException("Application was not found.");
+    const messages = await this.messagesRepository.find({
+      where: { applicationId },
+      relations: { sender: true },
+      order: { createdAt: "ASC", id: "ASC" },
+    });
+    return messages.map((message) => ({
+      id: message.id,
+      message: message.message,
+      senderUserId: message.senderUserId,
+      senderName: message.sender.displayName,
+      createdAt: message.createdAt,
+    }));
+  }
+
+  async sendMessage(
+    user: AuthenticatedUser,
+    applicationId: number,
+    dto: CreateCandidateApplicationMessageDto,
+  ) {
+    const messageText = dto.message.trim();
+    if (!messageText) {
+      throw new BadRequestException("Write a message before sending it.");
+    }
+    const application = await this.applicationsRepository.findOne({
+      where: { id: applicationId, userId: user.id },
+      relations: { job: true },
+    });
+    if (!application) throw new NotFoundException("Application was not found.");
+    const message = await this.messagesRepository.save(
+      this.messagesRepository.create({
+        applicationId,
+        senderUserId: user.id,
+        message: messageText,
+      }),
+    );
+    const recipientIds = application.job.organizationId
+      ? (
+          await this.organizationMembers.find({
+            where: {
+              organizationId: application.job.organizationId,
+              status: "active",
+            },
+          })
+        )
+          .map((member) => member.userId)
+          .filter((id): id is number => id !== null && id !== user.id)
+      : application.job.employerUserId &&
+          application.job.employerUserId !== user.id
+        ? [application.job.employerUserId]
+        : [];
+    if (recipientIds.length) {
+      await this.notificationsRepository.save(
+        [...new Set(recipientIds)].map((userId) =>
+          this.notificationsRepository.create({
+            userId,
+            type: "application_message",
+            title: "New candidate message",
+            message: `A candidate sent a message about ${application.job.title}.`,
+            link: "/#dashboard/applicants",
+            readAt: null,
+          }),
+        ),
+      );
+    }
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.application_message_sent",
+      targetType: "application",
+      targetId: applicationId,
+      details: { jobId: application.jobId },
+    });
+    return {
+      id: message.id,
+      message: message.message,
+      senderUserId: user.id,
+      senderName: user.displayName,
+      createdAt: message.createdAt,
+    };
+  }
+
   private async getHistories(applications: CandidateApplication[]) {
     if (!applications.length)
       return new Map<number, CandidateApplicationStatus[]>();
@@ -435,21 +681,82 @@ export class CandidateApplicationsService {
     return histories;
   }
 
+  private async getWorkflowRecords(applications: CandidateApplication[]) {
+    const ids = applications.map((application) => application.id);
+    if (!ids.length) {
+      return {
+        offers: new Map<number, CandidateApplicationOffer>(),
+        messages: new Map<number, CandidateApplicationMessage[]>(),
+      };
+    }
+    const [offers, messages] = await Promise.all([
+      this.offersRepository.find({
+        where: ids.map((applicationId) => ({ applicationId })),
+      }),
+      this.messagesRepository.find({
+        where: ids.map((applicationId) => ({ applicationId })),
+        relations: { sender: true },
+        order: { createdAt: "ASC", id: "ASC" },
+      }),
+    ]);
+    const offerByApplication = new Map(
+      offers.map((offer) => [offer.applicationId, offer]),
+    );
+    const messagesByApplication = new Map<
+      number,
+      CandidateApplicationMessage[]
+    >();
+    for (const message of messages) {
+      const items = messagesByApplication.get(message.applicationId) ?? [];
+      items.push(message);
+      messagesByApplication.set(message.applicationId, items);
+    }
+    return { offers: offerByApplication, messages: messagesByApplication };
+  }
+
   private toCandidateResponse(
     application: CandidateApplication,
     histories: CandidateApplicationStatus[],
+    offer: CandidateApplicationOffer | null = null,
+    messages: CandidateApplicationMessage[] = [],
   ) {
     const { job } = application;
+    const offerExpired =
+      application.status === "offer" &&
+      (offer?.status === "expired" ||
+        (offer?.status === "pending" &&
+          offer.expiresAt.getTime() <= Date.now()));
     return {
       id: application.id,
       jobId: application.jobId,
-      status: application.status,
+      status: offerExpired ? "offer_expired" : application.status,
       coverLetter: application.coverLetter,
       profileShared: application.profileShared,
       resumeIncluded: Boolean(application.resumePath),
       resumeFileName: application.resumeFileName,
       withdrawnAt: application.withdrawnAt,
+      withdrawalRequestedAt: application.withdrawalRequestedAt,
       createdAt: application.createdAt,
+      offer: offer
+        ? {
+            termsSummary: offer.termsSummary,
+            expiresAt: offer.expiresAt,
+            status:
+              offer.status === "expired" ||
+              (offer.status === "pending" &&
+                offer.expiresAt.getTime() <= Date.now())
+                ? "expired"
+                : offer.status,
+            respondedAt: offer.respondedAt,
+          }
+        : null,
+      messages: messages.map((message) => ({
+        id: message.id,
+        message: message.message,
+        senderUserId: message.senderUserId,
+        senderName: message.sender.displayName,
+        createdAt: message.createdAt,
+      })),
       history: histories.map((entry) => ({
         fromStatus: entry.fromStatus,
         toStatus: entry.toStatus,

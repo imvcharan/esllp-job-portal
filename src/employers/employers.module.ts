@@ -20,6 +20,8 @@ import { EmployersController } from "./employers.controller";
 import { RazorpayWebhookController } from "./razorpay-webhook.controller";
 import { EmployersService } from "./employers.service";
 import { EmployerApprovalGuard } from "./employer-approval.guard";
+import { CandidateApplicationOffer } from "../users/candidate-application-offer.entity";
+import { CandidateApplicationMessage } from "../users/candidate-application-message.entity";
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { EmployerApprovalGuard } from "./employer-approval.guard";
       RazorpayWebhookEvent,
       CandidateApplication,
       CandidateApplicationStatus,
+      CandidateApplicationOffer,
+      CandidateApplicationMessage,
       Job,
       User,
     ]),

@@ -21,6 +21,9 @@ import { EmailDeliveryService } from "../auth/email-delivery.service";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CandidateApplication } from "../users/candidate-application.entity";
 import { CandidateApplicationStatus } from "../users/candidate-application-status.entity";
+import { CandidateApplicationOffer } from "../users/candidate-application-offer.entity";
+import { CandidateApplicationMessage } from "../users/candidate-application-message.entity";
+import { CandidateProfile } from "../users/candidate-profile.entity";
 import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
 import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
 import { Job } from "../jobs/job.entity";
@@ -32,11 +35,13 @@ import {
 import { UpdateCompanyDto } from "./dto/update-company.dto";
 import {
   CreateEmployerInterviewDto,
+  CreateEmployerOfferDto,
   CreateEmployerNoteDto,
   EmployerApplicantsQueryDto,
   InviteTeamMemberDto,
   UpdateTeamMemberDto,
 } from "./dto/employer-workflow.dto";
+import { ResolveCandidateWithdrawalDto } from "../users/dto/resolve-candidate-withdrawal.dto";
 import { EmployerApplicationNote } from "./employer-application-note.entity";
 import { EmployerApplicationTag } from "./employer-application-tag.entity";
 import { EmployerInterview } from "./employer-interview.entity";
@@ -47,7 +52,10 @@ import {
 import { EmployerOrganization } from "./organization.entity";
 import { UserNotification } from "./user-notification.entity";
 import { JobsService } from "../jobs/jobs.service";
-import { currentJobDeadlineDate } from "../jobs/job.constants";
+import {
+  currentJobDeadlineDate,
+  jobPublicationError,
+} from "../jobs/job.constants";
 
 const PLAN_LIMITS = {
   free: { activeJobs: 1, seats: 1 },
@@ -99,6 +107,10 @@ export class EmployersService {
     private readonly applications: Repository<CandidateApplication>,
     @InjectRepository(CandidateApplicationStatus)
     private readonly applicationStatuses: Repository<CandidateApplicationStatus>,
+    @InjectRepository(CandidateApplicationOffer)
+    private readonly offers: Repository<CandidateApplicationOffer>,
+    @InjectRepository(CandidateApplicationMessage)
+    private readonly messages: Repository<CandidateApplicationMessage>,
     @InjectRepository(EmployerApplicationNote)
     private readonly notes: Repository<EmployerApplicationNote>,
     @InjectRepository(EmployerApplicationTag)
@@ -200,13 +212,24 @@ export class EmployersService {
       })
       .getMany();
     const jobIds = jobs.map((job) => job.id);
+    const pipelineStage = `CASE
+        WHEN application.status = 'offer' AND EXISTS (
+          SELECT 1 FROM candidate_application_offers offer
+          WHERE offer.application_id = application.id
+            AND (
+              offer.status = 'expired'
+              OR (offer.status = 'pending' AND offer.expires_at <= NOW())
+            )
+        ) THEN 'offer_expired'
+        ELSE application.status
+      END`;
     const stageCounts = jobIds.length
       ? await this.applications
           .createQueryBuilder("application")
-          .select("application.status", "status")
+          .select(pipelineStage, "status")
           .addSelect("COUNT(*)", "count")
           .where("application.jobId IN (:...jobIds)", { jobIds })
-          .groupBy("application.status")
+          .groupBy(pipelineStage)
           .getRawMany<{ status: string; count: string }>()
       : [];
     const recentApplications =
@@ -220,6 +243,23 @@ export class EmployersService {
             .take(5)
             .getMany()
         : [];
+    const recentOffers = recentApplications.length
+      ? await this.offers.find({
+          where: recentApplications.map((application) => ({
+            applicationId: application.id,
+          })),
+        })
+      : [];
+    const expiredOfferApplicationIds = new Set(
+      recentOffers
+        .filter(
+          (offer) =>
+            offer.status === "expired" ||
+            (offer.status === "pending" &&
+              offer.expiresAt.getTime() <= Date.now()),
+        )
+        .map((offer) => offer.applicationId),
+    );
     const activeJobs = jobs.filter((job) => job.isActive).length;
     const limits = this.limitsFor(organization);
     const unreadNotifications = await this.notifications.countBy({
@@ -255,7 +295,9 @@ export class EmployersService {
         user.employerApprovalStatus === EmployerApprovalStatus.APPROVED
           ? recentApplications.map((application) => ({
               id: application.id,
-              status: application.status,
+              status: expiredOfferApplicationIds.has(application.id)
+                ? "offer_expired"
+                : application.status,
               createdAt: application.createdAt,
               job: { id: application.job.id, title: application.job.title },
             }))
@@ -377,6 +419,15 @@ export class EmployersService {
     if (dto.description !== undefined)
       job.description = dto.description?.trim() || null;
     job.company = context.organization.name;
+    if (
+      job.isActive &&
+      (dto.title !== undefined ||
+        dto.location !== undefined ||
+        dto.description !== undefined)
+    ) {
+      const readinessError = jobPublicationError(job);
+      if (readinessError) throw new BadRequestException(readinessError);
+    }
     const saved = await this.jobs.save(job);
     await this.auditService.record({
       actorUserId: user.id,
@@ -413,6 +464,8 @@ export class EmployersService {
         if (!job)
           throw new NotFoundException("Job was not found in this company.");
         if (job.isActive) return { job, published: false };
+        const readinessError = jobPublicationError(job);
+        if (readinessError) throw new BadRequestException(readinessError);
         if (
           job.applicationDeadline &&
           job.applicationDeadline < currentJobDeadlineDate()
@@ -475,9 +528,20 @@ export class EmployersService {
       })
       .orderBy("application.createdAt", "DESC");
     if (query.status && query.status !== "all") {
-      builder.andWhere("application.status = :status", {
-        status: query.status,
-      });
+      if (query.status === "offer_expired") {
+        builder.andWhere("application.status = 'offer'").andWhere(`EXISTS (
+            SELECT 1 FROM candidate_application_offers offer
+            WHERE offer.application_id = application.id
+              AND (
+                offer.status = 'expired'
+                OR (offer.status = 'pending' AND offer.expires_at <= NOW())
+              )
+          )`);
+      } else {
+        builder.andWhere("application.status = :status", {
+          status: query.status,
+        });
+      }
     }
     if (query.jobId) {
       builder.andWhere("application.jobId = :jobId", { jobId: query.jobId });
@@ -536,6 +600,20 @@ export class EmployersService {
       tagsPromise,
       interviewsPromise,
     ]);
+    const [offers, messages] = await Promise.all([
+      applicationIds.length
+        ? this.offers.find({
+            where: applicationIds.map((applicationId) => ({ applicationId })),
+          })
+        : Promise.resolve([]),
+      applicationIds.length
+        ? this.messages.find({
+            where: applicationIds.map((applicationId) => ({ applicationId })),
+            relations: { sender: true },
+            order: { createdAt: "ASC", id: "ASC" },
+          })
+        : Promise.resolve([]),
+    ]);
     const fileLinks = await Promise.all(
       items.map((application) =>
         application.resumePath
@@ -559,7 +637,17 @@ export class EmployersService {
     return {
       items: items.map((application, index) => ({
         id: application.id,
-        status: application.status,
+        status: (() => {
+          const offer = offers.find(
+            (item) => item.applicationId === application.id,
+          );
+          return application.status === "offer" &&
+            (offer?.status === "expired" ||
+              (offer?.status === "pending" &&
+                offer.expiresAt.getTime() <= Date.now()))
+            ? "offer_expired"
+            : application.status;
+        })(),
         coverLetter: application.coverLetter,
         createdAt: application.createdAt,
         candidateName:
@@ -582,6 +670,31 @@ export class EmployersService {
             toStatus: entry.toStatus,
             note: entry.note,
             createdAt: entry.createdAt,
+          })),
+        offer: (() => {
+          const offer =
+            offers.find((item) => item.applicationId === application.id) ??
+            null;
+          return offer
+            ? {
+                ...offer,
+                status:
+                  offer.status === "expired" ||
+                  (offer.status === "pending" &&
+                    offer.expiresAt.getTime() <= Date.now())
+                    ? "expired"
+                    : offer.status,
+              }
+            : null;
+        })(),
+        messages: messages
+          .filter((message) => message.applicationId === application.id)
+          .map((message) => ({
+            id: message.id,
+            message: message.message,
+            senderUserId: message.senderUserId,
+            senderName: message.sender.displayName,
+            createdAt: message.createdAt,
           })),
         internalNotes: notes
           .filter((entry) => entry.applicationId === application.id)
@@ -630,6 +743,254 @@ export class EmployersService {
       context.organization.id,
     );
     return result;
+  }
+
+  async createApplicationOffer(
+    user: AuthenticatedUser,
+    applicationId: number,
+    dto: CreateEmployerOfferDto,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const termsSummary = dto.termsSummary.trim();
+    if (!termsSummary) {
+      throw new BadRequestException("Enter the offer details before sending.");
+    }
+    const expiresAt = new Date(dto.expiresAt);
+    if (
+      !Number.isFinite(expiresAt.getTime()) ||
+      expiresAt.getTime() <= Date.now()
+    ) {
+      throw new BadRequestException("Offer expiry must be in the future.");
+    }
+    const result = await this.dataSource.transaction(async (manager) => {
+      const applications = manager.getRepository(CandidateApplication);
+      const application = await applications
+        .createQueryBuilder("application")
+        .innerJoinAndSelect("application.job", "job")
+        .where("application.id = :applicationId", { applicationId })
+        .andWhere("job.organizationId = :organizationId", {
+          organizationId: context.organization.id,
+        })
+        .setLock("pessimistic_write")
+        .getOne();
+      if (!application)
+        throw new NotFoundException("Application was not found.");
+      if (
+        !["submitted", "in_review", "interview"].includes(application.status)
+      ) {
+        throw new BadRequestException(
+          "An offer can only be made to an application that is being considered.",
+        );
+      }
+      const offerRepository = manager.getRepository(CandidateApplicationOffer);
+      const existing = await offerRepository.findOneBy({ applicationId });
+      if (existing) {
+        throw new BadRequestException(
+          "An offer has already been created for this application.",
+        );
+      }
+      const offer = await offerRepository.save(
+        offerRepository.create({
+          applicationId,
+          termsSummary,
+          expiresAt,
+          status: "pending",
+          respondedAt: null,
+        }),
+      );
+      const previousStatus = application.status;
+      application.status = "offer";
+      await applications.save(application);
+      await manager.getRepository(CandidateApplicationStatus).save({
+        applicationId,
+        fromStatus: previousStatus,
+        toStatus: "offer",
+        note: "An offer was sent to the candidate.",
+        changedByUserId: user.id,
+      });
+      await manager.getRepository(UserNotification).save(
+        manager.getRepository(UserNotification).create({
+          userId: application.userId,
+          type: "application_offer",
+          title: "You received a job offer",
+          message: `The hiring team sent you an offer for ${application.job.title}. Review and respond before it expires.`,
+          link: "/#dashboard/applications",
+          readAt: null,
+        }),
+      );
+      return offer;
+    });
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.application_offer_created",
+      targetType: "application",
+      targetId: applicationId,
+      details: {
+        organizationId: context.organization.id,
+        expiresAt: expiresAt.toISOString(),
+      },
+    });
+    return result;
+  }
+
+  async resolveWithdrawalRequest(
+    user: AuthenticatedUser,
+    applicationId: number,
+    dto: ResolveCandidateWithdrawalDto,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const result = await this.dataSource.transaction(async (manager) => {
+      const applications = manager.getRepository(CandidateApplication);
+      const application = await applications
+        .createQueryBuilder("application")
+        .innerJoinAndSelect("application.job", "job")
+        .where("application.id = :applicationId", { applicationId })
+        .andWhere("job.organizationId = :organizationId", {
+          organizationId: context.organization.id,
+        })
+        .setLock("pessimistic_write")
+        .getOne();
+      if (!application)
+        throw new NotFoundException("Application was not found.");
+      if (application.status !== "withdrawal_requested") {
+        throw new BadRequestException(
+          "This application has no pending withdrawal request.",
+        );
+      }
+      const previousStatus = application.withdrawalRequestedFromStatus;
+      if (!previousStatus) {
+        throw new BadRequestException(
+          "The prior application stage is missing; contact support.",
+        );
+      }
+      application.status =
+        dto.decision === "approve" ? "withdrawn" : previousStatus;
+      application.withdrawnAt = dto.decision === "approve" ? new Date() : null;
+      application.withdrawalRequestedAt = null;
+      application.withdrawalRequestedFromStatus = null;
+      await applications.save(application);
+      if (dto.decision === "approve") {
+        const offerRepository = manager.getRepository(
+          CandidateApplicationOffer,
+        );
+        const offer = await offerRepository.findOneBy({ applicationId });
+        if (offer?.status === "pending") {
+          offer.status = "withdrawn";
+          await offerRepository.save(offer);
+        }
+      }
+      await manager.getRepository(CandidateApplicationStatus).save({
+        applicationId,
+        fromStatus: "withdrawal_requested",
+        toStatus: application.status,
+        note:
+          dto.note?.trim() ||
+          (dto.decision === "approve"
+            ? "Employer confirmed the candidate's withdrawal request."
+            : "Employer declined the candidate's withdrawal request."),
+        changedByUserId: user.id,
+      });
+      await manager.getRepository(UserNotification).save(
+        manager.getRepository(UserNotification).create({
+          userId: application.userId,
+          type: `withdrawal_${dto.decision === "approve" ? "confirmed" : "declined"}`,
+          title:
+            dto.decision === "approve"
+              ? "Withdrawal confirmed"
+              : "Withdrawal request declined",
+          message:
+            dto.decision === "approve"
+              ? `Your application for ${application.job.title} has been withdrawn. You may apply again while the job remains open.`
+              : `Your withdrawal request for ${application.job.title} was declined.${dto.note?.trim() ? ` Note: ${dto.note.trim()}` : ""}`,
+          link: "/#dashboard/applications",
+          readAt: null,
+        }),
+      );
+      return application.status;
+    });
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: `employer.application_withdrawal_${dto.decision}d`,
+      targetType: "application",
+      targetId: applicationId,
+      details: { organizationId: context.organization.id },
+    });
+    return { applicationId, status: result };
+  }
+
+  async listApplicationMessages(
+    user: AuthenticatedUser,
+    applicationId: number,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    await this.assertApplicationBelongsToOrganization(
+      applicationId,
+      context.organization.id,
+    );
+    const items = await this.messages.find({
+      where: { applicationId },
+      relations: { sender: true },
+      order: { createdAt: "ASC", id: "ASC" },
+    });
+    return items.map((message) => ({
+      id: message.id,
+      message: message.message,
+      senderUserId: message.senderUserId,
+      senderName: message.sender.displayName,
+      createdAt: message.createdAt,
+    }));
+  }
+
+  async sendApplicationMessage(
+    user: AuthenticatedUser,
+    applicationId: number,
+    dto: { message: string },
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const messageText = dto.message.trim();
+    if (!messageText) {
+      throw new BadRequestException("Write a message before sending it.");
+    }
+    const application = await this.getApplicationWithCandidate(
+      applicationId,
+      context.organization.id,
+    );
+    const message = await this.messages.save(
+      this.messages.create({
+        applicationId,
+        senderUserId: user.id,
+        message: messageText,
+      }),
+    );
+    await this.addNotification(
+      application.userId,
+      "application_message",
+      "New message from the hiring team",
+      `The hiring team sent you a message about ${application.job.title}.`,
+      "/#dashboard/applications",
+    );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.application_message_sent",
+      targetType: "application",
+      targetId: applicationId,
+      details: { organizationId: context.organization.id },
+    });
+    return {
+      id: message.id,
+      message: message.message,
+      senderUserId: user.id,
+      senderName: user.displayName,
+      createdAt: message.createdAt,
+    };
   }
 
   async addApplicationNote(
@@ -778,30 +1139,48 @@ export class EmployersService {
           notes: dto.notes?.trim() || null,
           status: "scheduled",
         });
+        if (["submitted", "in_review"].includes(application.status)) {
+          const previousStatus = application.status;
+          application.status = "interview";
+          await manager.getRepository(CandidateApplication).save(application);
+          await manager.getRepository(CandidateApplicationStatus).save({
+            applicationId,
+            fromStatus: previousStatus,
+            toStatus: "interview",
+            note: "Application moved to Interview when the interview was scheduled.",
+            changedByUserId: user.id,
+          });
+        }
         return { application, interview };
       },
     );
-    let notificationStatus: "sent" | "failed" = "sent";
-    try {
-      await this.emailDelivery.sendNotification(
-        application.user.email,
-        `Interview invitation: ${application.job.title}`,
-        `The hiring team at ${context.organization.name} scheduled an interview for ${application.job.title} on ${startsAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}.${interview.meetingUrl ? ` Join here: ${interview.meetingUrl}` : ""}${interview.location ? ` Location: ${interview.location}` : ""}`,
-      );
-    } catch (error) {
-      notificationStatus = "failed";
-      this.logger.error(
-        `Interview ${interview.id} was saved but its invitation email could not be delivered: ${
-          error instanceof Error ? error.message : "unknown email error"
-        }`,
-      );
+    let notificationStatus: "sent" | "disabled" | "failed" = "disabled";
+    const candidateProfile = await this.dataSource
+      .getRepository(CandidateProfile)
+      .findOneBy({ userId: application.userId });
+    if (candidateProfile?.applicationEmailUpdates ?? true) {
+      try {
+        await this.emailDelivery.sendNotification(
+          application.user.email,
+          `Interview invitation: ${application.job.title}`,
+          `The hiring team at ${context.organization.name} scheduled an interview for ${application.job.title} on ${startsAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}.${interview.meetingUrl ? ` Join here: ${interview.meetingUrl}` : ""}${interview.location ? ` Location: ${interview.location}` : ""}`,
+        );
+        notificationStatus = "sent";
+      } catch (error) {
+        notificationStatus = "failed";
+        this.logger.error(
+          `Interview ${interview.id} was saved but its invitation email could not be delivered: ${
+            error instanceof Error ? error.message : "unknown email error"
+          }`,
+        );
+      }
     }
     await this.addNotification(
       application.userId,
       "interview_scheduled",
       "Interview scheduled",
-      `An interview was scheduled for ${application.job.title}.`,
-      "/#dashboard/notifications",
+      `An interview was scheduled for ${application.job.title}. Your application is now in the Interview stage.`,
+      "/#dashboard/applications",
     );
     await this.auditService.record({
       actorUserId: user.id,
@@ -837,20 +1216,26 @@ export class EmployersService {
       interview.applicationId,
       context.organization.id,
     );
-    let notificationStatus: "sent" | "failed" = "sent";
-    try {
-      await this.emailDelivery.sendNotification(
-        application.user.email,
-        `Interview cancelled: ${application.job.title}`,
-        `The interview for ${application.job.title} at ${context.organization.name} has been cancelled. Contact the hiring team if you need more information.`,
-      );
-    } catch (error) {
-      notificationStatus = "failed";
-      this.logger.error(
-        `Interview ${interview.id} was cancelled but the candidate notification could not be delivered: ${
-          error instanceof Error ? error.message : "unknown email error"
-        }`,
-      );
+    let notificationStatus: "sent" | "disabled" | "failed" = "disabled";
+    const candidateProfile = await this.dataSource
+      .getRepository(CandidateProfile)
+      .findOneBy({ userId: application.userId });
+    if (candidateProfile?.applicationEmailUpdates ?? true) {
+      try {
+        await this.emailDelivery.sendNotification(
+          application.user.email,
+          `Interview cancelled: ${application.job.title}`,
+          `The interview for ${application.job.title} at ${context.organization.name} has been cancelled. Contact the hiring team if you need more information.`,
+        );
+        notificationStatus = "sent";
+      } catch (error) {
+        notificationStatus = "failed";
+        this.logger.error(
+          `Interview ${interview.id} was cancelled but the candidate notification could not be delivered: ${
+            error instanceof Error ? error.message : "unknown email error"
+          }`,
+        );
+      }
     }
     await this.addNotification(
       application.userId,

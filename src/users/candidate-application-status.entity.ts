@@ -2,7 +2,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -11,11 +10,6 @@ import { User } from "./user.entity";
 import { CandidateApplication } from "./candidate-application.entity";
 
 @Entity({ name: "candidate_application_status_history" })
-@Index(
-  "UQ_candidate_application_history_application_status",
-  ["applicationId", "toStatus"],
-  { unique: true },
-)
 export class CandidateApplicationStatus {
   @PrimaryGeneratedColumn()
   id!: number;

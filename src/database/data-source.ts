@@ -33,6 +33,13 @@ import { CreateCandidateSavedSearches1729000000011 } from "./migrations/17290000
 import { ExpandJobListingDetails1729000000012 } from "./migrations/1729000000012-ExpandJobListingDetails";
 import { ExpandAuditLogDetails1729000000013 } from "./migrations/1729000000013-ExpandAuditLogDetails";
 import { ManagedAccountsPasswordChange1729000000014 } from "./migrations/1729000000014-ManagedAccountsPasswordChange";
+import { CreateReports1729000000015 } from "./migrations/1729000000015-CreateReports";
+import { Report } from "../reports/report.entity";
+import { CandidateDeletionRequest } from "../users/candidate-deletion-request.entity";
+import { CandidateDeletionRequests1729000000016 } from "./migrations/1729000000016-CandidateDeletionRequests";
+import { CandidateApplicationOffer } from "../users/candidate-application-offer.entity";
+import { CandidateApplicationMessage } from "../users/candidate-application-message.entity";
+import { CandidateWorkflowEnhancements1729000000017 } from "./migrations/1729000000017-CandidateWorkflowEnhancements";
 
 export const AppDataSource = new DataSource({
   ...getDatabaseConfig(),
@@ -46,6 +53,8 @@ export const AppDataSource = new DataSource({
     CandidateApplication,
     AuthToken,
     CandidateApplicationStatus,
+    CandidateApplicationOffer,
+    CandidateApplicationMessage,
     EmployerOrganization,
     EmployerOrganizationMember,
     EmployerApplicationNote,
@@ -54,6 +63,8 @@ export const AppDataSource = new DataSource({
     UserNotification,
     RazorpayWebhookEvent,
     CandidateSavedSearch,
+    Report,
+    CandidateDeletionRequest,
   ],
   migrations: [
     CreateJobsTable1729000000000,
@@ -71,6 +82,9 @@ export const AppDataSource = new DataSource({
     ExpandJobListingDetails1729000000012,
     ExpandAuditLogDetails1729000000013,
     ManagedAccountsPasswordChange1729000000014,
+    CreateReports1729000000015,
+    CandidateDeletionRequests1729000000016,
+    CandidateWorkflowEnhancements1729000000017,
   ],
   synchronize: false,
 });

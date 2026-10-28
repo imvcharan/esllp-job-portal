@@ -20,6 +20,8 @@ import { RolesGuard } from "../auth/roles.guard";
 import { UserRole } from "./user.entity";
 import { CandidateApplicationsService } from "./candidate-applications.service";
 import { SubmitCandidateApplicationDto } from "./dto/submit-candidate-application.dto";
+import { CreateCandidateApplicationMessageDto } from "./dto/create-candidate-application-message.dto";
+import { RespondToCandidateApplicationOfferDto } from "./dto/respond-to-candidate-application-offer.dto";
 
 @Controller("candidate/applications")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,5 +68,38 @@ export class CandidateApplicationsController {
     @Param("applicationId", ParseIntPipe) applicationId: number,
   ) {
     return this.applicationsService.withdraw(user, applicationId);
+  }
+
+  @Get("records/:applicationId/messages")
+  @Header("Cache-Control", "private, no-store")
+  messages(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+  ) {
+    return this.applicationsService.listMessages(user, applicationId);
+  }
+
+  @Post("records/:applicationId/messages")
+  @Header("Cache-Control", "private, no-store")
+  sendMessage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Body() dto: CreateCandidateApplicationMessageDto,
+  ) {
+    return this.applicationsService.sendMessage(user, applicationId, dto);
+  }
+
+  @Post("records/:applicationId/offer-response")
+  @Header("Cache-Control", "private, no-store")
+  respondToOffer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Body() dto: RespondToCandidateApplicationOfferDto,
+  ) {
+    return this.applicationsService.respondToOffer(
+      user,
+      applicationId,
+      dto.decision,
+    );
   }
 }

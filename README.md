@@ -71,9 +71,31 @@ npm run start:dev
 
 Open `http://localhost:3000` for the homepage or `http://localhost:3000/admin/` for the admin dashboard preview. The API is available at `http://localhost:3000/api/jobs`.
 
+Run the current build and unit tests before opening a pull request:
+
+```powershell
+npm test
+```
+
+The command builds the NestJS application and runs the Node.js test suite.
+GitHub Actions runs the same command on pushes and pull requests; full database
+integration and browser end-to-end coverage are still required before release.
+
 The admin dashboard includes live overview metrics, job management, candidate account records for superadmins, employer organizations, application analytics, recent platform activity, account security, superadmin user management, and audit history. Counts and tables use database records; empty datasets show empty states instead of example people or invented metrics. Candidate account details, role/status controls, account creation, recent platform activity, and the security audit log remain restricted to their assigned roles. Account-list failures and timeouts are displayed in the table with retry guidance instead of leaving the page in a permanent loading state.
 
 The superadmin audit log records successful account, job, employer, candidate, and hiring-workflow changes plus login successes and failures. Records are append-only and include request IP address, user agent, and approximate city/region/country when a local MaxMind City database is configured. It supports search, action/country/date filters, pagination, and CSV export. It does not use browser GPS or send IP addresses to an external geolocation service.
+
+Candidates can report a job listing from its detail page; staff, admins, and
+superadmins can review and disposition reports in the admin Reports queue.
+Report creation and status changes are audit logged. Company/account reports
+are accepted by the authenticated reports API, but the public web interface
+currently exposes reporting for job listings only. Candidates can download a
+JSON export of their profile, applications and status history, offer details
+and responses, application messages, saved jobs, saved searches, notifications,
+and deletion requests. They can submit a
+deletion request for superadmin review; this does **not** delete or anonymize the account. The
+actual deletion/retention policy remains a release decision and must be
+reviewed with qualified privacy/legal stakeholders.
 
 To enable geographic labels, obtain and license a MaxMind GeoLite2 City database, store its `.mmdb` file outside the repository, and set `GEOIP_DATABASE_PATH` to that local file path. The database itself is ignored by Git. Set `TRUST_PROXY_HOPS` to the exact number of trusted reverse proxies before the app when deployed behind a proxy so request IPs are resolved correctly; leave it at `0` for direct connections. Without a local database, audit events still keep the request IP and client user agent, while location is shown as unavailable.
 
@@ -131,8 +153,10 @@ Authentication routes:
 - `GET /api/candidate/applications?page=1&limit=20` — paginated applications as `{ items, total, page, limit }`
 - `GET /api/candidate/applications/:jobId` — read that candidate's application as `{ application: ... }`, or `{ application: null }`
 - `POST /api/candidate/applications/:jobId` — submit an application with optional note, resume inclusion, and profile-sharing choices; safe to retry
-- `POST /api/candidate/applications/records/:applicationId/withdraw` — withdraw an application that is still submitted
-- `GET /api/candidate/notifications?page=1` and `PATCH /api/candidate/notifications/:notificationId/read` — review and mark interview notifications read
+- `POST /api/candidate/applications/records/:applicationId/withdraw` — request withdrawal at any active stage; the employer must confirm before the application is withdrawn
+- `POST /api/candidate/applications/records/:applicationId/offer-response` — accept or decline a pending offer before its deadline
+- `GET|POST /api/candidate/applications/records/:applicationId/messages` — read or send text messages on an owned application
+- `GET /api/candidate/notifications?page=1` and `PATCH /api/candidate/notifications/:notificationId/read` — review and mark application, offer, message, and interview notifications read
 
 Candidate profile routes require a candidate access token; profile data and files are private by default. New registrations require email verification. Password reset, resend verification, and signed-in password change use one-time tokens or session revocation. Configure the SMTP variables below for these flows. The web client routes candidate/employer accounts to their role-specific workspace and admin/superadmin accounts to `/admin/`.
 
@@ -164,7 +188,16 @@ after Razorpay confirms subscription activation.
 
 The hiring workflow includes paginated applicant search and filters, status
 history, company-private notes and tags, candidate-consented profile/resume
-access, and interview scheduling/cancellation. Company roles are owner, admin,
+access, two-way application messages, withdrawal-request review, interview
+scheduling/cancellation, and offer summaries with candidate accept/decline
+responses. A candidate's account name is always visible to the employer;
+profile-sharing consent covers the additional profile snapshot and contact
+details, and resume inclusion is a separate choice. Scheduling an interview
+automatically moves eligible applications to the Interview stage. Employers
+must add a job description of at least 100 characters before publication;
+salary disclosure remains optional.
+
+Company roles are owner, admin,
 recruiter, hiring manager, and billing. Invitations are created by an active,
 approved employer account. A new invitee can register directly from the
 invitation link and verify their email; the read-only preview remains limited
@@ -187,6 +220,9 @@ Employer routes (bearer token required; organization-scoped routes accept
 - `POST /api/employer/jobs/:jobId/publish` and `/close` — publish or close a company job
 - `GET /api/employer/applications` — search/filter organization applicants
 - `PATCH /api/employer/applications/:applicationId/status` — update candidate stage
+- `POST /api/employer/applications/:applicationId/offer` — send an offer summary with a response deadline; this does not generate a contract
+- `POST /api/employer/applications/:applicationId/withdrawal` — confirm or decline a candidate withdrawal request
+- `GET|POST /api/employer/applications/:applicationId/messages` — read or send application messages for an authorized hiring-team member
 - `POST /api/employer/applications/:applicationId/notes` and `/tags` — add internal notes/tags
 - `DELETE /api/employer/applications/:applicationId/tags/:tagId` — remove a tag
 - `POST /api/employer/applications/:applicationId/interviews` — schedule an interview
@@ -227,9 +263,9 @@ secret, and staging verification are complete.
 
 ## Backend implementation status
 
-This is not yet a complete production job portal. The admin UI uses live data for job listings, organizations, aggregate application metrics, activity, superadmin-visible user accounts, and audit events. Job listings include optional application deadlines, opening counts, and salary currency/pay period; expired listings are hidden from public search and cannot accept applications. Candidate accounts have a private profile editor, interactive photo crop, private PDF resume storage, experience and education history, career preferences, professional links, saved jobs/searches, and application tracking. Candidates can independently choose to attach their current resume and share a profile snapshot on each application; they can withdraw applications while status remains `submitted`. Approved employers have organization-scoped job management, applicant workflows, bulk status updates, team access, notifications, and interview scheduling. Employers see profile details/resumes only when the candidate consented. Application status emails, interview notices, and matching job alerts use SMTP. Production database, SMTP, Supabase Storage, Razorpay, backups, and deployment still require configuration and staging verification.
+This is not yet a complete production job portal. The admin UI uses live data for job listings, organizations, aggregate application metrics, activity, superadmin-visible user accounts, and audit events. Job listings include optional application deadlines, opening counts, and salary currency/pay period; expired listings are hidden from public search and cannot accept applications. Candidate accounts have a private profile editor, interactive photo crop, private PDF resume storage, experience and education history, career preferences, professional links, saved jobs/searches, and application tracking. Candidates can independently choose to attach their current resume and share a profile snapshot on each application; they can request withdrawal at any active stage, with employer confirmation required, and may reapply after confirmation while the job remains open. Approved employers have organization-scoped job management, applicant workflows, bulk status updates, team access, notifications, and interview scheduling. Employers always see the candidate's account name; additional profile details and resumes are shared only according to candidate consent. Application status emails, interview notices, and matching job alerts use SMTP. Production database, SMTP, Supabase Storage, Razorpay, backups, and deployment still require configuration and staging verification.
 
-Before production, configure HTTPS, establish PostgreSQL backups/restore tests, test SMTP delivery, apply migrations against a staging database, and arrange security review and superadmin MFA. Review the Privacy and Terms pages against the business's actual data-retention, deletion, cookie/analytics, and service terms; the current pages are only high-level summaries.
+Before production, configure HTTPS, establish PostgreSQL backups/restore tests, test SMTP delivery, apply migrations against a staging database, and arrange security review and superadmin MFA. Validate Razorpay plans, displayed prices, webhooks, subscription changes, cancellation, and payment failure handling in staging before enabling paid checkout. Establish monitoring/alerting, incident ownership, customer-support response ownership, and recovery procedures. Configure and verify malware scanning/quarantine for uploads before accepting real resumes. Review the Privacy and Terms pages against the business's actual data-retention, deletion, cookie/analytics, and service terms; the current pages are only high-level summaries.
 
 Use HTTPS in production. The refresh cookie is marked Secure when `NODE_ENV=production`; production startup also refuses to run without a 32+ character `JWT_ACCESS_SECRET`.
 
@@ -241,8 +277,13 @@ Useful API routes:
 - `GET|PUT /api/candidate/profile` — read or update the signed-in candidate's private profile
 - `POST|DELETE /api/candidate/profile/photo` — upload a cropped photo or remove it
 - `POST|DELETE /api/candidate/profile/resume` — upload a PDF resume or remove it
+- `GET /api/candidate/account/export` — download the signed-in candidate's JSON data export
+- `GET|POST /api/candidate/account/deletion-request` — view or submit a candidate deletion request for superadmin review; no data is deleted
+- `POST /api/reports` — submit a job, company, or user report as a signed-in candidate/employer
+- `GET /api/admin/reports` and `PATCH /api/admin/reports/:id` — staff/admin/superadmin report queue and moderation actions
+- `GET /api/admin/privacy-requests` and `PATCH /api/admin/privacy-requests/:id` — superadmin-only candidate deletion-request review queue
 
-The public homepage fetches published jobs from `/api/jobs` and includes URL-addressable search results and job detail views. Search, filters, sorting, and pagination are applied by the API, and clients receive bounded result pages. If an unfiltered request succeeds but the database has no published jobs, clearly labeled sample listings are shown as read-only previews. API errors are surfaced rather than silently presented as live data. Signed-in candidates save published jobs and searches to their account; guest and preview saves remain browser-local and are offered for sync at sign-in. Candidates choose whether to attach a resume or share a profile when applying, track the full status history, and withdraw applications that remain submitted; withdrawal is final and candidates cannot reapply to that job. Interview scheduling and cancellation appear in the candidate notification center. Employers review organization-owned job applications; status changes are audited in the application timeline and emailed when the candidate has enabled status notifications. Public share pages at `/share/jobs/:id` provide canonical metadata and `JobPosting` structured data; `/sitemap.xml` lists active job share pages and `/robots.txt` references the sitemap. Set `PUBLIC_APP_URL` to the site’s canonical absolute HTTP(S) origin for these endpoints and matching-job email links.
+The public homepage fetches published jobs from `/api/jobs` and includes URL-addressable search results and job detail views. Search, filters, sorting, and pagination are applied by the API, and clients receive bounded result pages. If an unfiltered request succeeds but the database has no published jobs, clearly labeled sample listings are shown as read-only previews. API errors are surfaced rather than silently presented as live data. Signed-in candidates save published jobs and searches to their account; guest and preview saves remain browser-local and are offered for sync at sign-in. Candidates choose whether to attach a resume or share a profile when applying, track the full status history, request withdrawal at any active stage, and may reapply after the employer confirms withdrawal while the job remains open. They can review and respond to employer-entered offer summaries before expiry and message the hiring team with text-only messages. Interview scheduling and cancellation appear in the candidate notification center. Employers review organization-owned job applications; status changes are audited in the application timeline and emailed when the candidate has enabled status notifications. Public share pages at `/share/jobs/:id` provide canonical metadata and `JobPosting` structured data; `/sitemap.xml` lists active job share pages and `/robots.txt` references the sitemap. Set `PUBLIC_APP_URL` to the site's canonical absolute HTTP(S) origin for these endpoints and matching-job email links.
 
 ## Production build
 
