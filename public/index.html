@@ -2924,11 +2924,20 @@
         align-items: center;
         justify-content: space-between;
         gap: 14px;
+        min-width: 0;
         min-height: 54px;
         border-top: 1px solid #edf1f1;
         color: var(--ink);
         font-size: 12px;
         font-weight: 600;
+      }
+      .workspace-action > span:first-child {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .workspace-action > span:last-child {
+        min-width: 0;
+        overflow-wrap: anywhere;
       }
       .workspace-action span:last-child {
         color: var(--green);
@@ -3850,6 +3859,44 @@
         .workspace-heading {
           align-items: flex-start;
           flex-direction: column;
+        }
+        .workspace-topbar {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
+          padding: 12px 0;
+        }
+        .workspace-breadcrumb {
+          min-width: 0;
+        }
+        .workspace-user {
+          width: 100%;
+          min-width: 0;
+          gap: 8px;
+        }
+        .workspace-org-switcher {
+          flex: 1 1 0;
+          min-width: 0;
+          max-width: none;
+        }
+        .workspace-user-copy {
+          min-width: 0;
+          max-width: min(180px, 32vw);
+        }
+        .workspace-user-copy strong {
+          max-width: 100%;
+        }
+        .workspace-action {
+          flex-wrap: wrap;
+          gap: 8px;
+          padding: 12px 0;
+        }
+        .workspace-action > span:first-child,
+        .workspace-action > span:last-child {
+          flex: 1 1 100%;
+        }
+        .workspace-action > span:last-child {
+          text-align: left;
         }
       }
     </style>
@@ -7684,7 +7731,7 @@
         workspaceNav.innerHTML = workspaceItems(user.role)
           .map(
             (item) =>
-              `<a href="${item.href}" class="${item.key === activeKey ? "active" : ""}"${item.key === activeKey ? ' aria-current="page"' : ""}${item.disabled ? ' aria-disabled="true" title="This workflow will be enabled when its server features are implemented"' : ""}>
+              `<a href="${item.href}" class="${item.key === activeKey ? "active" : ""}" aria-label="${escapeHtml(item.label)}" title="${item.disabled ? "This workflow will be enabled when its server features are implemented" : escapeHtml(item.label)}"${item.key === activeKey ? ' aria-current="page"' : ""}${item.disabled ? ' aria-disabled="true"' : ""}>
           <span class="nav-icon" aria-hidden="true">${item.icon}</span><span class="nav-text">${escapeHtml(item.label)}</span>${item.disabled ? '<span class="nav-text" aria-hidden="true"> · soon</span>' : ""}
         </a>`,
           )
