@@ -30,6 +30,24 @@ import {
 import { CandidateAccountService } from "./candidate-account.service";
 import { CandidateApplicationOffer } from "./candidate-application-offer.entity";
 import { CandidateApplicationMessage } from "./candidate-application-message.entity";
+import { CandidateResumeVersion } from "./candidate-resume-version.entity";
+import { CandidateRecommendationsController } from "./candidate-recommendations.controller";
+import { CandidateRecommendationsService } from "./candidate-recommendations.service";
+import { CandidateInterviewsController } from "./candidate-interviews.controller";
+import { CandidateInterviewsService } from "./candidate-interviews.service";
+import { EmployerInterview } from "../employers/employer-interview.entity";
+import { CandidatePremiumProduct } from "./candidate-premium-product.entity";
+import { CandidatePremiumOrder } from "./candidate-premium-order.entity";
+import {
+  CandidatePremiumController,
+  CandidatePremiumWebhookController,
+} from "./candidate-premium.controller";
+import { CandidatePremiumService } from "./candidate-premium.service";
+import { PaymentsModule } from "../payments/payments.module";
+import { CandidateFileScanService } from "./candidate-file-scan.service";
+import { CandidateApplicationDocument } from "./candidate-application-document.entity";
+import { PublicUserProfileController } from "./public-user-profile.controller";
+import { EmployerOrganization } from "../employers/organization.entity";
 
 @Module({
   imports: [
@@ -37,21 +55,33 @@ import { CandidateApplicationMessage } from "./candidate-application-message.ent
       CandidateProfile,
       CandidateSavedJob,
       CandidateApplication,
+      CandidateApplicationDocument,
       CandidateApplicationStatus,
       CandidateApplicationOffer,
       CandidateApplicationMessage,
+      CandidateResumeVersion,
+      CandidatePremiumProduct,
+      CandidatePremiumOrder,
+      EmployerInterview,
       User,
       Job,
       EmployerOrganizationMember,
+      EmployerOrganization,
       UserNotification,
       CandidateSavedSearch,
       CandidateDeletionRequest,
     ]),
     AuthModule,
     AuditModule,
+    PaymentsModule,
   ],
   controllers: [
     CandidateProfileController,
+    PublicUserProfileController,
+    CandidateRecommendationsController,
+    CandidateInterviewsController,
+    CandidatePremiumController,
+    CandidatePremiumWebhookController,
     CandidateSavedJobsController,
     CandidateApplicationsController,
     CandidateNotificationsController,
@@ -61,6 +91,10 @@ import { CandidateApplicationMessage } from "./candidate-application-message.ent
   ],
   providers: [
     CandidateProfileService,
+    CandidateFileScanService,
+    CandidateRecommendationsService,
+    CandidateInterviewsService,
+    CandidatePremiumService,
     CandidateSavedJobsService,
     CandidateApplicationsService,
     CandidateNotificationsService,

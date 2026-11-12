@@ -5,12 +5,14 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import mammoth from "mammoth";
+import pdfParse from "pdf-parse";
 import { DataSource, Repository } from "typeorm";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { User } from "./user.entity";
 import { CandidateProfile } from "./candidate-profile.entity";
 import { CandidateFileStorageService } from "./candidate-file-storage.service";
-import { CandidateApplication } from "./candidate-application.entity";
+import { CandidateResumeVersion } from "./candidate-resume-version.entity";
 import { AuditService } from "../audit/audit.service";
 import {
   CandidateEducationDto,
@@ -29,8 +31,8 @@ export class CandidateProfileService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(CandidateProfile)
     private readonly profilesRepository: Repository<CandidateProfile>,
-    @InjectRepository(CandidateApplication)
-    private readonly applicationsRepository: Repository<CandidateApplication>,
+    @InjectRepository(CandidateResumeVersion)
+    private readonly resumeVersionsRepository: Repository<CandidateResumeVersion>,
     private readonly auditService: AuditService,
   ) {}
 
@@ -51,11 +53,16 @@ export class CandidateProfileService {
         ? this.fileStorage.createSignedUrl(profile.resumePath)
         : null,
     ]);
+    const resumeVersions = profile ? await this.listResumeVersions(user) : [];
 
     return {
       id: account.id,
       email: account.email,
       displayName: account.displayName,
+      username: account.username,
+      phoneNumber: account.phoneE164,
+      pendingPhoneNumber: account.pendingPhoneE164,
+      phoneVerified: account.phoneVerified,
       headline: profile?.headline ?? "",
       location: profile?.location ?? "",
       phone: profile?.phone ?? "",
@@ -66,6 +73,17 @@ export class CandidateProfileService {
       workplaceTypes: profile?.workplaceTypes ?? [],
       experience: profile?.experience ?? [],
       education: profile?.education ?? [],
+      certifications: profile?.certifications ?? [],
+      salaryPreferences: profile?.salaryPreferences ?? {},
+      profileVisibility: profile?.profileVisibility ?? "private",
+      publicProfileEnabled: profile?.publicProfileEnabled ?? false,
+      allowRecruiterContact: profile?.allowRecruiterContact ?? false,
+      allowRecruiterResumeAccess: profile?.allowRecruiterResumeAccess ?? false,
+      premiumBoostUntil: profile?.premiumBoostUntil ?? null,
+      resumeBuilder: profile?.resumeBuilder ?? {},
+      parsedResumeText:
+        resumeVersions.find((version) => version.active)?.parsedText ?? "",
+      resumeVersions,
       links: {
         linkedin: profile?.links?.linkedin ?? "",
         portfolio: profile?.links?.portfolio ?? "",
@@ -109,6 +127,13 @@ export class CandidateProfileService {
           workplaceTypes: [],
           experience: [],
           education: [],
+          certifications: [],
+          salaryPreferences: {},
+          profileVisibility: "private",
+          publicProfileEnabled: false,
+          allowRecruiterContact: false,
+          allowRecruiterResumeAccess: false,
+          resumeBuilder: {},
           links: { linkedin: "", portfolio: "", github: "" },
           shareProfileOnApplication: false,
           applicationEmailUpdates: true,
@@ -145,6 +170,31 @@ export class CandidateProfileService {
           endDate: item.endDate?.trim() ?? "",
           description: item.description?.trim() ?? "",
         }));
+      if (dto.certifications !== undefined)
+        profile.certifications = dto.certifications.map((item) => ({
+          name: item.name.trim(),
+          issuer: item.issuer?.trim() ?? "",
+          issueDate: item.issueDate?.trim() ?? "",
+          credentialUrl: item.credentialUrl?.trim() ?? "",
+        }));
+      if (dto.salaryPreferences !== undefined)
+        profile.salaryPreferences = {
+          ...profile.salaryPreferences,
+          ...dto.salaryPreferences,
+        };
+      if (dto.profileVisibility !== undefined)
+        profile.profileVisibility = dto.profileVisibility;
+      if (dto.publicProfileEnabled !== undefined)
+        profile.publicProfileEnabled = dto.publicProfileEnabled;
+      if (dto.allowRecruiterContact !== undefined)
+        profile.allowRecruiterContact = dto.allowRecruiterContact;
+      if (dto.allowRecruiterResumeAccess !== undefined)
+        profile.allowRecruiterResumeAccess = dto.allowRecruiterResumeAccess;
+      if (dto.resumeBuilder !== undefined)
+        profile.resumeBuilder = {
+          ...profile.resumeBuilder,
+          ...dto.resumeBuilder,
+        };
       if (dto.links) {
         profile.links = {
           linkedin: dto.links.linkedin?.trim() ?? profile.links.linkedin ?? "",
@@ -219,51 +269,205 @@ export class CandidateProfileService {
     user: AuthenticatedUser,
     file: Uint8Array,
     originalName: string,
+    mimeType: string,
   ) {
     const profile = await this.getOrCreateProfile(user);
+    const parsedText = await this.extractResumeText(file, mimeType);
     const safeFileName = originalName
       .replace(/[\/\\\u0000-\u001f\u007f]/g, "")
       .trim()
       .slice(-180);
-    const path = this.fileStorage.newObjectPath(user.id, "resume", "pdf");
-    await this.fileStorage.upload(path, "application/pdf", file);
-    const previousPath = profile.resumePath;
-    profile.resumePath = path;
-    profile.resumeFileName = safeFileName || "resume.pdf";
+    const extension = mimeType === "application/pdf" ? "pdf" : "docx";
+    const path = this.fileStorage.newObjectPath(user.id, "resume", extension);
+    await this.fileStorage.upload(path, mimeType, file);
     try {
-      await this.profilesRepository.save(profile);
+      await this.dataSource.transaction(async (manager) => {
+        profile.resumePath = path;
+        profile.resumeFileName = safeFileName || `resume.${extension}`;
+        await manager.getRepository(CandidateProfile).save(profile);
+        await manager.getRepository(CandidateResumeVersion).save({
+          userId: user.id,
+          storagePath: path,
+          fileName: profile.resumeFileName,
+          mimeType,
+          parsedText,
+        });
+      });
     } catch (error) {
       await this.cleanupFailedUpload(path, error);
       throw error;
     }
-    const storageCleanupWarning = previousPath
-      ? await this.removeOldResumeIfUnattached(previousPath)
-      : null;
     await this.auditService.record({
       actorUserId: user.id,
       action: "candidate.resume_uploaded",
       targetType: "user",
       targetId: user.id,
+      details: { fileName: safeFileName || `resume.${extension}`, mimeType },
     });
-    return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
+    return this.get(user);
+  }
+
+  async listResumeVersions(user: AuthenticatedUser) {
+    const profile = await this.profilesRepository.findOneBy({
+      userId: user.id,
+    });
+    const versions = await this.resumeVersionsRepository.find({
+      where: { userId: user.id },
+      order: { createdAt: "DESC", id: "DESC" },
+      take: 20,
+    });
+    return Promise.all(
+      versions.map(async (version) => ({
+        id: version.id,
+        fileName: version.fileName,
+        mimeType: version.mimeType,
+        parsedText: version.parsedText,
+        createdAt: version.createdAt,
+        active: profile?.resumePath === version.storagePath,
+        url: await this.fileStorage.createSignedUrl(version.storagePath),
+      })),
+    );
+  }
+
+  async restoreResumeVersion(user: AuthenticatedUser, versionId: number) {
+    const version = await this.resumeVersionsRepository.findOneBy({
+      id: versionId,
+      userId: user.id,
+    });
+    if (!version) throw new NotFoundException("Resume version was not found.");
+    const profile = await this.getOrCreateProfile(user);
+    profile.resumePath = version.storagePath;
+    profile.resumeFileName = version.fileName;
+    await this.profilesRepository.save(profile);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.resume_version_restored",
+      targetType: "candidate_resume_version",
+      targetId: version.id,
+    });
+    return this.get(user);
   }
 
   async removeResume(user: AuthenticatedUser) {
     const profile = await this.getOrCreateProfile(user);
-    const previousPath = profile.resumePath;
     profile.resumePath = null;
     profile.resumeFileName = null;
     await this.profilesRepository.save(profile);
-    const storageCleanupWarning = previousPath
-      ? await this.removeOldResumeIfUnattached(previousPath)
-      : null;
     await this.auditService.record({
       actorUserId: user.id,
       action: "candidate.resume_removed",
       targetType: "user",
       targetId: user.id,
     });
-    return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
+    return this.get(user);
+  }
+
+  private async extractResumeText(
+    file: Uint8Array,
+    mimeType: string,
+  ): Promise<string> {
+    const buffer = Buffer.from(file);
+    try {
+      const text =
+        mimeType === "application/pdf"
+          ? (await pdfParse(buffer, { max: 50 })).text
+          : (
+              await mammoth.extractRawText({
+                buffer: this.validateDocxArchive(buffer),
+              })
+            ).value;
+      const normalized = text
+        .replace(/\u0000/g, "")
+        .replace(/\r\n?/g, "\n")
+        .trim()
+        .slice(0, 100_000);
+      if (!normalized) {
+        throw new BadRequestException(
+          "No selectable text was found in the resume. Upload a text-based PDF or DOCX.",
+        );
+      }
+      return normalized;
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        "The resume could not be parsed. Upload a valid text-based PDF or DOCX.",
+        { cause: error },
+      );
+    }
+  }
+
+  private validateDocxArchive(buffer: Buffer): Buffer {
+    const eocdSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+    const eocdOffset = buffer.lastIndexOf(
+      eocdSignature,
+      Math.max(0, buffer.length - 22),
+    );
+    if (eocdOffset < 0 || eocdOffset + 22 > buffer.length) {
+      throw new BadRequestException("The DOCX archive is invalid.");
+    }
+    const entryCount = buffer.readUInt16LE(eocdOffset + 10);
+    const directorySize = buffer.readUInt32LE(eocdOffset + 12);
+    const directoryOffset = buffer.readUInt32LE(eocdOffset + 16);
+    if (
+      entryCount > 500 ||
+      directorySize === 0xffffffff ||
+      directoryOffset === 0xffffffff ||
+      directoryOffset + directorySize > eocdOffset
+    ) {
+      throw new BadRequestException(
+        "The DOCX archive is too large or uses an unsupported format.",
+      );
+    }
+
+    let offset = directoryOffset;
+    let expandedBytes = 0;
+    let foundDocument = false;
+    for (let index = 0; index < entryCount; index += 1) {
+      if (
+        offset + 46 > directoryOffset + directorySize ||
+        buffer.readUInt32LE(offset) !== 0x02014b50
+      ) {
+        throw new BadRequestException("The DOCX archive is invalid.");
+      }
+      const flags = buffer.readUInt16LE(offset + 8);
+      const compressedSize = buffer.readUInt32LE(offset + 20);
+      const uncompressedSize = buffer.readUInt32LE(offset + 24);
+      const nameLength = buffer.readUInt16LE(offset + 28);
+      const extraLength = buffer.readUInt16LE(offset + 30);
+      const commentLength = buffer.readUInt16LE(offset + 32);
+      const nextOffset = offset + 46 + nameLength + extraLength + commentLength;
+      if (
+        flags & 1 ||
+        uncompressedSize === 0xffffffff ||
+        nextOffset > directoryOffset + directorySize ||
+        uncompressedSize > 8 * 1024 * 1024 ||
+        compressedSize > buffer.length
+      ) {
+        throw new BadRequestException(
+          "The DOCX archive is encrypted, oversized, or invalid.",
+        );
+      }
+      expandedBytes += uncompressedSize;
+      if (expandedBytes > 24 * 1024 * 1024) {
+        throw new BadRequestException(
+          "The DOCX expands beyond the supported size limit.",
+        );
+      }
+      const name = buffer
+        .subarray(offset + 46, offset + 46 + nameLength)
+        .toString("utf8");
+      if (name.split(/[\\/]/).includes("..")) {
+        throw new BadRequestException(
+          "The DOCX archive contains an invalid path.",
+        );
+      }
+      if (name === "word/document.xml") foundDocument = true;
+      offset = nextOffset;
+    }
+    if (!foundDocument) {
+      throw new BadRequestException("The DOCX archive has no document body.");
+    }
+    return buffer;
   }
 
   private async cleanupFailedUpload(path: string, saveError: unknown) {
@@ -298,23 +502,6 @@ export class CandidateProfileService {
         }`,
       );
       return `Your profile was updated, but the ${description} could not be removed from private storage. Contact support if you need it deleted.`;
-    }
-  }
-
-  private async removeOldResumeIfUnattached(
-    path: string,
-  ): Promise<string | null> {
-    try {
-      if (await this.isResumeAttached(path)) return null;
-      await this.fileStorage.remove(path);
-      return null;
-    } catch (error) {
-      this.logger.error(
-        `Previous candidate resume ${path} could not be cleaned up: ${
-          error instanceof Error ? error.message : "unknown storage error"
-        }`,
-      );
-      return "Your profile was updated, but an older resume could not be removed from private storage. Contact support if you need it deleted.";
     }
   }
 
@@ -355,16 +542,17 @@ export class CandidateProfileService {
         workplaceTypes: [],
         experience: [],
         education: [],
+        certifications: [],
+        salaryPreferences: {},
+        profileVisibility: "private",
+        allowRecruiterContact: false,
+        resumeBuilder: {},
         links: { linkedin: "", portfolio: "", github: "" },
         shareProfileOnApplication: false,
         applicationEmailUpdates: true,
         jobAlertEmails: false,
       }),
     );
-  }
-
-  private isResumeAttached(path: string): Promise<boolean> {
-    return this.applicationsRepository.existsBy({ resumePath: path });
   }
 
   private uniqueValues(values: string[]): string[] {

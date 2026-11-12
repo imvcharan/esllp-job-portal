@@ -143,6 +143,6 @@ export class VerifyRazorpaySubscriptionDto {
 }
 
 export class CreateEmployerSubscriptionDto {
-  @IsIn(["starter", "growth"])
-  planKey!: "starter" | "growth";
+  @IsIn(["starter", "growth", "business", "enterprise"])
+  planKey!: "starter" | "growth" | "business" | "enterprise";
 }

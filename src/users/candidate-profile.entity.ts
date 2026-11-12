@@ -1,9 +1,21 @@
-import { Column, Entity, PrimaryColumn, UpdateDateColumn } from "typeorm";
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from "typeorm";
+import { User } from "./user.entity";
 
 @Entity({ name: "candidate_profiles" })
 export class CandidateProfile {
   @PrimaryColumn({ name: "user_id", type: "int" })
   userId!: number;
+
+  @ManyToOne(() => User, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "user_id" })
+  user!: User;
 
   @Column({ length: 160, default: "" })
   headline!: string;
@@ -46,6 +58,51 @@ export class CandidateProfile {
 
   @Column({ type: "jsonb", default: () => "'[]'::jsonb" })
   education!: CandidateEducation[];
+
+  @Column({ type: "jsonb", default: () => "'[]'::jsonb" })
+  certifications!: CandidateCertification[];
+
+  @Column({
+    name: "salary_preferences",
+    type: "jsonb",
+    default: () => "'{}'::jsonb",
+  })
+  salaryPreferences!: CandidateSalaryPreferences;
+
+  @Column({
+    name: "profile_visibility",
+    type: "varchar",
+    length: 20,
+    default: "private",
+  })
+  profileVisibility!: "private" | "applications" | "recruiters";
+
+  @Column({ name: "public_profile_enabled", type: "boolean", default: false })
+  publicProfileEnabled!: boolean;
+
+  @Column({ name: "allow_recruiter_contact", type: "boolean", default: false })
+  allowRecruiterContact!: boolean;
+
+  @Column({
+    name: "allow_recruiter_resume_access",
+    type: "boolean",
+    default: false,
+  })
+  allowRecruiterResumeAccess!: boolean;
+
+  @Column({
+    name: "premium_boost_until",
+    type: "timestamptz",
+    nullable: true,
+  })
+  premiumBoostUntil!: Date | null;
+
+  @Column({
+    name: "resume_builder",
+    type: "jsonb",
+    default: () => "'{}'::jsonb",
+  })
+  resumeBuilder!: CandidateResumeBuilder;
 
   @Column({ type: "jsonb", default: () => "'{}'::jsonb" })
   links!: CandidateLinks;
@@ -108,4 +165,23 @@ export interface CandidateLinks {
   linkedin: string;
   portfolio: string;
   github: string;
+}
+
+export interface CandidateCertification {
+  name: string;
+  issuer: string;
+  issueDate: string;
+  credentialUrl: string;
+}
+
+export interface CandidateSalaryPreferences {
+  minimum?: number;
+  currency?: string;
+  period?: "year" | "month" | "hour";
+}
+
+export interface CandidateResumeBuilder {
+  title?: string;
+  summary?: string;
+  sectionOrder?: string[];
 }

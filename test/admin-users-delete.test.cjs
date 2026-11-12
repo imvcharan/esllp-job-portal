@@ -10,6 +10,9 @@ const {
   CandidateApplication,
 } = require("../dist/users/candidate-application.entity.js");
 const {
+  CandidateApplicationDocument,
+} = require("../dist/users/candidate-application-document.entity.js");
+const {
   CandidateApplicationMessage,
 } = require("../dist/users/candidate-application-message.entity.js");
 const {
@@ -21,6 +24,12 @@ const {
 const {
   CandidateProfile,
 } = require("../dist/users/candidate-profile.entity.js");
+const {
+  CandidatePremiumOrder,
+} = require("../dist/users/candidate-premium-order.entity.js");
+const {
+  CandidateResumeVersion,
+} = require("../dist/users/candidate-resume-version.entity.js");
 const {
   CandidateSavedJob,
 } = require("../dist/users/candidate-saved-job.entity.js");
@@ -51,9 +60,13 @@ function createService({
   user,
   activeSuperadmins = 2,
   missingUser = false,
+  applicationDocuments = [],
+  resumeVersions = [],
+  storageError,
 } = {}) {
   const audits = [];
   const removedIds = [];
+  const removedFiles = [];
   const targetUser = user || {
     id: 8,
     email: "new-admin@example.com",
@@ -68,6 +81,12 @@ function createService({
   const manager = {
     getRepository(entity) {
       if (entity === User) return userRepository;
+      if (entity === CandidateApplicationDocument) {
+        return { find: async () => applicationDocuments };
+      }
+      if (entity === CandidateResumeVersion) {
+        return { find: async () => resumeVersions };
+      }
       return {
         countBy: async () => (entity === linkedEntity ? 1 : 0),
         findOne: async () => null,
@@ -79,10 +98,19 @@ function createService({
       transaction: async (callback) => callback(manager),
     },
   };
-  const service = new AdminUsersService(usersRepository, {
-    record: async (entry) => audits.push(entry),
-  });
-  return { service, audits, removedIds };
+  const service = new AdminUsersService(
+    usersRepository,
+    {
+      record: async (entry) => audits.push(entry),
+    },
+    {
+      removeMany: async (paths) => {
+        if (storageError) throw storageError;
+        removedFiles.push(...paths);
+      },
+    },
+  );
+  return { service, audits, removedIds, removedFiles };
 }
 
 test("permanently deletes an unlinked account and retains an audit event", async () => {
@@ -100,6 +128,22 @@ test("permanently deletes an unlinked account and retains an audit event", async
 test("blocks permanent deletion when business records are linked", async () => {
   const { service, removedIds, audits } = createService({
     linkedEntity: CandidateApplication,
+  });
+
+  test("preserves candidate accounts with premium payment records", async () => {
+    const { service, removedIds, audits } = createService({
+      linkedEntity: CandidatePremiumOrder,
+      user: {
+        id: 8,
+        email: "candidate@example.com",
+        role: UserRole.CANDIDATE,
+        isActive: true,
+      },
+    });
+
+    await assert.rejects(service.remove(8, 3), ConflictException);
+    assert.deepEqual(removedIds, []);
+    assert.deepEqual(audits, []);
   });
 
   await assert.rejects(service.remove(8, 3), ConflictException);
@@ -132,6 +176,48 @@ test("reports a missing account without creating an audit event", async () => {
   const { service, audits, removedIds } = createService({ missingUser: true });
 
   await assert.rejects(service.remove(404, 3), NotFoundException);
+  assert.deepEqual(removedIds, []);
+  assert.deepEqual(audits, []);
+});
+
+test("purges candidate files from external storage before account deletion", async () => {
+  const { service, removedFiles, removedIds } = createService({
+    user: {
+      id: 8,
+      email: "candidate@example.com",
+      role: UserRole.CANDIDATE,
+      isActive: true,
+    },
+    applicationDocuments: [
+      { filePath: "8/application/portfolio.pdf" },
+      { filePath: "8/application/other.docx" },
+    ],
+    resumeVersions: [{ storagePath: "8/resume/version.pdf" }],
+  });
+
+  await service.remove(8, 3);
+
+  assert.deepEqual(removedFiles.sort(), [
+    "8/application/other.docx",
+    "8/application/portfolio.pdf",
+    "8/resume/version.pdf",
+  ]);
+  assert.deepEqual(removedIds, [8]);
+});
+
+test("does not delete a candidate account when external file purging fails", async () => {
+  const { service, removedIds, audits } = createService({
+    user: {
+      id: 8,
+      email: "candidate@example.com",
+      role: UserRole.CANDIDATE,
+      isActive: true,
+    },
+    applicationDocuments: [{ filePath: "8/application/portfolio.pdf" }],
+    storageError: new Error("storage unavailable"),
+  });
+
+  await assert.rejects(service.remove(8, 3), /storage unavailable/);
   assert.deepEqual(removedIds, []);
   assert.deepEqual(audits, []);
 });

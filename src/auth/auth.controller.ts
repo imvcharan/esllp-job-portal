@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Put,
   Req,
   Res,
   UseGuards,
@@ -14,6 +15,18 @@ import { Request, Response } from "express";
 import { Throttle } from "@nestjs/throttler";
 import { AuthenticatedUser } from "./auth.types";
 import { AuthService } from "./auth.service";
+import {
+  GoogleSignInDto,
+  RequestEmailOtpDto,
+  VerifyEmailOtpDto,
+} from "./dto/email-otp.dto";
+import {
+  RequestPhoneChangeDto,
+  ResendRegistrationPhoneDto,
+  UpdateUsernameDto,
+  VerifyPhoneChangeDto,
+  VerifyRegistrationPhoneDto,
+} from "./dto/phone-verification.dto";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { AllowForcedPasswordChange } from "./forced-password-change.decorator";
@@ -41,6 +54,99 @@ const refreshCookieOptions = {
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get("config")
+  @Header("Cache-Control", "no-store")
+  config() {
+    return {
+      googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || null,
+    };
+  }
+
+  @Post("email-otp/request")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  requestEmailOtp(@Body() dto: RequestEmailOtpDto) {
+    return this.authService.requestEmailOtp(dto.email);
+  }
+
+  @Post("phone-verification/request")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  requestRegistrationPhoneVerification(
+    @Body() dto: ResendRegistrationPhoneDto,
+  ) {
+    return this.authService.requestRegistrationPhoneVerification(dto.email);
+  }
+
+  @Post("phone-verification/verify")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  verifyRegistrationPhone(@Body() dto: VerifyRegistrationPhoneDto) {
+    return this.authService.verifyRegistrationPhone(dto.email, dto.code);
+  }
+
+  @Put("me/username")
+  @UseGuards(JwtAuthGuard)
+  @Header("Cache-Control", "private, no-store")
+  updateUsername(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateUsernameDto,
+  ) {
+    return this.authService.updateUsername(user.id, dto.username);
+  }
+
+  @Post("phone/change/request")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  requestPhoneChange(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: RequestPhoneChangeDto,
+  ) {
+    return this.authService.requestPhoneChange(user.id, dto.phoneNumber);
+  }
+
+  @Post("phone/change/verify")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  verifyPhoneChange(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: VerifyPhoneChangeDto,
+  ) {
+    return this.authService.verifyPhoneChange(user.id, dto.code);
+  }
+
+  @Post("email-otp/verify")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async verifyEmailOtp(
+    @Body() dto: VerifyEmailOtpDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const session = await this.authService.verifyEmailOtp(dto.email, dto.code);
+    response.cookie(REFRESH_COOKIE, session.refreshToken, {
+      ...refreshCookieOptions,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    return { accessToken: session.accessToken, user: session.user };
+  }
+
+  @Post("google")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async googleSignIn(
+    @Body() dto: GoogleSignInDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const session = await this.authService.googleSignIn(dto.idToken);
+    response.cookie(REFRESH_COOKIE, session.refreshToken, {
+      ...refreshCookieOptions,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    return { accessToken: session.accessToken, user: session.user };
+  }
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)

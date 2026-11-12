@@ -20,6 +20,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../users/user.entity';
 import { CreateJobDto } from './dto/create-job.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
+import { ModerateJobDto } from './dto/moderate-job.dto';
 import { JobsService } from './jobs.service';
 
 @Controller('admin/jobs')
@@ -54,6 +55,22 @@ export class AdminJobsController {
       throw new NotFoundException(`Job ${id} was not found`);
     }
     return job;
+  }
+
+  @Patch(':id/moderation')
+  moderate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ModerateJobDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() request: Request,
+  ) {
+    return this.jobsService.moderate(
+      id,
+      dto.status,
+      dto.reason,
+      actor,
+      request.ip,
+    );
   }
 
   @Delete(':id')

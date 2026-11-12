@@ -5,6 +5,8 @@ import {
   Delete,
   Get,
   Header,
+  Param,
+  ParseIntPipe,
   Post,
   Put,
   UploadedFile,
@@ -22,12 +24,16 @@ import { RolesGuard } from "../auth/roles.guard";
 import { UserRole } from "./user.entity";
 import { CandidateProfileService } from "./candidate-profile.service";
 import { UpdateCandidateProfileDto } from "./dto/update-candidate-profile.dto";
+import { CandidateFileScanService } from "./candidate-file-scan.service";
 
 @Controller("candidate/profile")
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.CANDIDATE)
 export class CandidateProfileController {
-  constructor(private readonly profileService: CandidateProfileService) {}
+  constructor(
+    private readonly profileService: CandidateProfileService,
+    private readonly fileScan: CandidateFileScanService,
+  ) {}
 
   @Get()
   @Header("Cache-Control", "private, no-store")
@@ -89,6 +95,7 @@ export class CandidateProfileController {
         { cause: error },
       );
     }
+    await this.fileScan.scan(image);
     return this.profileService.uploadPhoto(user, image);
   }
 
@@ -105,23 +112,51 @@ export class CandidateProfileController {
   @UseInterceptors(
     FileInterceptor("file", { limits: { fileSize: 8 * 1024 * 1024 } }),
   )
-  uploadResume(
+  async uploadResume(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (!file) {
-      throw new BadRequestException("Choose a PDF resume to upload.");
+      throw new BadRequestException("Choose a PDF or DOCX resume to upload.");
     }
-    if (file.buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+    const isPdf =
+      file.buffer.subarray(0, 5).toString("ascii") === "%PDF-" &&
+      (file.mimetype === "application/pdf" ||
+        file.originalname.toLowerCase().endsWith(".pdf"));
+    const isDocx =
+      file.buffer.subarray(0, 4).toString("ascii") === "PK\u0003\u0004" &&
+      (file.mimetype ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.originalname.toLowerCase().endsWith(".docx"));
+    if (!isPdf && !isDocx) {
       throw new BadRequestException(
-        "Resume uploads must be valid PDF documents.",
+        "Resume uploads must be valid PDF or DOCX documents.",
       );
     }
+    await this.fileScan.scan(file.buffer);
     return this.profileService.uploadResume(
       user,
       file.buffer,
       file.originalname,
+      isPdf
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     );
+  }
+
+  @Get("resume-versions")
+  @Header("Cache-Control", "private, no-store")
+  listResumeVersions(@CurrentUser() user: AuthenticatedUser) {
+    return this.profileService.listResumeVersions(user);
+  }
+
+  @Post("resume-versions/:id/restore")
+  @Header("Cache-Control", "private, no-store")
+  restoreResumeVersion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", ParseIntPipe) id: number,
+  ) {
+    return this.profileService.restoreResumeVersion(user, id);
   }
 
   @Delete("resume")

@@ -1,5 +1,8 @@
 import { PartialType } from "@nestjs/mapped-types";
 import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -10,8 +13,41 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from "class-validator";
-import { JOB_SALARY_CURRENCIES, JOB_SALARY_PERIODS } from "../../jobs/job.constants";
+import { Type } from "class-transformer";
+import {
+  JOB_SALARY_CURRENCIES,
+  JOB_SALARY_PERIODS,
+} from "../../jobs/job.constants";
+
+export class JobApplicationQuestionDto {
+  @IsString()
+  @Matches(/^[a-zA-Z0-9_-]{1,40}$/)
+  id!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(300)
+  question!: string;
+
+  @IsBoolean()
+  required!: boolean;
+}
+
+export class JobRequiredDocumentDto {
+  @IsString()
+  @Matches(/^[a-zA-Z0-9_-]{1,40}$/)
+  id!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  label!: string;
+
+  @IsBoolean()
+  required!: boolean;
+}
 
 export class CreateEmployerJobDto {
   @IsString()
@@ -76,6 +112,20 @@ export class CreateEmployerJobDto {
   @IsString()
   @MaxLength(20_000)
   description?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => JobApplicationQuestionDto)
+  applicationQuestions?: JobApplicationQuestionDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => JobRequiredDocumentDto)
+  requiredDocuments?: JobRequiredDocumentDto[];
 }
 
 export class UpdateEmployerJobDto extends PartialType(CreateEmployerJobDto) {}

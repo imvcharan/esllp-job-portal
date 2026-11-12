@@ -12,6 +12,7 @@ import { EmailDeliveryService } from "./email-delivery.service";
 import { EmployerOrganization } from "../employers/organization.entity";
 import { EmployerOrganizationMember } from "../employers/organization-member.entity";
 import { AuditModule } from "../audit/audit.module";
+import { SmsDeliveryService } from "./sms-delivery.service";
 
 const localDevelopmentSecret =
   "local-development-only-secret-change-before-deploying-2026";
@@ -36,13 +37,20 @@ const localDevelopmentSecret =
     AuditModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, EmailDeliveryService, JwtAuthGuard, RolesGuard],
+  providers: [
+    AuthService,
+    EmailDeliveryService,
+    SmsDeliveryService,
+    JwtAuthGuard,
+    RolesGuard,
+  ],
   exports: [
     JwtAuthGuard,
     RolesGuard,
     JwtModule,
     TypeOrmModule,
     EmailDeliveryService,
+    SmsDeliveryService,
   ],
 })
 export class AuthModule {}

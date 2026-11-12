@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, Not, Repository } from "typeorm";
+import { DataSource, IsNull, Not, Repository } from "typeorm";
 import { EmailDeliveryService } from "../auth/email-delivery.service";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { Job } from "../jobs/job.entity";
@@ -22,6 +22,8 @@ import { AuditService } from "../audit/audit.service";
 import { CandidateApplicationOffer } from "./candidate-application-offer.entity";
 import { CandidateApplicationMessage } from "./candidate-application-message.entity";
 import { CreateCandidateApplicationMessageDto } from "./dto/create-candidate-application-message.dto";
+import { collectApplicationAnswers } from "./application-questions";
+import { CandidateApplicationDocument } from "./candidate-application-document.entity";
 
 const EMPLOYER_TRANSITIONS: Record<string, string[]> = {
   submitted: ["in_review", "interview", "rejected"],
@@ -106,6 +108,110 @@ export class CandidateApplicationsService {
     };
   }
 
+  async listUploadedDocuments(user: AuthenticatedUser, jobId: number) {
+    const job = await this.jobsRepository.findOneBy({ id: jobId });
+    if (!job) throw new NotFoundException(`Job ${jobId} was not found`);
+    const allowedIds = new Set(
+      (job.requiredDocuments ?? []).map((document) => document.id),
+    );
+    const documents = await this.dataSource
+      .getRepository(CandidateApplicationDocument)
+      .find({
+        where: { userId: user.id, jobId, applicationId: IsNull() },
+        order: { createdAt: "DESC" },
+      });
+    const latestByDocument = new Map<string, CandidateApplicationDocument>();
+    for (const document of documents) {
+      if (allowedIds.has(document.documentId))
+        latestByDocument.set(document.documentId, document);
+    }
+    return [...latestByDocument.values()].map((document) => ({
+      documentId: document.documentId,
+      label: document.documentLabel,
+      fileName: document.fileName,
+      uploadedAt: document.createdAt,
+    }));
+  }
+
+  async uploadDocument(
+    user: AuthenticatedUser,
+    jobId: number,
+    documentId: string,
+    file: { buffer: Buffer; originalname: string; contentType: string },
+  ) {
+    const job = await this.jobsRepository.findOneBy({
+      id: jobId,
+      isActive: true,
+    });
+    if (
+      !job ||
+      (job.applicationDeadline &&
+        job.applicationDeadline < currentJobDeadlineDate())
+    )
+      throw new NotFoundException(`Published job ${jobId} was not found`);
+    const configuredDocument = (job.requiredDocuments ?? []).find(
+      (document) => document.id === documentId,
+    );
+    if (!configuredDocument)
+      throw new NotFoundException(
+        "This document is not requested for the selected job.",
+      );
+    const extension = file.contentType === "application/pdf" ? "pdf" : "docx";
+    const fileName = file.originalname
+      .replace(/[\\/\u0000-\u001f\u007f]/g, "_")
+      .slice(0, 255);
+    const filePath = this.fileStorage.newObjectPath(
+      user.id,
+      "application",
+      extension,
+    );
+    await this.fileStorage.upload(filePath, file.contentType, file.buffer);
+    const documentRepository = this.dataSource.getRepository(
+      CandidateApplicationDocument,
+    );
+    let document: CandidateApplicationDocument;
+    try {
+      document = await documentRepository.save(
+        documentRepository.create({
+          userId: user.id,
+          jobId,
+          applicationId: null,
+          documentId,
+          documentLabel: configuredDocument.label,
+          filePath,
+          fileName,
+          contentType: file.contentType,
+        }),
+      );
+    } catch (error) {
+      try {
+        await this.fileStorage.remove(filePath);
+      } catch (cleanupError) {
+        this.logger.error(
+          `Could not remove orphaned application document for candidate ${user.id}: ${
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : "unknown storage error"
+          }`,
+        );
+      }
+      throw error;
+    }
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.application_document_uploaded",
+      targetType: "job",
+      targetId: jobId,
+      details: { documentId, contentType: file.contentType },
+    });
+    return {
+      documentId,
+      label: configuredDocument.label,
+      fileName: document.fileName,
+      uploadedAt: document.createdAt,
+    };
+  }
+
   async submit(
     user: AuthenticatedUser,
     jobId: number,
@@ -147,6 +253,11 @@ export class CandidateApplicationsService {
         "Enable profile sharing in your profile preferences before sharing it with an application.",
       );
     }
+    if (shareProfile && profile?.profileVisibility === "private") {
+      throw new BadRequestException(
+        "Change profile visibility to applications or recruiters before sharing profile details with an application.",
+      );
+    }
     const account = await this.usersRepository.findOneBy({
       id: user.id,
       isActive: true,
@@ -169,6 +280,39 @@ export class CandidateApplicationsService {
       if (!lockedJob?.isActive) {
         throw new NotFoundException(`Published job ${jobId} was not found`);
       }
+      const applicationAnswers = collectApplicationAnswers(
+        lockedJob.applicationQuestions,
+        dto.answers,
+      );
+      const documentRepository = manager.getRepository(
+        CandidateApplicationDocument,
+      );
+      const pendingDocuments = await documentRepository.find({
+        where: {
+          userId: user.id,
+          jobId,
+          applicationId: IsNull(),
+        },
+        order: { createdAt: "DESC" },
+        lock: { mode: "pessimistic_write" },
+      });
+      const selectedDocuments = new Map<string, CandidateApplicationDocument>();
+      for (const document of pendingDocuments) {
+        if (
+          (lockedJob.requiredDocuments ?? []).some(
+            (configured) => configured.id === document.documentId,
+          ) &&
+          !selectedDocuments.has(document.documentId)
+        )
+          selectedDocuments.set(document.documentId, document);
+      }
+      const missingDocuments = (lockedJob.requiredDocuments ?? []).filter(
+        (document) => document.required && !selectedDocuments.has(document.id),
+      );
+      if (missingDocuments.length)
+        throw new BadRequestException(
+          `Upload the required document(s) before applying: ${missingDocuments.map((document) => document.label).join(", ")}.`,
+        );
 
       const insertResult = await manager
         .createQueryBuilder()
@@ -185,17 +329,25 @@ export class CandidateApplicationsService {
           profileSnapshot: shareProfile
             ? {
                 displayName: account.displayName,
-                email: account.email,
                 headline: profile!.headline,
                 location: profile!.location,
-                phone: profile!.phone,
                 summary: profile!.summary,
                 skills: this.parseSkills(profile!.skills),
                 experience: profile!.experience,
                 education: profile!.education,
+                certifications: profile!.certifications,
                 links: profile!.links,
+                ...(profile!.allowRecruiterContact
+                  ? {
+                      email: account.email,
+                      ...(account.phoneVerified && account.phoneE164
+                        ? { phone: account.phoneE164 }
+                        : {}),
+                    }
+                  : {}),
               }
             : null,
+          applicationAnswers,
         })
         .orIgnore()
         .returning(["id"])
@@ -224,6 +376,11 @@ export class CandidateApplicationsService {
           })
           .orIgnore()
           .execute();
+        const applicationDocuments = [...selectedDocuments.values()];
+        for (const document of applicationDocuments)
+          document.applicationId = application.id;
+        if (applicationDocuments.length)
+          await documentRepository.save(applicationDocuments);
       }
     });
 
@@ -243,7 +400,7 @@ export class CandidateApplicationsService {
         targetId: application.id,
         details: { jobId, status: application.status },
       });
-      await this.notifyEmployer(application.job);
+      await this.notifyEmployer(application.job, application.id);
     }
     const histories = await this.getHistories([application]);
     const records = await this.getWorkflowRecords([application]);
@@ -442,8 +599,8 @@ export class CandidateApplicationsService {
       },
     );
 
-    let notificationSent = false;
-    let notificationStatus: "sent" | "disabled" | "failed" = "disabled";
+    let notificationQueued = false;
+    let notificationStatus: "queued" | "disabled" | "failed" = "disabled";
     const preferences = await this.profilesRepository.findOneBy({
       userId: application.userId,
     });
@@ -453,13 +610,14 @@ export class CandidateApplicationsService {
           application.user.email,
           `Application update: ${application.job.title}`,
           `Your application for ${application.job.title} at ${application.job.company} is now ${status.replace("_", " ")}.`,
+          `application-status:${applicationId}:${history.id}`,
         );
-        notificationSent = true;
-        notificationStatus = "sent";
+        notificationQueued = true;
+        notificationStatus = "queued";
       } catch (error) {
         notificationStatus = "failed";
         this.logger.error(
-          `Application ${applicationId} status email could not be delivered: ${
+          `Application ${applicationId} status email could not be queued: ${
             error instanceof Error ? error.message : "unknown delivery error"
           }`,
         );
@@ -480,7 +638,7 @@ export class CandidateApplicationsService {
       applicationId,
       status,
       changedAt: history.createdAt,
-      notificationSent,
+      notificationQueued,
       notificationStatus,
     };
   }
@@ -731,6 +889,7 @@ export class CandidateApplicationsService {
       jobId: application.jobId,
       status: offerExpired ? "offer_expired" : application.status,
       coverLetter: application.coverLetter,
+      applicationAnswers: application.applicationAnswers ?? [],
       profileShared: application.profileShared,
       resumeIncluded: Boolean(application.resumePath),
       resumeFileName: application.resumeFileName,
@@ -792,7 +951,7 @@ export class CandidateApplicationsService {
     return parsed;
   }
 
-  private async notifyEmployer(job: Job) {
+  private async notifyEmployer(job: Job, applicationId: number) {
     try {
       const memberIds = job.organizationId
         ? [
@@ -834,6 +993,7 @@ export class CandidateApplicationsService {
             recipient.email,
             `New application received: ${job.title}`,
             `A candidate submitted an application for ${job.title} at ${job.company}. Sign in to your esllp employer workspace to review applicants.`,
+            `application-received:${applicationId}:${recipient.id}`,
           ),
         ),
       );
@@ -842,7 +1002,7 @@ export class CandidateApplicationsService {
       ).length;
       if (failures) {
         this.logger.error(
-          `${failures} employer application notification email(s) could not be delivered for job ${job.id}.`,
+          `${failures} employer application notification email(s) could not be queued for job ${job.id}.`,
         );
       }
     } catch (error) {

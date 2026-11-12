@@ -49,8 +49,41 @@ export class Job {
   @Column({ type: "text", nullable: true })
   description!: string | null;
 
+  @Column({
+    name: "application_questions",
+    type: "jsonb",
+    default: () => "'[]'::jsonb",
+  })
+  applicationQuestions!: Array<{
+    id: string;
+    question: string;
+    required: boolean;
+  }>;
+
+  @Column({
+    name: "required_documents",
+    type: "jsonb",
+    default: () => "'[]'::jsonb",
+  })
+  requiredDocuments!: Array<{
+    id: string;
+    label: string;
+    required: boolean;
+  }>;
+
   @Column({ name: "is_active", type: "boolean", default: true })
   isActive!: boolean;
+
+  @Column({
+    name: "moderation_status",
+    type: "varchar",
+    length: 20,
+    default: "draft",
+  })
+  moderationStatus!: string;
+
+  @Column({ name: "moderation_note", type: "text", nullable: true })
+  moderationNote!: string | null;
 
   @Column({ name: "employer_user_id", type: "integer", nullable: true })
   employerUserId!: number | null;

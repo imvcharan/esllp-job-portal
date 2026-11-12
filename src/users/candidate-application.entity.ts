@@ -44,6 +44,17 @@ export class CandidateApplication {
   @Column({ name: "profile_snapshot", type: "jsonb", nullable: true })
   profileSnapshot!: Record<string, unknown> | null;
 
+  @Column({
+    name: "application_answers",
+    type: "jsonb",
+    default: () => "'[]'::jsonb",
+  })
+  applicationAnswers!: Array<{
+    id: string;
+    question: string;
+    answer: string;
+  }>;
+
   @Column({ name: "withdrawn_at", type: "timestamptz", nullable: true })
   withdrawnAt!: Date | null;
 

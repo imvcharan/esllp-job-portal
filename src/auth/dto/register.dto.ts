@@ -4,6 +4,7 @@ import {
   IsString,
   IsUrl,
   Length,
+  Matches,
   MaxLength,
   MinLength,
   ValidateIf,
@@ -23,6 +24,10 @@ export class RegisterDto {
   @MinLength(2)
   @MaxLength(120)
   displayName!: string;
+
+  @IsString()
+  @Matches(/^\+[1-9]\d{7,14}$/)
+  phoneNumber!: string;
 }
 
 export class RegisterEmployerDto {
@@ -39,6 +44,10 @@ export class RegisterEmployerDto {
   @MinLength(2)
   @MaxLength(120)
   displayName!: string;
+
+  @IsString()
+  @Matches(/^\+[1-9]\d{7,14}$/)
+  phoneNumber!: string;
 
   @ValidateIf((dto: RegisterEmployerDto) => !dto.invitationToken)
   @IsString()

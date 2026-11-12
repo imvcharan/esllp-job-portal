@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   DefaultValuePipe,
@@ -10,8 +11,12 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { Throttle } from "@nestjs/throttler";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -22,6 +27,7 @@ import { CandidateApplicationsService } from "./candidate-applications.service";
 import { SubmitCandidateApplicationDto } from "./dto/submit-candidate-application.dto";
 import { CreateCandidateApplicationMessageDto } from "./dto/create-candidate-application-message.dto";
 import { RespondToCandidateApplicationOfferDto } from "./dto/respond-to-candidate-application-offer.dto";
+import { CandidateFileScanService } from "./candidate-file-scan.service";
 
 @Controller("candidate/applications")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,6 +35,7 @@ import { RespondToCandidateApplicationOfferDto } from "./dto/respond-to-candidat
 export class CandidateApplicationsController {
   constructor(
     private readonly applicationsService: CandidateApplicationsService,
+    private readonly fileScan: CandidateFileScanService,
   ) {}
 
   @Get()
@@ -48,6 +55,52 @@ export class CandidateApplicationsController {
     @Param("jobId", ParseIntPipe) jobId: number,
   ) {
     return this.applicationsService.getForJob(user, jobId);
+  }
+
+  @Get(":jobId/documents")
+  @Header("Cache-Control", "private, no-store")
+  listDocuments(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("jobId", ParseIntPipe) jobId: number,
+  ) {
+    return this.applicationsService.listUploadedDocuments(user, jobId);
+  }
+
+  @Post(":jobId/documents/:documentId")
+  @Header("Cache-Control", "private, no-store")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseInterceptors(
+    FileInterceptor("file", { limits: { fileSize: 8 * 1024 * 1024 } }),
+  )
+  async uploadDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("jobId", ParseIntPipe) jobId: number,
+    @Param("documentId") documentId: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file)
+      throw new BadRequestException("Choose a PDF or DOCX document to upload.");
+    const isPdf =
+      file.buffer.subarray(0, 5).toString("ascii") === "%PDF-" &&
+      (file.mimetype === "application/pdf" ||
+        file.originalname.toLowerCase().endsWith(".pdf"));
+    const isDocx =
+      file.buffer.subarray(0, 4).toString("ascii") === "PK\u0003\u0004" &&
+      (file.mimetype ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.originalname.toLowerCase().endsWith(".docx"));
+    if (!isPdf && !isDocx)
+      throw new BadRequestException(
+        "Application documents must be valid PDF or DOCX files.",
+      );
+    await this.fileScan.scan(file.buffer);
+    return this.applicationsService.uploadDocument(user, jobId, documentId, {
+      buffer: file.buffer,
+      originalname: file.originalname,
+      contentType: isPdf
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
   }
 
   @Post(":jobId")

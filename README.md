@@ -92,10 +92,31 @@ are accepted by the authenticated reports API, but the public web interface
 currently exposes reporting for job listings only. Candidates can download a
 JSON export of their profile, applications and status history, offer details
 and responses, application messages, saved jobs, saved searches, notifications,
-and deletion requests. They can submit a
-deletion request for superadmin review; this does **not** delete or anonymize the account. The
-actual deletion/retention policy remains a release decision and must be
-reviewed with qualified privacy/legal stakeholders.
+application-document metadata, and deletion requests; storage paths and
+temporary file links are excluded. Deletion requests remain subject to
+superadmin review and do **not** automatically delete or anonymize an account.
+When an eligible unlinked candidate account is permanently deleted, its
+application documents and resume-version files are purged from private object
+storage before the database account is removed. Linked business records still
+block permanent deletion and must be handled under the approved retention
+process. Document the database provider's actual backup expiry before launch;
+deletion from backups follows that provider's expiry schedule.
+
+Candidate profile settings include education, work history, skills,
+certifications, salary/location preferences, recruiter visibility, and a
+separate recruiter-contact permission. Resume uploads support PDF/DOCX parsing,
+private version history, and a browser-printable resume builder. Candidates can
+see explainable job recommendations and interview details. Optional candidate
+services are available as one-time purchases: resume review (default ₹499),
+30-day profile boost (default ₹299), and career consultation (default ₹1,499).
+These editable defaults are illustrative, not market-validated. Superadmins
+can change prices, descriptions, availability, and boost duration in the
+Candidate services dashboard. Applications and core job-seeking features
+remain free. Razorpay verifies each payment server-side; profile boosts are
+activated automatically without overriding candidate visibility/contact
+settings, while resume-review and career-consultation requests require manual
+fulfillment tracking by a superadmin. Configure the existing server-side
+`RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` before enabling live checkout.
 
 To enable geographic labels, obtain and license a MaxMind GeoLite2 City database, store its `.mmdb` file outside the repository, and set `GEOIP_DATABASE_PATH` to that local file path. The database itself is ignored by Git. Set `TRUST_PROXY_HOPS` to the exact number of trusted reverse proxies before the app when deployed behind a proxy so request IPs are resolved correctly; leave it at `0` for direct connections. Without a local database, audit events still keep the request IP and client user agent, while location is shown as unavailable.
 
@@ -133,18 +154,33 @@ security; the dashboard signs out after a successful change.
 
 Authentication routes:
 
-- `POST /api/auth/register` — public candidate registration; requires an 8-character minimum password (maximum 72 UTF-8 bytes)
+- `POST /api/auth/register` — public candidate registration; requires an 8-character minimum password and an E.164 mobile number
+- `GET /api/auth/config` — public sign-in configuration, including the Google web client ID when configured
+- `POST /api/auth/email-otp/request` and `POST /api/auth/email-otp/verify` — request and exchange a short-lived sign-in code for a verified candidate account
+- `POST /api/auth/google` — link/sign in to an existing candidate account using a Google Identity Services ID token; new accounts must complete email/mobile registration
 - `GET /api/auth/bootstrap-superadmin/status` and `POST /api/auth/bootstrap-superadmin` — one-time first-superadmin setup; checks the configured superadmin name, email, and password and is disabled after a superadmin exists
-- `POST /api/auth/register/employer` — employer registration request with company name/website; email verification is required before login, and administrator approval is required before write access
+- `POST /api/auth/register/employer` — employer registration request with company name/website and E.164 mobile; email/mobile verification is required before sign-in, and administrator approval is required before write access
 - `POST /api/auth/login` — issues a short-lived bearer access token and an HttpOnly, SameSite=Strict refresh cookie
 - `POST /api/auth/refresh` — rotates the refresh token and issues a new access token
 - `POST /api/auth/logout` — revokes the refresh session
 - `POST /api/auth/forgot-password` and `POST /api/auth/reset-password` — request and consume one-time password-reset links
 - `POST /api/auth/verify-email` and `POST /api/auth/resend-verification` — verify a new account or request another link
+- `POST /api/auth/phone-verification/request|verify` — resend or verify the new-account SMS code
+- `POST /api/auth/phone/change/request|verify` — stage and verify a signed-in user's new mobile number
+- `PUT /api/auth/me/username` — update the signed-in user's unique username
+- `GET /u/:username` — opt-in candidate profile page; employer usernames redirect to their company page
 - `POST /api/auth/change-password` — change the signed-in user's password and revoke refresh sessions
 - `GET /api/auth/me` — current user (bearer token required)
 - `GET /api/candidate/profile` — read the authenticated candidate's profile
 - `PUT /api/candidate/profile` — create/update the authenticated candidate's profile
+- `GET /api/candidate/profile/resume-versions` and `POST /api/candidate/profile/resume-versions/:id/restore` — list private resume versions and restore one as current
+- `GET /api/candidate/recommendations` — return explainable job matches based on profile and salary preferences
+- `GET /api/candidate/interviews` — list the candidate's interview schedule and joining details
+- `GET /api/candidate/premium` — available candidate services, order history, and boost status
+- `POST /api/candidate/premium/checkout` and `POST /api/candidate/premium/verify` — create and server-verify a one-time Razorpay order
+- `POST /api/billing/razorpay/candidate-webhook` — verify Razorpay `payment.captured` events and reconcile candidate orders when the browser callback cannot finish
+- `GET /api/employer/candidates?q=...` — Boolean-search profiles opted into recruiter visibility using `AND`, `OR`, `NOT`, parentheses, quoted phrases, and implicit `AND`; email/phone are returned only when the candidate also permits contact
+- `POST /api/employer/candidates/:candidateId/resume` — issue a five-minute signed resume link only when that candidate separately opted in; consumes one monthly organization credit per candidate and records an audit event
 - `GET /api/candidate/saved-jobs` — list jobs saved to the authenticated candidate's account
 - `POST /api/candidate/saved-jobs/:jobId` — save a currently published job; safe to retry
 - `DELETE /api/candidate/saved-jobs/:jobId` — remove a saved job
@@ -152,13 +188,28 @@ Authentication routes:
 - `PATCH|DELETE /api/candidate/saved-searches/:id` — update an owned saved search/alert preference or remove it
 - `GET /api/candidate/applications?page=1&limit=20` — paginated applications as `{ items, total, page, limit }`
 - `GET /api/candidate/applications/:jobId` — read that candidate's application as `{ application: ... }`, or `{ application: null }`
-- `POST /api/candidate/applications/:jobId` — submit an application with optional note, resume inclusion, and profile-sharing choices; safe to retry
+- `GET /api/candidate/applications/:jobId/documents` and `POST /api/candidate/applications/:jobId/documents/:documentId` — list or securely upload a job-requested PDF/DOCX before applying; uploads are scanned and private
+- `POST /api/candidate/applications/:jobId` — submit an application with optional note, resume inclusion, profile-sharing choices, and validated answers to employer-defined questions; safe to retry
 - `POST /api/candidate/applications/records/:applicationId/withdraw` — request withdrawal at any active stage; the employer must confirm before the application is withdrawn
 - `POST /api/candidate/applications/records/:applicationId/offer-response` — accept or decline a pending offer before its deadline
 - `GET|POST /api/candidate/applications/records/:applicationId/messages` — read or send text messages on an owned application
 - `GET /api/candidate/notifications?page=1` and `PATCH /api/candidate/notifications/:notificationId/read` — review and mark application, offer, message, and interview notifications read
 
-Candidate profile routes require a candidate access token; profile data and files are private by default. New registrations require email verification. Password reset, resend verification, and signed-in password change use one-time tokens or session revocation. Configure the SMTP variables below for these flows. The web client routes candidate/employer accounts to their role-specific workspace and admin/superadmin accounts to `/admin/`.
+Candidate profile routes require a candidate access token; profile data and files are private by default. Password-based candidate and employer registrations require both email-link
+verification and a phone OTP before password sign-in. Phone numbers use
+international E.164 format, are unique per account, and verification codes
+expire after ten minutes with a five-attempt limit. Configure SMTP and the
+server-only `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
+`TWILIO_FROM_NUMBER` variables before accepting registrations. Phone changes
+are staged and do not replace the existing verified number until the new
+number is confirmed. Google sign-in can link existing accounts; new accounts
+must register with email and phone so both contact methods are verified.
+Candidate usernames are unique and editable; public candidate pages are
+opt-in, and employers' username links redirect to their public company page.
+The public profile excludes contact details, resumes, and application data.
+Password reset, resend verification, and signed-in password change use one-time
+tokens or session revocation. The web client routes candidate/employer accounts
+to their role-specific workspace and admin/superadmin accounts to `/admin/`.
 
 Admin API routes require a bearer access token. `STAFF`, `ADMIN`, and `SUPERADMIN` can manage job listings and view companies and aggregate analytics. Staff cannot access recent platform activity, user controls, or audit logs. Only `SUPERADMIN` can list and create managed accounts, change account roles/status, approve employers, and read audit logs. Superadmins can create employer, staff, or admin accounts (not superadmins); employer accounts start pending approval. Every provisioned account receives a temporary password and is forced to change it before accessing protected portal features. A newly created job is a draft (`isActive: false`) until an authorized user publishes it. Public job search returns active listings only. Admin UI access is gated at the browser and all admin data routes are independently authorization-checked by the API.
 
@@ -181,10 +232,15 @@ workspace overview, company profile, and job-listing view. Applicant details,
 team and billing pages, and all write actions remain unavailable until an
 administrator approves the account. Approved employer owners can create job
 drafts, publish or close jobs, manage company details, and review applicants
-for their organization. Active-job and seat quotas are currently defined in
-`PLAN_LIMITS` in `src/employers/employers.service.ts`: Free has 1 job/1 seat,
-Starter has 3 jobs/3 seats, and Growth has 10 jobs/10 seats. Paid quotas apply
-after Razorpay confirms subscription activation.
+for their organization. Active-job and seat quotas are managed in the superadmin Razorpay settings: Free has 1 job/1 seat,
+and the illustrative defaults are Starter (₹2,999/month, 5 jobs/3 seats),
+Growth (₹9,999/month, 25 jobs/10 seats), Business (₹24,999/month, 75 jobs/25
+seats), and Enterprise (custom price, 1,000 jobs/100 seats). Illustrative
+monthly resume-unlock credits are 0, 25, 100, and 500 respectively. Paid
+quotas apply after Razorpay confirms subscription activation. Prices,
+entitlements, and credits are admin-configurable; provider plan IDs and prices
+must match. These amounts and limits are examples, not market-validated
+commitments.
 
 The hiring workflow includes paginated applicant search and filters, status
 history, company-private notes and tags, candidate-consented profile/resume
@@ -216,9 +272,11 @@ Employer routes (bearer token required; organization-scoped routes accept
 - `GET /api/employer/organizations` — list companies the employer can access
 - `GET /api/employer/dashboard` — company hiring metrics and recent applicants
 - `GET|PATCH /api/employer/company` — read or update company details
-- `GET|POST /api/employer/jobs` and `PATCH /api/employer/jobs/:jobId` — list and manage company jobs
-- `POST /api/employer/jobs/:jobId/publish` and `/close` — publish or close a company job
+- `GET|POST /api/employer/jobs` and `PATCH /api/employer/jobs/:jobId` — list and manage company jobs, including up to 10 required/optional application questions and 5 required/optional PDF/DOCX documents
+- `POST /api/employer/jobs/:jobId/publish` and `/close` — submit new or previously closed listings for administrator review, or close an approved listing
 - `GET /api/employer/applications` — search/filter organization applicants
+- `PUT /api/employer/applications/:applicationId/scorecard` — save the signed-in reviewer’s private 1–5 ratings and recommendation; scorecards are visible only to authorized members of the same company
+- `GET|POST /api/employer/candidate-searches` and `DELETE /api/employer/candidate-searches/:searchId` — list/save/delete organization-scoped recruiter searches
 - `PATCH /api/employer/applications/:applicationId/status` — update candidate stage
 - `POST /api/employer/applications/:applicationId/offer` — send an offer summary with a response deadline; this does not generate a contract
 - `POST /api/employer/applications/:applicationId/withdrawal` — confirm or decline a candidate withdrawal request
@@ -233,18 +291,23 @@ Employer routes (bearer token required; organization-scoped routes accept
 - `GET /api/employer/billing` — view plan, usage, and subscription status
 - `POST /api/employer/billing/subscribe`, `/api/employer/billing/verify`, and `/api/employer/billing/cancel` — manage subscriptions
 - `POST /api/billing/razorpay/webhook` — Razorpay subscription event endpoint (provider signature required)
+- `GET /companies/:slug` and `/companies/id/:id` — public company profile with current public jobs and an explicitly sourced employer-account approval status
+- `PATCH /api/admin/jobs/:id/moderation` — staff/admin/superadmin approval, rejection, or pause with a required reason and audit record
+- `GET /api/admin/email-outbox` and `POST /api/admin/email-outbox/:id/retry` — review failed notification delivery metadata and manually retry a failed email (admin/superadmin)
 
 ### Razorpay configuration
 
 Razorpay is optional for Free-plan use. To enable paid checkout:
 
 1. Create monthly INR subscription plans in the Razorpay dashboard with amounts
-   you have chosen for the business. No commercial price has been preselected
-   by this project.
+   matching the admin-configured tiers. Initial illustrative defaults are
+   Starter ₹2,999, Growth ₹9,999, Business ₹24,999, and Enterprise custom.
 2. Configure `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`,
-   `RAZORPAY_PLAN_STARTER`, and `RAZORPAY_PLAN_GROWTH` in the server
+   `RAZORPAY_PLAN_STARTER`, `RAZORPAY_PLAN_GROWTH`,
+   `RAZORPAY_PLAN_BUSINESS`, and optionally `RAZORPAY_PLAN_ENTERPRISE` in the server
    environment. Configure `EMPLOYER_STARTER_PRICE_INR` and
-   `EMPLOYER_GROWTH_PRICE_INR` only as display values matching the plans;
+   `EMPLOYER_GROWTH_PRICE_INR` and `EMPLOYER_BUSINESS_PRICE_INR` only as
+   display values matching the plans;
    the API verifies these values match the monthly INR Razorpay plan amounts
    before creating a subscription.
 3. Set `RAZORPAY_WEBHOOK_SECRET` and configure the Razorpay webhook URL as
@@ -252,14 +315,30 @@ Razorpay is optional for Free-plan use. To enable paid checkout:
    subscription activation, charge, resume, halt, cancel, and completion
    events. Webhook signatures are verified against the raw request body and
    event IDs are recorded transactionally for retry-safe processing.
-4. Test checkout and webhook delivery in Razorpay test mode against staging
+4. Configure a second Razorpay webhook pointing to
+   `https://<your-domain>/api/billing/razorpay/candidate-webhook`, using the
+   same `RAZORPAY_WEBHOOK_SECRET`, and subscribe to `payment.captured`.
+   Candidate catalog prices are managed in the superadmin Candidate services
+   dashboard and are charged as one-time INR payments.
+5. Test subscription and candidate checkouts and webhook delivery in Razorpay test mode against staging
    before using live keys. Never put API secrets or webhook secrets in browser
    code or commit them.
 
-The Starter/Growth plan quotas are application-defined and can be changed in
-`PLAN_LIMITS`; commercial amounts are configured in Razorpay. Do not deploy
-paid checkout until plan IDs, matching displayed prices, API keys, webhook
-secret, and staging verification are complete.
+Superadmins can also manage the Razorpay key ID, API secret, shared webhook
+signing secret, paid plan IDs and prices, plus each paid plan's active-job and
+seat limits under **Razorpay
+settings** in the admin dashboard. API and webhook secrets are encrypted at
+rest and are never returned to the browser. To enable saving secrets through
+the dashboard, configure `RAZORPAY_CONFIG_ENCRYPTION_KEY` as a stable random
+value of at least 32 characters (for example, generate one with
+`openssl rand -base64 32`). Back it up securely and keep it unchanged: saved
+secrets cannot be decrypted if this key is lost or rotated. Legacy `RAZORPAY_*`
+environment settings remain supported as fallback values. Use the dashboard
+Test API connection action before enabling checkout. Starter, Growth,
+Business, and Enterprise subscriptions all require matching monthly INR plans
+in Razorpay. Do not deploy paid
+checkout until credentials, plan IDs/prices, both webhook endpoints, and
+staging verification are complete.
 
 ## Backend implementation status
 
@@ -276,12 +355,17 @@ Useful API routes:
 - `GET /api/jobs/:id` — get an active job
 - `GET|PUT /api/candidate/profile` — read or update the signed-in candidate's private profile
 - `POST|DELETE /api/candidate/profile/photo` — upload a cropped photo or remove it
-- `POST|DELETE /api/candidate/profile/resume` — upload a PDF resume or remove it
+- `POST|DELETE /api/candidate/profile/resume` — upload a PDF/DOCX resume or clear the current resume
+- `GET /api/candidate/profile/resume-versions` and `POST /api/candidate/profile/resume-versions/:id/restore` — list private resume versions and restore one as current
+- `GET /api/candidate/recommendations` — return explainable job matches based on profile and salary preferences
+- `GET /api/candidate/interviews` — list the candidate's interview schedule and joining details
+- `GET /api/employer/candidates?q=...` — search profiles opted into recruiter visibility; email/phone are returned only when the candidate also permits contact
 - `GET /api/candidate/account/export` — download the signed-in candidate's JSON data export
 - `GET|POST /api/candidate/account/deletion-request` — view or submit a candidate deletion request for superadmin review; no data is deleted
 - `POST /api/reports` — submit a job, company, or user report as a signed-in candidate/employer
 - `GET /api/admin/reports` and `PATCH /api/admin/reports/:id` — staff/admin/superadmin report queue and moderation actions
 - `GET /api/admin/privacy-requests` and `PATCH /api/admin/privacy-requests/:id` — superadmin-only candidate deletion-request review queue
+- `GET /api/admin/candidate-premium/products`, `PATCH /api/admin/candidate-premium/products/:key`, `GET /api/admin/candidate-premium/orders`, and `PATCH /api/admin/candidate-premium/orders/:id/fulfillment` — superadmin-only candidate service pricing and fulfillment controls
 
 The public homepage fetches published jobs from `/api/jobs` and includes URL-addressable search results and job detail views. Search, filters, sorting, and pagination are applied by the API, and clients receive bounded result pages. If an unfiltered request succeeds but the database has no published jobs, clearly labeled sample listings are shown as read-only previews. API errors are surfaced rather than silently presented as live data. Signed-in candidates save published jobs and searches to their account; guest and preview saves remain browser-local and are offered for sync at sign-in. Candidates choose whether to attach a resume or share a profile when applying, track the full status history, request withdrawal at any active stage, and may reapply after the employer confirms withdrawal while the job remains open. They can review and respond to employer-entered offer summaries before expiry and message the hiring team with text-only messages. Interview scheduling and cancellation appear in the candidate notification center. Employers review organization-owned job applications; status changes are audited in the application timeline and emailed when the candidate has enabled status notifications. Public share pages at `/share/jobs/:id` provide canonical metadata and `JobPosting` structured data; `/sitemap.xml` lists active job share pages and `/robots.txt` references the sitemap. Set `PUBLIC_APP_URL` to the site's canonical absolute HTTP(S) origin for these endpoints and matching-job email links.
 
@@ -299,22 +383,31 @@ Configure `DATABASE_URL` or `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `
 Candidate photo and resume uploads require Supabase Storage in addition to the PostgreSQL database:
 
 1. In Supabase Storage, create a bucket named `candidate-private` and keep it **private**. Do not add public read policies.
-2. Set the bucket file-size limit to at least 8 MB and allow only `image/webp` and `application/pdf`.
+2. Set the bucket file-size limit to at least 8 MB and allow only `image/webp`, `application/pdf`, and `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
 3. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the server's environment. Use a newly generated, server-only service-role secret; never put it in `public/`, a browser variable, or committed files. `SUPABASE_CANDIDATE_BUCKET` is optional and defaults to `candidate-private`.
-4. Deploy the application. Photos are decoded, normalized and resized by the API; resumes are limited to PDF files up to 8 MB. Stored files use owner-scoped object paths in the private bucket. The API returns signed links that expire after five minutes.
+4. Configure a reachable ClamAV `clamd` TCP service using `CLAMAV_HOST` and optional `CLAMAV_PORT` (default `3310`). Keep the scanner on a private network accessible only to the API. Production uploads fail closed if the scanner is missing or unavailable; detected files are rejected before storage. Photos are decoded, normalized and resized by the API; PDF/DOCX resumes are limited to 8 MB and parsed with bounded extraction. Stored files use owner-scoped object paths in the private bucket, with a retained version history. The API returns signed links that expire after five minutes. Scanned PDFs without selectable text need OCR and are rejected.
 
-The profile/photo and profile/resume upload and delete endpoints require an authenticated candidate account. A resume is **not** automatically attached to an application; candidates choose whether to include it for each submission. Employer access is restricted to assigned jobs, and signed resume URLs are issued only for resumes deliberately attached to those applications. Replacing/removing a resume does not invalidate an older resume already attached to an application. Avoid configuring a public bucket or sharing the service-role key.
+The profile/photo and profile/resume upload and delete endpoints require an authenticated candidate account. A resume is **not** automatically attached to an application; candidates choose whether to include it for each submission. Employer application access is restricted to assigned jobs. Recruiter-directory resume access is a separate candidate opt-in, requires the candidate to remain discoverable, spends one admin-configured monthly organization credit per candidate, and is audited; each resulting signed link expires after five minutes. Replacing/removing a resume does not invalidate an older resume already attached to an application. Avoid configuring a public bucket or sharing the service-role key.
 
 ### Email delivery
 
 Configure `PUBLIC_APP_URL` as the public HTTPS origin, plus `SMTP_HOST`,
 `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in the server
-environment. These are required for email verification and password recovery;
-application notifications and job alerts also use SMTP. Never put SMTP
-credentials in browser code or commit them. Job alerts are sent when an
+environment. These are required for email verification, password recovery, and
+email OTP; application notifications and job alerts also use SMTP. Set
+`GOOGLE_OAUTH_CLIENT_ID` and authorize the production site's origin in Google
+Cloud to enable Google sign-in. Never put SMTP credentials in browser code or
+commit them. Job alerts are sent when an
 administrator publishes a job matching a candidate's target role and selected
-employment/workplace preferences. Failed alert deliveries are logged and
-reported in the admin response; there is no automatic retry queue.
+employment/workplace, location, and salary preferences. Notification emails
+are written to a deduplicated database outbox and delivered asynchronously;
+transient failures retry up to five times with exponential backoff. Successful
+delivery payloads are cleared from the outbox. Failed entries retain the
+address/body needed for manual retry for up to 30 days after the final failed
+attempt; after that, recipient, message, and error details are purged and the
+delivery cannot be retried. Failed entries are visible only as non-content
+metadata in the admin queue. Push delivery is not configured because no push
+provider has been selected.
 
 ## Frontend and GitHub
 

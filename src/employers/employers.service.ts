@@ -15,7 +15,13 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
-import { DataSource, IsNull, MoreThan, Repository } from "typeorm";
+import {
+  DataSource,
+  IsNull,
+  MoreThan,
+  QueryFailedError,
+  Repository,
+} from "typeorm";
 import { AuditService } from "../audit/audit.service";
 import { EmailDeliveryService } from "../auth/email-delivery.service";
 import { AuthenticatedUser } from "../auth/auth.types";
@@ -52,16 +58,31 @@ import {
 import { EmployerOrganization } from "./organization.entity";
 import { UserNotification } from "./user-notification.entity";
 import { JobsService } from "../jobs/jobs.service";
+import { RazorpayConfigurationService } from "../payments/razorpay-configuration.service";
+import { EmployerSavedSearch } from "./employer-saved-search.entity";
+import { EmployerApplicationScorecard } from "./employer-application-scorecard.entity";
+import { EmployerApplicationScorecardDto } from "./dto/employer-application-scorecard.dto";
+import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
+import { CreateEmployerSavedSearchDto } from "./dto/employer-saved-search.dto";
+import { compileCandidateSearchQuery } from "./candidate-search-query";
 import {
   currentJobDeadlineDate,
   jobPublicationError,
 } from "../jobs/job.constants";
 
 const PLAN_LIMITS = {
-  free: { activeJobs: 1, seats: 1 },
-  starter: { activeJobs: 3, seats: 3 },
-  growth: { activeJobs: 10, seats: 10 },
+  free: { activeJobs: 1, seats: 1, resumeCredits: 0 },
 } as const;
+type PaidPlanKey = "starter" | "growth" | "business" | "enterprise";
+
+function isPaidPlanKey(value: string | null): value is PaidPlanKey {
+  return (
+    value === "starter" ||
+    value === "growth" ||
+    value === "business" ||
+    value === "enterprise"
+  );
+}
 
 const JOB_MANAGERS = [
   OrganizationMemberRole.OWNER,
@@ -101,6 +122,8 @@ export class EmployersService {
     private readonly members: Repository<EmployerOrganizationMember>,
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(CandidateProfile)
+    private readonly candidateProfiles: Repository<CandidateProfile>,
     @InjectRepository(Job)
     private readonly jobs: Repository<Job>,
     @InjectRepository(CandidateApplication)
@@ -119,11 +142,18 @@ export class EmployersService {
     private readonly interviews: Repository<EmployerInterview>,
     @InjectRepository(UserNotification)
     private readonly notifications: Repository<UserNotification>,
+    @InjectRepository(EmployerSavedSearch)
+    private readonly employerSavedSearches: Repository<EmployerSavedSearch>,
+    @InjectRepository(EmployerApplicationScorecard)
+    private readonly scorecards: Repository<EmployerApplicationScorecard>,
+    @InjectRepository(CandidateApplicationDocument)
+    private readonly applicationDocuments: Repository<CandidateApplicationDocument>,
     private readonly applicationsService: CandidateApplicationsService,
     private readonly fileStorage: CandidateFileStorageService,
     private readonly emailDelivery: EmailDeliveryService,
     private readonly auditService: AuditService,
     private readonly jobsService: JobsService,
+    private readonly razorpayConfiguration: RazorpayConfigurationService,
   ) {}
 
   async listOrganizations(user: AuthenticatedUser) {
@@ -261,7 +291,7 @@ export class EmployersService {
         .map((offer) => offer.applicationId),
     );
     const activeJobs = jobs.filter((job) => job.isActive).length;
-    const limits = this.limitsFor(organization);
+    const limits = await this.limitsFor(organization);
     const unreadNotifications = await this.notifications.countBy({
       userId: user.id,
       readAt: IsNull(),
@@ -289,6 +319,7 @@ export class EmployersService {
       limits: {
         activeJobs: limits.activeJobs,
         seats: limits.seats,
+        resumeCredits: limits.resumeCredits,
         jobsRemaining: Math.max(0, limits.activeJobs - activeJobs),
       },
       recentApplications:
@@ -344,7 +375,7 @@ export class EmployersService {
       total,
       page: safePage,
       limit: safeLimit,
-      limits: this.limitsFor(organization),
+      limits: await this.limitsFor(organization),
     };
   }
 
@@ -372,6 +403,14 @@ export class EmployersService {
         numberOfOpenings: dto.numberOfOpenings ?? 1,
         experience: dto.experience?.trim() || null,
         description: dto.description?.trim() || null,
+        applicationQuestions: this.normalizeApplicationQuestions(
+          dto.applicationQuestions ?? [],
+        ),
+        requiredDocuments: this.normalizeRequiredDocuments(
+          dto.requiredDocuments ?? [],
+        ),
+        moderationStatus: "draft",
+        moderationNote: null,
         isActive: false,
         employerUserId: user.id,
         organizationId: context.organization.id,
@@ -418,6 +457,14 @@ export class EmployersService {
       job.experience = dto.experience?.trim() || null;
     if (dto.description !== undefined)
       job.description = dto.description?.trim() || null;
+    if (dto.applicationQuestions !== undefined)
+      job.applicationQuestions = this.normalizeApplicationQuestions(
+        dto.applicationQuestions,
+      );
+    if (dto.requiredDocuments !== undefined)
+      job.requiredDocuments = this.normalizeRequiredDocuments(
+        dto.requiredDocuments,
+      );
     job.company = context.organization.name;
     if (
       job.isActive &&
@@ -474,12 +521,23 @@ export class EmployersService {
             "A job with a past application deadline cannot be published.",
           );
         }
-        await this.assertJobQuota(organization, jobs);
-        job.isActive = true;
+        if (job.moderationStatus === "approved") {
+          await this.assertJobQuota(organization, jobs);
+          job.isActive = true;
+        } else {
+          job.moderationStatus = "pending_review";
+          job.moderationNote = null;
+          job.isActive = false;
+        }
         return { job: await jobs.save(job), published: true };
       },
     );
-    if (!published) return { job, alertResult: { sent: 0, failed: 0 } };
+    if (!published || !job.isActive)
+      return {
+        job,
+        reviewRequired: job.moderationStatus === "pending_review",
+        alertResult: { queued: 0, failed: 0 },
+      };
     const alertResult = await this.jobsService.notifyMatchingCandidates(job);
     await this.auditService.record({
       actorUserId: user.id,
@@ -500,6 +558,7 @@ export class EmployersService {
     this.requireRole(context.membership, JOB_MANAGERS);
     const job = await this.findOrganizationJob(jobId, context.organization.id);
     job.isActive = false;
+    job.moderationStatus = "closed";
     const saved = await this.jobs.save(job);
     await this.auditService.record({
       actorUserId: user.id,
@@ -600,7 +659,7 @@ export class EmployersService {
       tagsPromise,
       interviewsPromise,
     ]);
-    const [offers, messages] = await Promise.all([
+    const [offers, messages, scorecards, documents] = await Promise.all([
       applicationIds.length
         ? this.offers.find({
             where: applicationIds.map((applicationId) => ({ applicationId })),
@@ -613,12 +672,39 @@ export class EmployersService {
             order: { createdAt: "ASC", id: "ASC" },
           })
         : Promise.resolve([]),
+      applicationIds.length
+        ? this.scorecards.find({
+            where: applicationIds.map((applicationId) => ({
+              organizationId: organization.id,
+              applicationId,
+            })),
+            relations: { reviewer: true },
+            order: { updatedAt: "DESC" },
+          })
+        : Promise.resolve([]),
+      applicationIds.length
+        ? this.applicationDocuments.find({
+            where: applicationIds.map((applicationId) => ({ applicationId })),
+            order: { createdAt: "ASC" },
+          })
+        : Promise.resolve([]),
     ]);
     const fileLinks = await Promise.all(
       items.map((application) =>
         application.resumePath
           ? this.fileStorage.createSignedUrl(application.resumePath)
           : Promise.resolve(null),
+      ),
+    );
+    const documentLinks = new Map(
+      await Promise.all(
+        documents.map(
+          async (document) =>
+            [
+              document.id,
+              await this.fileStorage.createSignedUrl(document.filePath),
+            ] as const,
+        ),
       ),
     );
     await this.auditService.record({
@@ -649,6 +735,17 @@ export class EmployersService {
             : application.status;
         })(),
         coverLetter: application.coverLetter,
+        applicationAnswers: application.applicationAnswers ?? [],
+        scorecards: scorecards
+          .filter((entry) => entry.applicationId === application.id)
+          .map((entry) => ({
+            reviewerUserId: entry.reviewerUserId,
+            reviewerName: entry.reviewer.displayName,
+            scores: entry.scores,
+            recommendation: entry.recommendation,
+            notes: entry.notes,
+            updatedAt: entry.updatedAt,
+          })),
         createdAt: application.createdAt,
         candidateName:
           application.profileShared &&
@@ -658,6 +755,14 @@ export class EmployersService {
         profile: application.profileShared ? application.profileSnapshot : null,
         resumeUrl: fileLinks[index],
         resumeFileName: application.resumeFileName,
+        documents: documents
+          .filter((document) => document.applicationId === application.id)
+          .map((document) => ({
+            documentId: document.documentId,
+            label: document.documentLabel,
+            fileName: document.fileName,
+            fileUrl: documentLinks.get(document.id),
+          })),
         job: {
           id: application.job.id,
           title: application.job.title,
@@ -715,6 +820,361 @@ export class EmployersService {
       page,
       limit,
     };
+  }
+
+  async saveApplicationScorecard(
+    user: AuthenticatedUser,
+    applicationId: number,
+    dto: EmployerApplicationScorecardDto,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const application = await this.applications.findOne({
+      where: { id: applicationId },
+      relations: { job: true },
+    });
+    if (
+      !application ||
+      application.job.organizationId !== context.organization.id
+    )
+      throw new NotFoundException("Application was not found in this company.");
+
+    const scoreEntries = Object.entries(dto.scores ?? {});
+    if (
+      scoreEntries.length < 1 ||
+      scoreEntries.length > 10 ||
+      scoreEntries.some(
+        ([criterion, score]) =>
+          !criterion.trim() ||
+          criterion.length > 80 ||
+          !Number.isInteger(score) ||
+          score < 1 ||
+          score > 5,
+      )
+    )
+      throw new BadRequestException(
+        "Provide 1 to 10 score criteria with integer ratings from 1 to 5.",
+      );
+
+    const existing = await this.scorecards.findOneBy({
+      organizationId: context.organization.id,
+      applicationId,
+      reviewerUserId: user.id,
+    });
+    const scorecard = this.scorecards.create({
+      ...(existing ?? {}),
+      organizationId: context.organization.id,
+      applicationId,
+      reviewerUserId: user.id,
+      scores: Object.fromEntries(
+        scoreEntries.map(([criterion, score]) => [criterion.trim(), score]),
+      ),
+      recommendation: dto.recommendation,
+      notes: dto.notes?.trim() || null,
+    });
+    const saved = await this.scorecards.save(scorecard);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.application_scorecard_saved",
+      targetType: "application",
+      targetId: applicationId,
+      details: {
+        organizationId: context.organization.id,
+        scorecardId: saved.id,
+        criteriaCount: scoreEntries.length,
+      },
+    });
+    return saved;
+  }
+
+  async searchCandidates(
+    user: AuthenticatedUser,
+    query = "",
+    requestedPage = 1,
+    requestedLimit = 20,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const page = Math.min(1_000_000, Math.max(1, requestedPage));
+    const limit = Math.min(50, Math.max(1, requestedLimit));
+    const builder = this.candidateProfiles
+      .createQueryBuilder("profile")
+      .innerJoinAndSelect("profile.user", "candidate")
+      .where("profile.profileVisibility = :visibility", {
+        visibility: "recruiters",
+      })
+      .andWhere("candidate.role = :role AND candidate.isActive = true", {
+        role: UserRole.CANDIDATE,
+      })
+      .orderBy(
+        "CASE WHEN profile.premium_boost_until > NOW() THEN 0 ELSE 1 END",
+        "ASC",
+      )
+      .addOrderBy("profile.premiumBoostUntil", "DESC", "NULLS LAST")
+      .addOrderBy("profile.updatedAt", "DESC");
+    const searchTerm = query.trim().slice(0, 500);
+    if (searchTerm) {
+      const compiled = compileCandidateSearchQuery(searchTerm);
+      if (compiled) builder.andWhere(compiled.expression, compiled.parameters);
+    }
+    const [profiles, total] = await builder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+    const [entitlements, usage] = await Promise.all([
+      this.limitsFor(context.organization),
+      this.dataSource.query(
+        `SELECT COUNT(*)::int AS used,
+                COALESCE(array_agg(candidate_user_id), ARRAY[]::integer[]) AS "candidateIds"
+         FROM employer_candidate_resume_unlocks
+         WHERE organization_id = $1 AND period_key = $2`,
+        [context.organization.id, this.currentResumeCreditPeriod()],
+      ) as Promise<Array<{ used: number | string; candidateIds: number[] }>>,
+    ]);
+    const resumeCreditsUsed = Number(usage[0]?.used ?? 0);
+    const unlockedCandidates = new Set(
+      (usage[0]?.candidateIds ?? []).map(Number),
+    );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.candidate_directory_searched",
+      targetType: "employer_organization",
+      targetId: context.organization.id,
+      details: {
+        page,
+        resultCount: profiles.length,
+        total,
+        hasQuery: Boolean(searchTerm),
+      },
+    });
+    return {
+      items: profiles.map((profile) => ({
+        candidateId: profile.userId,
+        displayName: profile.user.displayName,
+        headline: profile.headline,
+        location: profile.location,
+        summary: profile.summary,
+        skills: this.parseCandidateSkills(profile.skills),
+        experience: profile.experience,
+        education: profile.education,
+        certifications: profile.certifications,
+        profileBoosted:
+          profile.premiumBoostUntil !== null &&
+          profile.premiumBoostUntil.getTime() > Date.now(),
+        resumeAccessAvailable: Boolean(
+          profile.resumePath && profile.allowRecruiterResumeAccess,
+        ),
+        resumeAlreadyUnlocked: unlockedCandidates.has(profile.userId),
+        ...(profile.allowRecruiterContact
+          ? {
+              email: profile.user.email,
+              ...(profile.user.phoneVerified && profile.user.phoneE164
+                ? { phone: profile.user.phoneE164 }
+                : {}),
+            }
+          : {}),
+      })),
+      total,
+      page,
+      limit,
+      resumeCredits: {
+        monthlyLimit: entitlements.resumeCredits,
+        used: resumeCreditsUsed,
+        remaining: Math.max(0, entitlements.resumeCredits - resumeCreditsUsed),
+      },
+    };
+  }
+
+  async unlockCandidateResume(
+    user: AuthenticatedUser,
+    candidateId: number,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const profile = await this.candidateProfiles
+      .createQueryBuilder("profile")
+      .innerJoinAndSelect("profile.user", "candidate")
+      .where("profile.userId = :candidateId", { candidateId })
+      .andWhere("profile.profileVisibility = :visibility", {
+        visibility: "recruiters",
+      })
+      .andWhere("profile.allowRecruiterResumeAccess = true")
+      .andWhere("profile.resumePath IS NOT NULL")
+      .andWhere("candidate.role = :role AND candidate.isActive = true", {
+        role: UserRole.CANDIDATE,
+      })
+      .getOne();
+    if (!profile?.resumePath)
+      throw new NotFoundException("This candidate has not shared a resume.");
+
+    const signedUrl = await this.fileStorage.createSignedUrl(
+      profile.resumePath,
+    );
+    const periodKey = this.currentResumeCreditPeriod();
+    const newlyUnlocked = await this.dataSource.transaction(async (manager) => {
+      const organization = await manager
+        .getRepository(EmployerOrganization)
+        .findOne({
+          where: { id: context.organization.id },
+          lock: { mode: "pessimistic_write" },
+        });
+      if (!organization)
+        throw new NotFoundException("Company workspace was not found.");
+
+      const currentProfile = (await manager.query(
+        `SELECT profile.resume_path AS "resumePath"
+         FROM candidate_profiles profile
+         INNER JOIN users candidate ON candidate.id = profile.user_id
+         WHERE profile.user_id = $1
+           AND profile.profile_visibility = 'recruiters'
+           AND profile.allow_recruiter_resume_access = true
+           AND candidate.role = $2
+           AND candidate.is_active = true`,
+        [candidateId, UserRole.CANDIDATE],
+      )) as Array<{ resumePath: string | null }>;
+      if (
+        !currentProfile[0]?.resumePath ||
+        currentProfile[0].resumePath !== profile.resumePath
+      )
+        throw new NotFoundException("This candidate has not shared a resume.");
+
+      const existing = (await manager.query(
+        `SELECT id
+         FROM employer_candidate_resume_unlocks
+         WHERE organization_id = $1 AND candidate_user_id = $2 AND period_key = $3`,
+        [organization.id, candidateId, periodKey],
+      )) as Array<{ id: number }>;
+      if (existing.length) return false;
+
+      const entitlements = await this.limitsFor(organization);
+      if (entitlements.resumeCredits < 1)
+        throw new ForbiddenException(
+          "Resume database access is not included in this plan.",
+        );
+      const usage = (await manager.query(
+        `SELECT COUNT(*)::int AS used
+         FROM employer_candidate_resume_unlocks
+         WHERE organization_id = $1 AND period_key = $2`,
+        [organization.id, periodKey],
+      )) as Array<{ used: number | string }>;
+      if (Number(usage[0]?.used ?? 0) >= entitlements.resumeCredits)
+        throw new ForbiddenException(
+          "Your plan's monthly resume unlock credits are used. Upgrade or wait for the next billing month.",
+        );
+      await manager.query(
+        `INSERT INTO employer_candidate_resume_unlocks
+           (organization_id, candidate_user_id, unlocked_by_user_id, period_key)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (organization_id, candidate_user_id, period_key) DO NOTHING`,
+        [organization.id, candidateId, user.id, periodKey],
+      );
+      return true;
+    });
+
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.candidate_resume_accessed",
+      targetType: "candidate",
+      targetId: candidateId,
+      details: {
+        organizationId: context.organization.id,
+        periodKey,
+        newlyUnlocked,
+      },
+    });
+    return { resumeUrl: signedUrl, newlyUnlocked, periodKey };
+  }
+
+  async listCandidateSearches(
+    user: AuthenticatedUser,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    return this.employerSavedSearches.find({
+      where: { userId: user.id, organizationId: context.organization.id },
+      order: { createdAt: "DESC" },
+      take: 50,
+    });
+  }
+
+  async saveCandidateSearch(
+    user: AuthenticatedUser,
+    dto: CreateEmployerSavedSearchDto,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const name = dto.name.trim();
+    const query = dto.query.trim();
+    if (!name || !query)
+      throw new BadRequestException("Enter a name and a search expression.");
+    compileCandidateSearchQuery(query);
+    try {
+      const search = await this.employerSavedSearches.save(
+        this.employerSavedSearches.create({
+          organizationId: context.organization.id,
+          userId: user.id,
+          name,
+          query,
+        }),
+      );
+      await this.auditService.record({
+        actorUserId: user.id,
+        action: "employer.candidate_search_saved",
+        targetType: "employer_saved_candidate_search",
+        targetId: search.id,
+        details: { organizationId: context.organization.id },
+      });
+      return search;
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        error.driverError?.code === "23505"
+      )
+        throw new ConflictException(
+          "A saved candidate search with this name already exists.",
+        );
+      throw error;
+    }
+  }
+
+  async deleteCandidateSearch(
+    user: AuthenticatedUser,
+    searchId: number,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const result = await this.employerSavedSearches.delete({
+      id: searchId,
+      userId: user.id,
+      organizationId: context.organization.id,
+    });
+    if (!result.affected)
+      throw new NotFoundException("Saved candidate search was not found.");
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.candidate_search_deleted",
+      targetType: "employer_saved_candidate_search",
+      targetId: searchId,
+      details: { organizationId: context.organization.id },
+    });
+    return { success: true };
+  }
+
+  private parseCandidateSkills(value: string): string[] {
+    const parsed: unknown = JSON.parse(value || "[]");
+    if (
+      !Array.isArray(parsed) ||
+      parsed.some((skill) => typeof skill !== "string")
+    ) {
+      throw new Error("Stored candidate skills have an invalid format");
+    }
+    return parsed;
   }
 
   async updateApplicationStatus(
@@ -1154,7 +1614,7 @@ export class EmployersService {
         return { application, interview };
       },
     );
-    let notificationStatus: "sent" | "disabled" | "failed" = "disabled";
+    let notificationStatus: "queued" | "disabled" | "failed" = "disabled";
     const candidateProfile = await this.dataSource
       .getRepository(CandidateProfile)
       .findOneBy({ userId: application.userId });
@@ -1164,12 +1624,13 @@ export class EmployersService {
           application.user.email,
           `Interview invitation: ${application.job.title}`,
           `The hiring team at ${context.organization.name} scheduled an interview for ${application.job.title} on ${startsAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}.${interview.meetingUrl ? ` Join here: ${interview.meetingUrl}` : ""}${interview.location ? ` Location: ${interview.location}` : ""}`,
+          `interview-scheduled:${interview.id}`,
         );
-        notificationStatus = "sent";
+        notificationStatus = "queued";
       } catch (error) {
         notificationStatus = "failed";
         this.logger.error(
-          `Interview ${interview.id} was saved but its invitation email could not be delivered: ${
+          `Interview ${interview.id} was saved but its invitation email could not be queued: ${
             error instanceof Error ? error.message : "unknown email error"
           }`,
         );
@@ -1216,7 +1677,7 @@ export class EmployersService {
       interview.applicationId,
       context.organization.id,
     );
-    let notificationStatus: "sent" | "disabled" | "failed" = "disabled";
+    let notificationStatus: "queued" | "disabled" | "failed" = "disabled";
     const candidateProfile = await this.dataSource
       .getRepository(CandidateProfile)
       .findOneBy({ userId: application.userId });
@@ -1226,12 +1687,13 @@ export class EmployersService {
           application.user.email,
           `Interview cancelled: ${application.job.title}`,
           `The interview for ${application.job.title} at ${context.organization.name} has been cancelled. Contact the hiring team if you need more information.`,
+          `interview-cancelled:${interview.id}`,
         );
-        notificationStatus = "sent";
+        notificationStatus = "queued";
       } catch (error) {
         notificationStatus = "failed";
         this.logger.error(
-          `Interview ${interview.id} was cancelled but the candidate notification could not be delivered: ${
+          `Interview ${interview.id} was cancelled but the candidate notification could not be queued: ${
             error instanceof Error ? error.message : "unknown email error"
           }`,
         );
@@ -1367,7 +1829,7 @@ export class EmployersService {
           { now },
         )
         .getCount();
-      const limits = this.limitsFor(organization);
+      const limits = await this.limitsFor(organization);
       if (occupiedSeats >= limits.seats)
         throw new ForbiddenException(
           `Your ${organization.planKey} plan includes ${limits.seats} team seat(s). Upgrade the plan to add another member.`,
@@ -1396,6 +1858,7 @@ export class EmployersService {
           existingUser,
           invitationUrl,
         ),
+        `team-invitation:${member.id}:${tokenHash}`,
       );
     } catch (error) {
       await this.members.update(
@@ -1492,6 +1955,7 @@ export class EmployersService {
           existingUser,
           invitationUrl,
         ),
+        `team-invitation:${updated.member.id}:${tokenHash}`,
       );
     } catch (error) {
       await this.members.update(
@@ -1678,7 +2142,8 @@ export class EmployersService {
       user.id,
       organizationId,
     );
-    const plans = this.planCatalog();
+    const plans = await this.planCatalog();
+    const credentials = await this.razorpayConfiguration.credentials();
     return {
       currency: "INR",
       provider: "razorpay",
@@ -1693,15 +2158,14 @@ export class EmployersService {
         ].includes(membership.role),
       },
       checkoutReady: Boolean(
-        process.env.RAZORPAY_KEY_ID?.trim() &&
-        process.env.RAZORPAY_KEY_SECRET?.trim(),
+        credentials.enabled && credentials.keyId && credentials.apiSecret,
       ),
     };
   }
 
   async createSubscription(
     user: AuthenticatedUser,
-    planKey: "starter" | "growth",
+    planKey: PaidPlanKey,
     organizationId?: number,
   ) {
     const context = await this.getContext(user.id, organizationId);
@@ -1709,14 +2173,20 @@ export class EmployersService {
       OrganizationMemberRole.OWNER,
       OrganizationMemberRole.BILLING,
     ]);
-    const plan = this.planCatalog().find((item) => item.key === planKey);
+    const credentials = await this.razorpayConfiguration.credentials();
+    if (!credentials.enabled)
+      throw new ServiceUnavailableException(
+        "Razorpay checkout is disabled in the admin dashboard.",
+      );
+    const plans = await this.planCatalog();
+    const plan = plans.find((item) => item.key === planKey);
     if (!plan?.razorpayPlanId)
       throw new ServiceUnavailableException(
-        `Configure RAZORPAY_PLAN_${planKey.toUpperCase()} before enabling this plan.`,
+        `Configure the Razorpay ${planKey} plan in the admin dashboard before enabling this plan.`,
       );
     if (plan.amountInr === null || plan.amountInr <= 0)
       throw new ServiceUnavailableException(
-        `Set a positive EMPLOYER_${planKey.toUpperCase()}_PRICE_INR matching the Razorpay plan before enabling checkout.`,
+        `Set a positive ${planKey} price in the admin dashboard matching the Razorpay plan before enabling checkout.`,
       );
     const planResponse = await this.razorpayRequest(
       `/plans/${encodeURIComponent(plan.razorpayPlanId)}`,
@@ -1731,7 +2201,7 @@ export class EmployersService {
       providerPlan.amount !== Math.round(plan.amountInr * 100)
     )
       throw new ServiceUnavailableException(
-        `The configured Razorpay ${planKey} plan must be monthly in INR and match EMPLOYER_${planKey.toUpperCase()}_PRICE_INR.`,
+        `The configured Razorpay ${planKey} plan must be monthly in INR and match the price in the admin dashboard.`,
       );
     const checkout = await this.dataSource.transaction(async (manager) => {
       const organizations = manager.getRepository(EmployerOrganization);
@@ -1763,7 +2233,7 @@ export class EmployersService {
             )
           ) {
             return {
-              keyId: process.env.RAZORPAY_KEY_ID!.trim(),
+              keyId: credentials.keyId,
               subscriptionId: pendingSubscription.id,
               planKey,
               companyName: organization.name,
@@ -1810,7 +2280,7 @@ export class EmployersService {
       organization.pendingRazorpaySubscriptionId = payload.id;
       await organizations.save(organization);
       return {
-        keyId: process.env.RAZORPAY_KEY_ID!.trim(),
+        keyId: credentials.keyId,
         subscriptionId: payload.id,
         planKey,
         companyName: organization.name,
@@ -1842,7 +2312,12 @@ export class EmployersService {
       OrganizationMemberRole.OWNER,
       OrganizationMemberRole.BILLING,
     ]);
-    const secret = this.requireRazorpaySecret();
+    const { apiSecret: secret } =
+      await this.razorpayConfiguration.credentials();
+    if (!secret)
+      throw new ServiceUnavailableException(
+        "Razorpay key secret is not configured.",
+      );
     const expected = createHmac("sha256", secret)
       .update(
         `${payload.razorpay_payment_id}|${payload.razorpay_subscription_id}`,
@@ -1889,10 +2364,7 @@ export class EmployersService {
       const planKey = isPending
         ? organization.pendingPlanKey
         : organization.planKey;
-      if (
-        subscriptionNotes.planKey !== planKey ||
-        (planKey !== "starter" && planKey !== "growth")
-      )
+      if (subscriptionNotes.planKey !== planKey || !isPaidPlanKey(planKey))
         throw new ForbiddenException(
           "The Razorpay subscription plan does not match this company.",
         );
@@ -1963,7 +2435,8 @@ export class EmployersService {
     eventId: string | undefined,
     body: Record<string, unknown>,
   ) {
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
+    const { webhookSecret: secret } =
+      await this.razorpayConfiguration.credentials();
     if (!secret)
       throw new ServiceUnavailableException(
         "Razorpay webhook secret is not configured.",
@@ -2120,21 +2593,42 @@ export class EmployersService {
       );
   }
 
-  private limitsFor(organization: EmployerOrganization) {
+  private async limitsFor(organization: EmployerOrganization) {
     const paidPlanActive =
       organization.planKey !== "free" &&
       ["active", "cancel_pending"].includes(organization.subscriptionStatus);
-    const key = paidPlanActive
-      ? (organization.planKey as keyof typeof PLAN_LIMITS)
-      : "free";
-    return PLAN_LIMITS[key] ?? PLAN_LIMITS.free;
+    if (!paidPlanActive) return PLAN_LIMITS.free;
+    const plans = await this.razorpayConfiguration.employerPlans();
+    const plan = plans[organization.planKey as PaidPlanKey];
+    return plan
+      ? {
+          activeJobs: plan.activeJobs,
+          seats: plan.seats,
+          resumeCredits: plan.resumeCredits,
+        }
+      : PLAN_LIMITS.free;
+  }
+
+  private currentResumeCreditPeriod() {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(new Date());
+    const year = parts.find((part) => part.type === "year")?.value;
+    const month = parts.find((part) => part.type === "month")?.value;
+    if (!year || !month)
+      throw new ServiceUnavailableException(
+        "The current resume-credit period could not be determined.",
+      );
+    return `${year}-${month}`;
   }
 
   private async assertJobQuota(
     organization: EmployerOrganization,
     jobs: Repository<Job> = this.jobs,
   ) {
-    const limits = this.limitsFor(organization);
+    const limits = await this.limitsFor(organization);
     const activeJobs = await jobs.countBy({
       organizationId: organization.id,
       isActive: true,
@@ -2149,7 +2643,7 @@ export class EmployersService {
     organization: EmployerOrganization,
     jobs: Repository<Job> = this.jobs,
   ) {
-    const limit = this.limitsFor(organization).activeJobs;
+    const limit = (await this.limitsFor(organization)).activeJobs;
     const activeJobs = await jobs.find({
       where: { organizationId: organization.id, isActive: true },
       order: { createdAt: "DESC", id: "DESC" },
@@ -2165,6 +2659,38 @@ export class EmployersService {
     const job = await this.jobs.findOneBy({ id: jobId, organizationId });
     if (!job) throw new NotFoundException("Job was not found in this company.");
     return job;
+  }
+
+  private normalizeApplicationQuestions(
+    questions: Array<{ id: string; question: string; required: boolean }>,
+  ) {
+    const ids = new Set<string>();
+    return questions.map((question) => {
+      const id = question.id.trim();
+      const prompt = question.question.trim();
+      if (!id || !prompt || ids.has(id))
+        throw new BadRequestException(
+          "Application question IDs must be unique and prompts cannot be empty.",
+        );
+      ids.add(id);
+      return { id, question: prompt, required: question.required };
+    });
+  }
+
+  private normalizeRequiredDocuments(
+    documents: Array<{ id: string; label: string; required: boolean }>,
+  ) {
+    const ids = new Set<string>();
+    return documents.map((document) => {
+      const id = document.id.trim();
+      const label = document.label.trim();
+      if (!id || !label || ids.has(id))
+        throw new BadRequestException(
+          "Required document IDs must be unique and labels cannot be empty.",
+        );
+      ids.add(id);
+      return { id, label, required: document.required };
+    });
   }
 
   private validateSalary(min?: number | null, max?: number | null) {
@@ -2221,69 +2747,80 @@ export class EmployersService {
     );
   }
 
-  private planCatalog() {
+  private async planCatalog() {
+    const configured = await this.razorpayConfiguration.employerPlans();
     const plan = (
-      key: "free" | "starter" | "growth",
+      key: "free" | PaidPlanKey,
       name: string,
       activeJobs: number,
       seats: number,
-      planEnv?: string,
-      amountEnv?: string,
+      resumeCredits: number,
+      providerPlanId?: string | null,
+      amountInr?: number | null,
     ) => ({
       key,
       name,
       currency: "INR",
-      amountInr: amountEnv ? this.readOptionalAmount(amountEnv) : 0,
+      amountInr: amountInr ?? (key === "free" ? 0 : null),
       activeJobs,
       seats,
-      razorpayPlanId: planEnv ? process.env[planEnv]?.trim() || null : null,
+      resumeCredits,
+      razorpayPlanId: providerPlanId || null,
     });
     return [
-      plan("free", "Free", 1, 1),
+      plan("free", "Free", 1, 1, 0),
       plan(
         "starter",
         "Starter",
-        3,
-        3,
-        "RAZORPAY_PLAN_STARTER",
-        "EMPLOYER_STARTER_PRICE_INR",
+        configured.starter.activeJobs,
+        configured.starter.seats,
+        configured.starter.resumeCredits,
+        configured.starter.planId,
+        configured.starter.amountInr,
       ),
       plan(
         "growth",
         "Growth",
-        10,
-        10,
-        "RAZORPAY_PLAN_GROWTH",
-        "EMPLOYER_GROWTH_PRICE_INR",
+        configured.growth.activeJobs,
+        configured.growth.seats,
+        configured.growth.resumeCredits,
+        configured.growth.planId,
+        configured.growth.amountInr,
+      ),
+      plan(
+        "business",
+        "Business",
+        configured.business.activeJobs,
+        configured.business.seats,
+        configured.business.resumeCredits,
+        configured.business.planId,
+        configured.business.amountInr,
+      ),
+      plan(
+        "enterprise",
+        "Enterprise",
+        configured.enterprise.activeJobs,
+        configured.enterprise.seats,
+        configured.enterprise.resumeCredits,
+        configured.enterprise.planId,
+        configured.enterprise.amountInr,
       ),
     ];
-  }
-
-  private readOptionalAmount(name: string): number | null {
-    const value = process.env[name]?.trim();
-    if (!value) return null;
-    const amount = Number(value);
-    if (!Number.isFinite(amount) || amount < 0)
-      throw new ServiceUnavailableException(
-        `${name} must be a non-negative INR amount.`,
-      );
-    return amount;
   }
 
   private async razorpayRequest(
     path: string,
     init: RequestInit,
   ): Promise<Response> {
-    const keyId = process.env.RAZORPAY_KEY_ID?.trim();
-    const secret = this.requireRazorpaySecret();
-    if (!keyId)
+    const { keyId, apiSecret } = await this.razorpayConfiguration.credentials();
+    if (!keyId || !apiSecret)
       throw new ServiceUnavailableException(
-        "Razorpay key ID is not configured.",
+        "Razorpay key ID and API secret must be configured.",
       );
     return fetch(`https://api.razorpay.com/v1${path}`, {
       ...init,
       headers: {
-        Authorization: `Basic ${Buffer.from(`${keyId}:${secret}`).toString("base64")}`,
+        Authorization: `Basic ${Buffer.from(`${keyId}:${apiSecret}`).toString("base64")}`,
         "Content-Type": "application/json",
         ...init.headers,
       },
@@ -2312,15 +2849,6 @@ export class EmployersService {
         "Razorpay returned an invalid response.",
       );
     return object;
-  }
-
-  private requireRazorpaySecret() {
-    const secret = process.env.RAZORPAY_KEY_SECRET?.trim();
-    if (!secret)
-      throw new ServiceUnavailableException(
-        "Razorpay key secret is not configured.",
-      );
-    return secret;
   }
 
   private epochDate(value: unknown): Date | null {

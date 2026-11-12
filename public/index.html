@@ -40,15 +40,25 @@
         font-synthesis: none;
         text-rendering: optimizeLegibility;
       }
-
       * {
         box-sizing: border-box;
-        scrollbar-width: none;
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
       }
       *::-webkit-scrollbar {
-        display: none;
-        width: 0;
-        height: 0;
+        width: 9px;
+        height: 9px;
+      }
+      *::-webkit-scrollbar-track {
+        background: var(--scrollbar-track);
+      }
+      *::-webkit-scrollbar-thumb {
+        border: 2px solid var(--scrollbar-track);
+        border-radius: 8px;
+        background: var(--scrollbar-thumb);
+      }
+      *::-webkit-scrollbar-thumb:hover {
+        background: var(--green);
       }
       html {
         scroll-behavior: smooth;
@@ -1575,6 +1585,8 @@
         --muted: #5d7480;
         --green: #087f8c;
         --green-dark: #06636e;
+        --scrollbar-track: #e4edf0;
+        --scrollbar-thumb: #79a8ad;
         --lime: #f3c969;
         --paper: #f1f8fa;
         --line: #dce9ed;
@@ -3287,7 +3299,8 @@
         grid-column: 1 / -1;
       }
       .profile-field input,
-      .profile-field textarea {
+      .profile-field textarea,
+      .profile-field select {
         width: 100%;
         min-height: 44px;
         padding: 10px 12px;
@@ -3303,6 +3316,20 @@
         min-height: 115px;
         resize: vertical;
         line-height: 1.55;
+      }
+      .profile-salary-inputs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .resume-text-preview {
+        max-height: 300px;
+        overflow: auto;
+        padding: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: #f4f6f1;
+        border-radius: 8px;
       }
       .profile-field input[readonly] {
         color: var(--muted);
@@ -3787,12 +3814,8 @@
           overflow-x: auto;
           overflow-y: hidden;
           overscroll-behavior-x: contain;
-          scrollbar-width: none;
           -webkit-overflow-scrolling: touch;
           touch-action: pan-x;
-        }
-        .workspace-nav::-webkit-scrollbar {
-          display: none;
         }
         .workspace-nav a {
           flex: 0 0 auto;
@@ -4809,6 +4832,8 @@
         workspaceJobLocation: "",
         candidateApplicationsPage: 1,
         candidateNotificationsPage: 1,
+        employerCandidatePage: 1,
+        employerCandidateQuery: "",
       };
       const searchForm = document.querySelector("#job-search");
       const keywordInput = document.querySelector("#keyword");
@@ -5041,7 +5066,7 @@
           <span class="company-icon ${companyColor(job)}" aria-hidden="true">${job.mark ? escapeHtml(job.mark) : companyMark(job.company)}</span>
           <div class="result-card-copy">
             <h2><a class="result-open" href="${detailHash}">${escapeHtml(job.title)}</a></h2>
-            <p class="result-company">${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
+            <p class="result-company">${job.organizationId ? `<a href="/companies/id/${encodeURIComponent(job.organizationId)}">${escapeHtml(job.company)}</a>` : escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
             <div class="result-meta">${meta}</div>
           </div>
         </div>
@@ -5065,7 +5090,7 @@
             ${job.isPreview ? '<span class="preview-badge">Preview</span>' : ""}
             <button class="save-button${savedJobIds().includes(String(job.id)) ? " saved" : ""}" type="button" data-save-job="${escapeHtml(job.id)}" aria-label="Save ${escapeHtml(job.title)}" aria-pressed="${savedJobIds().includes(String(job.id))}">${savedJobIds().includes(String(job.id)) ? "♥" : "♡"}</button></div>
           <h3><a class="result-open" href="#job/${encodeURIComponent(job.id)}">${escapeHtml(job.title)}</a></h3>
-          <p class="job-company">${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
+          <p class="job-company">${job.organizationId ? `<a href="/companies/id/${encodeURIComponent(job.organizationId)}">${escapeHtml(job.company)}</a>` : escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
           <div class="job-meta"><span>${escapeHtml(employmentLabel(job.employmentType))}</span><span>${escapeHtml(workplaceLabel(job.workplaceType))}</span>${job.experience ? `<span>${escapeHtml(job.experience)}</span>` : ""}</div>
           <div class="job-footer"><span><strong>${escapeHtml(formatSalary(job))}</strong><br>Salary range as provided</span><span class="fresh">${escapeHtml(postedLabel(job.createdAt))}</span></div>
         </article>`,
@@ -5296,19 +5321,33 @@
               ? `<p>Submit an application to add this role to your account’s application tracker.</p>
               <form class="application-form" id="candidate-application-form" data-job-id="${escapeHtml(job.id)}">
                   <div class="workspace-notice" role="note">Your account name is always shared with the employer. Profile sharing adds your profile snapshot and contact details; resume sharing is a separate choice.</div>
+                ${(Array.isArray(job.requiredDocuments) ? job.requiredDocuments : []).length ? `<section class="application-documents"><h3>Documents requested by the employer</h3>${job.requiredDocuments.map((document) => `<label>${escapeHtml(document.label)}${document.required ? " <span>(required)</span>" : " <span>(optional)</span>"}<input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-application-document="${escapeHtml(document.id)}" data-application-document-required="${document.required ? "true" : "false"}"><button class="button" type="button" data-upload-application-document="${escapeHtml(document.id)}">Upload document</button><small role="status" data-application-document-status="${escapeHtml(document.id)}">PDF or DOCX, up to 8 MB.</small></label>`).join("")}</section>` : ""}
+                ${(Array.isArray(job.applicationQuestions)
+                  ? job.applicationQuestions
+                  : []
+                )
+                  .map(
+                    (
+                      question,
+                    ) => `<label>${escapeHtml(question.question)}${question.required ? " <span>(required)</span>" : ""}
+                  <textarea name="applicationAnswer:${escapeHtml(question.id)}" data-application-question="${escapeHtml(question.id)}" maxlength="2000"${question.required ? " required" : ""}></textarea>
+                </label>`,
+                  )
+                  .join("")}
                 <label for="application-cover-letter">Short note <span>(optional)</span>
                   <textarea id="application-cover-letter" name="coverLetter" maxlength="5000" placeholder="Briefly introduce yourself and explain your interest in this role."></textarea>
                     <small>Do not include sensitive personal information in this note.</small>
                 </label>
                   <div class="profile-checkboxes">
                     <label class="profile-checkbox"><input name="includeResume" type="checkbox"${profile?.resumeFileName ? "" : " disabled"}>Include my uploaded resume${profile?.resumeFileName ? ` (${escapeHtml(profile.resumeFileName)})` : " (upload one in My profile first)"}</label>
-                    <label class="profile-checkbox"><input name="shareProfile" type="checkbox"${profile?.shareProfileOnApplication ? "" : " disabled"}>Share my profile details with this employer${profile?.shareProfileOnApplication ? "" : " (enable in My profile first)"}</label>
+                    <label class="profile-checkbox"><input name="shareProfile" type="checkbox"${profile?.shareProfileOnApplication && profile?.profileVisibility !== "private" ? "" : " disabled"}>Share my profile details with this employer${profile?.shareProfileOnApplication && profile?.profileVisibility !== "private" ? "" : " (enable application sharing and choose Applications or Recruiters visibility in My profile first)"}</label>
                   </div>
                   <section class="application-review" id="application-review" hidden aria-live="polite">
                     <h3>Review before submitting</h3>
                     <p><strong>Applying as:</strong> <span id="application-review-name"></span></p>
                     <p><strong>Email:</strong> <span id="application-review-email"></span></p>
                     <p><strong>Your note:</strong> <span id="application-review-note"></span></p>
+                    <div id="application-review-answers"></div>
                     <p><strong>Resume:</strong> <span id="application-review-resume"></span></p>
                     <p><strong>Profile sharing:</strong> <span id="application-review-profile"></span></p>
                 </section>
@@ -5347,7 +5386,7 @@
           <span class="company-icon ${companyColor(job)}" aria-hidden="true">${job.mark ? escapeHtml(job.mark) : companyMark(job.company)}</span>
           <div><div class="view-eyebrow">${job.isPreview ? "Illustrative preview listing" : "Published job listing"}</div>
             <h1 id="detail-title">${escapeHtml(job.title)}</h1>
-            <p class="detail-company">${escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
+            <p class="detail-company">${job.organizationId ? `<a href="/companies/id/${encodeURIComponent(job.organizationId)}">${escapeHtml(job.company)}</a>` : escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
           </div>
         </div>
         <div class="detail-meta">${meta}</div>
@@ -5581,6 +5620,83 @@
         );
       }
 
+      async function completeCandidateSignIn(payload) {
+        if (!validAuthPayload(payload) || payload.user.role !== "candidate") {
+          throw new Error("Candidate sign-in returned an unexpected response.");
+        }
+        authState.accessToken = payload.accessToken;
+        authState.user = payload.user;
+        authState.notice = "";
+        authState.noticeType = "";
+        state.employerOrganizations = [];
+        updateAuthNavigation();
+        try {
+          await syncLocalSavedJobs();
+        } catch (error) {
+          showToast(
+            `Saved jobs could not be synced: ${displayAuthError(error)}`,
+          );
+        }
+        redirectAuthenticatedUser();
+      }
+
+      async function mountGoogleSignInButton() {
+        const container = authCard.querySelector("#google-sign-in");
+        if (!container) return;
+        try {
+          const configResponse = await fetch("/api/auth/config", {
+            cache: "no-store",
+          });
+          const config = await readAuthResponse(configResponse);
+          if (!config.googleClientId) {
+            container.textContent =
+              "Google sign-in is unavailable until configured by the service.";
+            return;
+          }
+          if (!window.google?.accounts?.id) {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = "https://accounts.google.com/gsi/client";
+              script.async = true;
+              script.defer = true;
+              script.onload = resolve;
+              script.onerror = () =>
+                reject(new Error("Google sign-in could not be loaded."));
+              document.head.append(script);
+            });
+          }
+          if (!window.google?.accounts?.id) {
+            throw new Error("Google sign-in could not be initialized.");
+          }
+          window.google.accounts.id.initialize({
+            client_id: config.googleClientId,
+            callback: async ({ credential }) => {
+              try {
+                const response = await fetch("/api/auth/google", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ idToken: credential }),
+                });
+                await completeCandidateSignIn(await readAuthResponse(response));
+              } catch (error) {
+                setAuthNotice(displayAuthError(error), "error");
+              }
+            },
+          });
+          window.google.accounts.id.renderButton(container, {
+            theme: "outline",
+            size: "large",
+            shape: "rectangular",
+            text: "continue_with",
+            width: 320,
+          });
+        } catch (error) {
+          container.textContent = displayAuthError(error);
+          container.classList.add("error");
+        }
+      }
+
       async function restoreSession() {
         try {
           const response = await fetch("/api/auth/refresh", {
@@ -5634,6 +5750,38 @@
         );
         const token = authParams.get("token") || "";
         const inviteToken = authParams.get("invite") || "";
+        if (action === "registration-verification") {
+          const email = authParams.get("email") || "";
+          authCard.innerHTML = `<h2>Verify your email and mobile</h2>
+          <p class="auth-card-copy">${escapeHtml(authState.notice || "Enter the 6-digit code sent to your mobile. Also open the verification link sent to your email. Both checks are required before you can sign in.")}</p>
+          <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.noticeType === "error" ? authState.notice : "")}</p>
+          <form class="auth-form" id="account-action-form" data-action="phone-verification-verify" novalidate>
+            <label class="auth-field">Account email<input name="email" type="email" autocomplete="email" maxlength="254" required value="${escapeHtml(email)}"></label>
+            <label class="auth-field">Mobile verification code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label>
+            <button class="button button-dark" type="submit">Verify mobile number</button>
+          </form>
+          <form class="auth-form" id="account-action-form" data-action="phone-verification-resend" novalidate>
+            <input name="email" type="hidden" value="${escapeHtml(email)}">
+            <button class="button button-light" type="submit">Resend SMS code</button>
+          </form>
+          <p class="auth-switch"><a href="#resend-verification">Resend email verification</a> · <a href="#sign-in">Go to sign in</a></p>`;
+          return;
+        }
+        if (action === "email-otp") {
+          const verifyCode = authParams.get("step") === "verify";
+          const email = authParams.get("email") || "";
+          document.body.classList.add("auth-mode");
+          authCard.innerHTML = `<h2>${verifyCode ? "Enter your sign-in code" : "Sign in with email code"}</h2>
+          <p class="auth-card-copy">${verifyCode ? "Enter the 6-digit code we emailed you. It expires in 10 minutes." : "We’ll send a one-time code to the email address on your verified candidate account."}</p>
+          <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
+          <form class="auth-form" id="account-action-form" data-action="${verifyCode ? "email-otp-verify" : "email-otp-request"}" novalidate>
+            <label class="auth-field">Email address<input name="email" type="email" autocomplete="email" maxlength="254" required value="${escapeHtml(email)}"${verifyCode ? " readonly" : ""}></label>
+            ${verifyCode ? '<label class="auth-field">Sign-in code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label>' : ""}
+            <button class="button button-dark" type="submit">${verifyCode ? "Verify and sign in" : "Email me a code"}</button>
+          </form>
+          <p class="auth-switch"><a href="#sign-in">Return to password sign in</a></p>`;
+          return;
+        }
         const accountType =
           action === "employer-sign-up" ||
           (["sign-up", "sign-in"].includes(action) &&
@@ -5749,6 +5897,14 @@
               : ""
           }
           ${
+            isSignup
+              ? `<label class="auth-field" for="auth-phone">Mobile number
+            <input id="auth-phone" name="phoneNumber" type="tel" autocomplete="tel" inputmode="tel" pattern="\\+[1-9][0-9]{7,14}" placeholder="+919876543210" maxlength="16" required>
+            <small>Include the country calling code in international format (E.164).</small>
+          </label>`
+              : ""
+          }
+          ${
             isSignup && accountType === "employer" && !inviteToken
               ? `<label class="auth-field" for="auth-company-name">Company name
             <input id="auth-company-name" name="companyName" type="text" autocomplete="organization" minlength="2" maxlength="160" required>
@@ -5766,10 +5922,14 @@
           <label class="auth-field" for="auth-password">Password
             <span class="auth-password"><input id="auth-password" name="password" type="password" autocomplete="${isSignup ? "new-password" : "current-password"}" ${isSignup ? 'minlength="8"' : ""} maxlength="72" required>${passwordVisibilityButton()}</span>
           </label>
-          ${isSignup ? `<p class="auth-card-copy">${accountType === "employer" ? "Use at least 8 characters. Verify your email; employer access also requires administrator approval." : "Use at least 8 characters. We’ll email you a verification link before first sign-in."}</p>` : ""}
+          ${isSignup ? `<p class="auth-card-copy">${accountType === "employer" ? "Use at least 8 characters. Verify both your email and mobile number; employer publishing also requires administrator approval." : "Use at least 8 characters. Verify both your email and mobile number before signing in."}</p>` : ""}
           <button class="button button-dark" type="submit">${isSignup ? (accountType === "employer" ? (inviteToken ? "Create account" : "Submit for approval") : "Create candidate account") : "Log in"} <span aria-hidden="true">→</span></button>
         </form>
-        ${!isSignup ? '<p class="auth-switch"><a href="#forgot-password">Forgot password?</a> · <a href="#resend-verification">Resend verification</a></p>' : ""}`;
+        ${!isSignup && accountType === "candidate" && !inviteToken ? '<div class="auth-alternatives"><p>Or continue with Google</p><div id="google-sign-in"></div><p>Or use a one-time code</p><a class="button button-light" href="#email-otp">Sign in with email code</a></div>' : ""}
+        ${!isSignup ? '<p class="auth-switch"><a href="#forgot-password">Forgot password?</a> · <a href="#resend-verification">Resend email verification</a> · <a href="#registration-verification">Verify mobile</a></p>' : ""}`;
+        if (!isSignup && accountType === "candidate" && !inviteToken) {
+          void mountGoogleSignInButton();
+        }
       }
 
       function passwordVisibilityButton() {
@@ -5919,6 +6079,74 @@
           const originalText = button.textContent;
           button.textContent = "Please wait…";
           setAuthNotice("");
+          if (action === "email-otp-request" || action === "email-otp-verify") {
+            const email = String(formData.get("email") || "").trim();
+            try {
+              const isVerify = action === "email-otp-verify";
+              const response = await fetch(
+                `/api/auth/email-otp/${isVerify ? "verify" : "request"}`,
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email,
+                    ...(isVerify
+                      ? { code: String(formData.get("code") || "") }
+                      : {}),
+                  }),
+                },
+              );
+              const payload = await readAuthResponse(response);
+              if (isVerify) {
+                await completeCandidateSignIn(payload);
+              } else {
+                authState.notice = payload.message;
+                authState.noticeType = "";
+                navigate(
+                  `#email-otp?step=verify&email=${encodeURIComponent(email)}`,
+                );
+              }
+            } catch (error) {
+              setAuthNotice(displayAuthError(error), "error");
+              button.disabled = false;
+              button.textContent = originalText;
+            }
+            return;
+          }
+          if (
+            action === "phone-verification-verify" ||
+            action === "phone-verification-resend"
+          ) {
+            const verify = action === "phone-verification-verify";
+            try {
+              const response = await fetch(
+                `/api/auth/phone-verification/${verify ? "verify" : "request"}`,
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email: String(formData.get("email") || "").trim(),
+                    ...(verify
+                      ? { code: String(formData.get("code") || "") }
+                      : {}),
+                  }),
+                },
+              );
+              const result = await readAuthResponse(response);
+              authState.notice = result.message;
+              authState.noticeType = "";
+              button.disabled = false;
+              button.textContent = originalText;
+              renderAuth();
+            } catch (error) {
+              setAuthNotice(displayAuthError(error), "error");
+              button.disabled = false;
+              button.textContent = originalText;
+            }
+            return;
+          }
           const endpoints = {
             "forgot-password": "forgot-password",
             "reset-password": "reset-password",
@@ -5936,7 +6164,13 @@
             if (action === "verify-email" || action === "reset-password") {
               authState.notice = result.message;
               authState.noticeType = "";
-              navigate("#sign-in");
+              if (action === "verify-email" && authParams.get("email")) {
+                navigate(
+                  `#registration-verification?email=${encodeURIComponent(authParams.get("email"))}`,
+                );
+              } else {
+                navigate("#sign-in");
+              }
             } else {
               setAuthNotice(result.message);
               button.disabled = false;
@@ -6012,17 +6246,26 @@
             body: JSON.stringify({
               email: String(formData.get("email") || "").trim(),
               password,
-              ...(isSignup ? { displayName, ...registrationDetails } : {}),
+              ...(isSignup
+                ? {
+                    displayName,
+                    phoneNumber: String(
+                      formData.get("phoneNumber") || "",
+                    ).trim(),
+                    ...registrationDetails,
+                  }
+                : {}),
             }),
           });
           const payload = await readAuthResponse(response);
           if (isSignup) {
             authState.notice =
-              accountType === "employer"
-                ? payload.message
-                : "Account created. Check your email for the verification link before signing in.";
+              payload.message ||
+              "Account created. Verify your email and mobile before signing in.";
             authState.noticeType = "";
-            navigate("#sign-in");
+            navigate(
+              `#registration-verification?email=${encodeURIComponent(payload.email)}`,
+            );
             return;
           }
           if (!validAuthPayload(payload)) {
@@ -6332,7 +6575,7 @@
             </div>
           </div>
           <div class="profile-resource-card">
-            <div class="profile-section-heading"><div><h2>Resume</h2><p>Keep a current PDF ready for future application workflows.</p></div></div>
+            <div class="profile-section-heading"><div><h2>Resume</h2><p>Upload a PDF or DOCX. We extract selectable text and keep private versions so you can restore an earlier file.</p></div></div>
             <div class="profile-resource-line">
               ${
                 profile.resumeUrl
@@ -6340,13 +6583,43 @@
                   : '<span class="workspace-notice">No resume uploaded.</span>'
               }
               <div class="profile-photo-actions">
-                <button class="button button-light" type="button" data-open-resume>${profile.resumeUrl ? "Replace PDF" : "Upload PDF"}</button>
+                <button class="button button-light" type="button" data-open-resume>${profile.resumeUrl ? "Upload a new version" : "Upload resume"}</button>
                 ${profile.resumeUrl ? '<button class="button button-light" type="button" data-remove-resume>Remove</button>' : ""}
-                <input id="profile-resume-input" type="file" accept="application/pdf,.pdf" hidden>
+                <input id="profile-resume-input" type="file" accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx" hidden>
               </div>
             </div>
-            <small>PDF only, up to 8 MB. Your resume is private and is not automatically attached to applications.</small>
+            <small>PDF or DOCX, up to 8 MB. Files stay private; choose separately whether to include a resume in each application.</small>
+            ${profile.parsedResumeText ? `<details><summary>View extracted resume text</summary><pre class="resume-text-preview">${escapeHtml(profile.parsedResumeText)}</pre></details>` : ""}
+            ${profile.resumeVersions?.length ? `<div class="profile-collection"><strong>Resume versions</strong>${profile.resumeVersions.map((version) => `<article class="profile-entry"><div class="profile-entry-top"><span>${escapeHtml(version.fileName)}${version.active ? " · Current" : ""}</span>${version.active ? "" : `<button class="button button-light" type="button" data-restore-resume="${version.id}">Make current</button>`}</div><small>${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(version.mimeType === "application/pdf" ? "PDF" : "DOCX")}</small><p><a href="${escapeHtml(version.url)}" target="_blank" rel="noopener noreferrer">Open private file</a></p></article>`).join("")}</div>` : ""}
           </div>
+        </section>
+        <section class="profile-resource-card">
+          <div class="profile-section-heading"><div><h2>Public profile link</h2><p>Choose your unique username and decide whether your candidate profile can be viewed publicly.</p></div></div>
+          <form class="profile-fields" id="username-form" novalidate>
+            <label class="profile-field">Username
+              <input name="username" type="text" pattern="[A-Za-z0-9][A-Za-z0-9-]{2,29}" minlength="3" maxlength="30" autocomplete="username" required value="${escapeHtml(profile.username || "")}">
+              <small>3–30 letters, numbers, or hyphens; starts with a letter or number.</small>
+            </label>
+            <p class="profile-field">Your link: <a data-profile-url href="/u/${encodeURIComponent(profile.username || "")}" target="_blank" rel="noopener noreferrer">${escapeHtml(location.origin)}/u/${escapeHtml(profile.username || "")}</a></p>
+            <div class="profile-form-actions full"><button class="button button-light" type="submit">Update username</button></div>
+          </form>
+          <p class="workspace-notice">Your public link is off until you enable it below. Resume files, contact details, and application information are never shown on the public profile.</p>
+        </section>
+        <section class="profile-resource-card">
+          <div class="profile-section-heading"><div><h2>Verified mobile number</h2><p>Used for account verification and security notices.</p></div></div>
+          <p>${profile.phoneNumber ? `${escapeHtml(profile.phoneNumber)} · ${profile.phoneVerified ? "Verified" : "Not verified"}` : "No mobile number added."}</p>
+          <form class="profile-fields" id="phone-change-request" novalidate>
+            <label class="profile-field">New mobile number
+              <input name="phoneNumber" type="tel" inputmode="tel" pattern="\\+[1-9][0-9]{7,14}" placeholder="+919876543210" maxlength="16" required>
+            </label>
+            <div class="profile-form-actions full"><button class="button button-light" type="submit">Send verification code</button></div>
+          </form>
+          <form class="profile-fields" id="phone-change-verify" hidden novalidate>
+            <label class="profile-field">Code sent to ${escapeHtml(profile.pendingPhoneNumber || "")}
+              <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
+            </label>
+            <div class="profile-form-actions full"><button class="button button-light" type="submit">Verify and update mobile</button></div>
+          </form>
         </section>
         <form id="profile-form" novalidate>
           <div class="profile-fields">
@@ -6362,8 +6635,9 @@
             <label class="profile-field" for="profile-location">City or preferred location
               <input id="profile-location" name="location" type="text" maxlength="120" autocomplete="address-level2" placeholder="e.g. Bengaluru" value="${escapeHtml(profile.location)}">
             </label>
-            <label class="profile-field" for="profile-phone">Phone (optional)
+            <label class="profile-field" for="profile-phone">Additional profile phone (optional)
               <input id="profile-phone" name="phone" type="tel" maxlength="32" autocomplete="tel" value="${escapeHtml(profile.phone)}">
+              <small>Recruiter contact uses your verified account mobile number.</small>
             </label>
             <label class="profile-field full" for="profile-summary">About you
               <textarea id="profile-summary" name="summary" maxlength="5000" placeholder="Share a short professional summary">${escapeHtml(profile.summary)}</textarea>
@@ -6381,6 +6655,10 @@
           <section class="profile-section-card">
             <div class="profile-section-heading"><div><h2>Education</h2><p>Add up to 20 qualifications or training programs.</p></div><button class="button button-light" type="button" data-add-education>Add education</button></div>
             <div class="profile-collection" id="profile-education-list">${profile.education.map((entry, index) => renderEducationEntry(entry, index)).join("") || '<p class="workspace-notice">No education added yet.</p>'}</div>
+          </section>
+          <section class="profile-section-card">
+            <div class="profile-section-heading"><div><h2>Certifications</h2><p>Add up to 20 professional certifications.</p></div><button class="button button-light" type="button" data-add-certification>Add certification</button></div>
+            <div class="profile-collection" id="profile-certification-list">${profile.certifications.map((entry, index) => renderCertificationEntry(entry, index)).join("") || '<p class="workspace-notice">No certifications added yet.</p>'}</div>
           </section>
           <section class="profile-section-card">
             <div class="profile-section-heading"><div><h2>Career preferences</h2><p>Tell us what kinds of opportunities you are interested in.</p></div></div>
@@ -6401,6 +6679,20 @@
                 ${profileCheckbox("workplaceTypes", "hybrid", "Hybrid", profile.workplaceTypes)}
                 ${profileCheckbox("workplaceTypes", "remote", "Remote", profile.workplaceTypes)}
               </div></fieldset>
+              <label class="profile-field" for="profile-salary-min">Minimum desired salary
+                <input id="profile-salary-min" name="salaryMinimum" type="number" min="0" max="1000000000" step="0.01" value="${escapeHtml(profile.salaryPreferences?.minimum ?? "")}">
+              </label>
+              <label class="profile-field" for="profile-salary-currency">Salary currency and period
+                <span class="profile-salary-inputs"><select id="profile-salary-currency" name="salaryCurrency">${["INR", "USD", "EUR", "GBP", "AUD", "CAD", "SGD"].map((currency) => `<option value="${currency}"${(profile.salaryPreferences?.currency || "INR") === currency ? " selected" : ""}>${currency}</option>`).join("")}</select><select name="salaryPeriod" aria-label="Salary period">${["year", "month", "hour"].map((period) => `<option value="${period}"${(profile.salaryPreferences?.period || "year") === period ? " selected" : ""}>per ${period}</option>`).join("")}</select></span>
+              </label>
+            </div>
+          </section>
+          <section class="profile-section-card">
+            <div class="profile-section-heading"><div><h2>Resume builder</h2><p>Edit the content and print a clean, browser-generated resume. Save this profile first to include current changes.</p></div><button class="button button-light" type="button" data-print-resume>Preview / print</button></div>
+            <div class="profile-fields">
+              <label class="profile-field" for="resume-builder-title">Resume title<input id="resume-builder-title" name="resumeBuilderTitle" maxlength="160" value="${escapeHtml(profile.resumeBuilder?.title || profile.displayName)}"></label>
+              <label class="profile-field full" for="resume-builder-summary">Resume summary<textarea id="resume-builder-summary" name="resumeBuilderSummary" maxlength="5000">${escapeHtml(profile.resumeBuilder?.summary ?? profile.summary)}</textarea></label>
+              <fieldset class="profile-field full"><legend>Sections to include</legend><div class="profile-checkboxes">${["summary", "experience", "education", "certifications", "skills"].map((section) => `<label class="profile-checkbox"><input type="checkbox" name="resumeSections" value="${section}"${(profile.resumeBuilder?.sectionOrder || ["summary", "experience", "education", "certifications", "skills"]).includes(section) ? " checked" : ""}>${section[0].toUpperCase()}${section.slice(1)}</label>`).join("")}</div></fieldset>
             </div>
           </section>
           <section class="profile-section-card">
@@ -6421,10 +6713,25 @@
             <div class="profile-section-heading"><div><h2>Privacy and notifications</h2><p>Control what may be included with applications and which account emails you receive.</p></div></div>
             <div class="profile-checkboxes">
               <label class="profile-checkbox"><input name="shareProfileOnApplication" type="checkbox"${profile.shareProfileOnApplication ? " checked" : ""}>Allow sharing my profile details when I apply</label>
+              <label class="profile-checkbox"><input name="allowRecruiterContact" type="checkbox"${profile.allowRecruiterContact ? " checked" : ""}>Allow recruiters to contact me using my email and phone</label>
+              <label class="profile-checkbox"><input name="allowRecruiterResumeAccess" type="checkbox"${profile.allowRecruiterResumeAccess ? " checked" : ""}>Allow approved recruiters to unlock my resume using their monthly credits</label>
               <label class="profile-checkbox"><input name="applicationEmailUpdates" type="checkbox"${profile.applicationEmailUpdates ? " checked" : ""}>Email me application status and interview updates</label>
               <label class="profile-checkbox"><input name="jobAlertEmails" type="checkbox"${profile.jobAlertEmails ? " checked" : ""}>Email me about matching new jobs</label>
+              <label class="profile-checkbox"><input name="publicProfileEnabled" type="checkbox"${profile.publicProfileEnabled ? " checked" : ""}>Allow anyone with my username link to view my selected profile details</label>
             </div>
-            <small>Your profile remains private unless you opt in here and choose to share for an application. Resume sharing is a separate choice each time you apply. Job alerts are sent when an administrator publishes a job matching a target role and your selected work preferences.</small>
+            <fieldset class="profile-field"><legend>Profile visibility</legend><div class="profile-checkboxes">
+              ${[
+                ["private", "Private"],
+                ["applications", "Only applications you choose to share"],
+                ["recruiters", "Discoverable by approved recruiters"],
+              ]
+                .map(
+                  ([value, label]) =>
+                    `<label class="profile-checkbox"><input type="radio" name="profileVisibility" value="${value}"${(profile.profileVisibility || "private") === value ? " checked" : ""}>${label}</label>`,
+                )
+                .join("")}
+            </div></fieldset>
+            <small>Public username profiles are separate from recruiter discovery and application sharing. A public profile shows only your name, headline, location, summary, skills, experience, education, and public links; contact details and resumes are excluded. Recruiter discovery is opt-in. Contact details are shown only when you allow recruiter contact. Resume-database access is a separate opt-in and can be revoked here; each recruiter unlock is recorded.</small>
           </section>
           <div class="profile-form-actions"><p>Changes save to your account when the server confirms.</p>
             <button class="button button-dark" type="submit">Save profile <span aria-hidden="true">→</span></button></div>
@@ -6491,6 +6798,18 @@
           <label class="profile-field" for="edu-${index}-start">Start date<input id="edu-${index}-start" data-edu-field="startDate" type="month" required value="${escapeHtml(entry.startDate)}"></label>
           <label class="profile-field" for="edu-${index}-end">End date<input id="edu-${index}-end" data-edu-field="endDate" type="month" value="${escapeHtml(entry.endDate)}"></label>
           <label class="profile-field full" for="edu-${index}-description">Details<textarea id="edu-${index}-description" data-edu-field="description" maxlength="1000">${escapeHtml(entry.description)}</textarea></label>
+        </div>
+      </article>`;
+      }
+
+      function renderCertificationEntry(entry, index) {
+        return `<article class="profile-entry" data-certification-entry="${index}">
+        <div class="profile-entry-top"><span>Certification ${index + 1}</span><button class="button button-light" type="button" data-remove-certification>Remove</button></div>
+        <div class="profile-fields">
+          <label class="profile-field" for="cert-${index}-name">Certification<input id="cert-${index}-name" data-cert-field="name" type="text" maxlength="160" required value="${escapeHtml(entry.name)}"></label>
+          <label class="profile-field" for="cert-${index}-issuer">Issuing organization<input id="cert-${index}-issuer" data-cert-field="issuer" type="text" maxlength="160" value="${escapeHtml(entry.issuer)}"></label>
+          <label class="profile-field" for="cert-${index}-date">Issue date<input id="cert-${index}-date" data-cert-field="issueDate" type="month" value="${escapeHtml(entry.issueDate)}"></label>
+          <label class="profile-field" for="cert-${index}-url">Credential URL<input id="cert-${index}-url" data-cert-field="credentialUrl" type="url" maxlength="500" value="${escapeHtml(entry.credentialUrl)}"></label>
         </div>
       </article>`;
       }
@@ -6651,14 +6970,18 @@
 
       async function uploadCandidateResume(file) {
         if (file.size > 8 * 1024 * 1024) {
-          profileInputError("Choose a PDF no larger than 8 MB.");
+          profileInputError("Choose a PDF or DOCX no larger than 8 MB.");
           return;
         }
-        if (
-          file.type !== "application/pdf" &&
-          !file.name.toLowerCase().endsWith(".pdf")
-        ) {
-          profileInputError("Resume uploads must be PDF files.");
+        const isPdf =
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf");
+        const isDocx =
+          file.type ===
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+          file.name.toLowerCase().endsWith(".docx");
+        if (!isPdf && !isDocx) {
+          profileInputError("Resume uploads must be PDF or DOCX files.");
           return;
         }
         const uploadButton = profileContent.querySelector("[data-open-resume]");
@@ -6715,6 +7038,29 @@
 
       profileContent.addEventListener("click", async (event) => {
         const target = event.target;
+        const restoreResumeButton = target.closest("[data-restore-resume]");
+        if (restoreResumeButton) {
+          restoreResumeButton.disabled = true;
+          try {
+            const response = await authenticatedFetch(
+              `/api/candidate/profile/resume-versions/${encodeURIComponent(restoreResumeButton.dataset.restoreResume)}/restore`,
+              { method: "POST" },
+            );
+            const profile = await readAuthResponse(response);
+            authState.notice = "The selected resume version is now current.";
+            authState.noticeType = "";
+            renderProfileForm(profile);
+          } catch (error) {
+            profileInputError(displayAuthError(error));
+            restoreResumeButton.disabled = false;
+          }
+          return;
+        }
+        const printResumeButton = target.closest("[data-print-resume]");
+        if (printResumeButton) {
+          printCandidateResume();
+          return;
+        }
         if (target.closest("[data-open-photo]")) {
           profileContent.querySelector("#profile-photo-input").click();
         }
@@ -6791,7 +7137,102 @@
           removeEducationButton.closest("[data-education-entry]").remove();
           renumberProfileEntries("education");
         }
+        const addCertificationButton = target.closest(
+          "[data-add-certification]",
+        );
+        if (addCertificationButton) {
+          const list = profileContent.querySelector(
+            "#profile-certification-list",
+          );
+          const entries = list.querySelectorAll("[data-certification-entry]");
+          if (entries.length >= 20)
+            return profileInputError("You can add up to 20 certifications.");
+          list.querySelector(".workspace-notice")?.remove();
+          list.insertAdjacentHTML(
+            "beforeend",
+            renderCertificationEntry(
+              { name: "", issuer: "", issueDate: "", credentialUrl: "" },
+              entries.length,
+            ),
+          );
+        }
+        const removeCertificationButton = target.closest(
+          "[data-remove-certification]",
+        );
+        if (removeCertificationButton) {
+          removeCertificationButton
+            .closest("[data-certification-entry]")
+            .remove();
+        }
       });
+
+      function printCandidateResume() {
+        const form = profileContent.querySelector("#profile-form");
+        if (!form) return;
+        const readValue = (selector) =>
+          form.querySelector(selector)?.value?.trim() || "";
+        const sections = [
+          ...form.querySelectorAll('input[name="resumeSections"]:checked'),
+        ].map((input) => input.value);
+        const summary = readValue('[name="resumeBuilderSummary"]');
+        const title = readValue('[name="resumeBuilderTitle"]');
+        const experience = [
+          ...form.querySelectorAll("[data-experience-entry]"),
+        ].map((entry) => ({
+          title: entry.querySelector('[data-exp-field="title"]').value,
+          company: entry.querySelector('[data-exp-field="company"]').value,
+          location: entry.querySelector('[data-exp-field="location"]').value,
+          start: entry.querySelector('[data-exp-field="startDate"]').value,
+          end: entry.querySelector('[data-exp-field="endDate"]').value,
+          description: entry.querySelector('[data-exp-field="description"]')
+            .value,
+        }));
+        const education = [
+          ...form.querySelectorAll("[data-education-entry]"),
+        ].map((entry) => ({
+          institution: entry.querySelector('[data-edu-field="institution"]')
+            .value,
+          qualification: entry.querySelector('[data-edu-field="qualification"]')
+            .value,
+          field: entry.querySelector('[data-edu-field="fieldOfStudy"]').value,
+          start: entry.querySelector('[data-edu-field="startDate"]').value,
+          end: entry.querySelector('[data-edu-field="endDate"]').value,
+        }));
+        const certifications = [
+          ...form.querySelectorAll("[data-certification-entry]"),
+        ].map((entry) => ({
+          name: entry.querySelector('[data-cert-field="name"]').value,
+          issuer: entry.querySelector('[data-cert-field="issuer"]').value,
+          date: entry.querySelector('[data-cert-field="issueDate"]').value,
+        }));
+        const skillList = readValue('[name="skills"]')
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        const content = sections
+          .map((section) => {
+            if (section === "summary")
+              return `<section><h2>Profile</h2><p>${escapeHtml(summary)}</p></section>`;
+            if (section === "skills")
+              return `<section><h2>Skills</h2><p>${skillList.map(escapeHtml).join(" · ")}</p></section>`;
+            if (section === "experience")
+              return `<section><h2>Experience</h2>${experience.map((item) => `<article><h3>${escapeHtml(item.title)} · ${escapeHtml(item.company)}</h3><p>${escapeHtml(item.location)} · ${escapeHtml(item.start)} – ${escapeHtml(item.end || "Present")}</p><p>${escapeHtml(item.description)}</p></article>`).join("")}</section>`;
+            if (section === "education")
+              return `<section><h2>Education</h2>${education.map((item) => `<article><h3>${escapeHtml(item.qualification)} · ${escapeHtml(item.institution)}</h3><p>${escapeHtml(item.field)} · ${escapeHtml(item.start)} – ${escapeHtml(item.end)}</p></article>`).join("")}</section>`;
+            return `<section><h2>Certifications</h2>${certifications.map((item) => `<article><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.issuer)} · ${escapeHtml(item.date)}</p></article>`).join("")}</section>`;
+          })
+          .join("");
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+          profileInputError("Allow pop-ups to preview and print your resume.");
+          return;
+        }
+        printWindow.opener = null;
+        printWindow.document.write(
+          `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{max-width:800px;margin:40px auto;padding:0 28px;color:#17231d;font:15px/1.55 Arial,sans-serif}h1{font-size:30px}h2{border-bottom:1px solid #ccd5ce;padding-bottom:5px;text-transform:uppercase;font-size:15px}h3{margin-bottom:2px;font-size:16px}p{margin-top:4px;white-space:pre-wrap}@media print{body{margin:0 auto}}</style></head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(readValue('[name="headline"]'))} · ${escapeHtml(readValue('[name="location"]'))}</p><p>${escapeHtml(readValue("#profile-email"))}${readValue('[name="phone"]') ? ` · ${escapeHtml(readValue('[name="phone"]'))}` : ""}</p>${content}<script>window.addEventListener("load",()=>window.print())<\/script></body></html>`,
+        );
+        printWindow.document.close();
+      }
 
       function renumberProfileEntries(kind) {
         const experience = kind === "experience";
@@ -7099,6 +7540,12 @@
               href: "#dashboard/applicants",
             },
             {
+              key: "candidates",
+              label: "Discover candidates",
+              icon: "⌕",
+              href: "#dashboard/candidates",
+            },
+            {
               key: "interviews",
               label: "Interviews",
               icon: "◷",
@@ -7166,6 +7613,18 @@
             label: "Applications",
             icon: "▣",
             href: "#dashboard/applications",
+          },
+          {
+            key: "interviews",
+            label: "Interviews",
+            icon: "◷",
+            href: "#dashboard/interviews",
+          },
+          {
+            key: "recommendations",
+            label: "Recommended jobs",
+            icon: "✦",
+            href: "#dashboard/recommendations",
           },
           {
             key: "notifications",
@@ -7258,8 +7717,10 @@
             profile.links.github,
           ),
           Boolean(profile.resumeUrl),
+          profile.certifications.length > 0,
+          Boolean(profile.salaryPreferences?.minimum),
         ].filter(Boolean).length;
-        return Math.round((completed / 12) * 100);
+        return Math.round((completed / 14) * 100);
       }
 
       async function loadEmployerOverview() {
@@ -7273,6 +7734,7 @@
           const pipeline = metrics.pipeline || {};
           profileContent.innerHTML = `${pendingEmployer ? pendingEmployerNotice("This dashboard is read-only until an administrator approves your employer account. You can review your company profile and job listings, but cannot make changes.") : ""}
           ${workspaceHeading(dashboard.organization.name, `Welcome, ${authState.user.displayName}`, pendingEmployer ? "Read-only preview of your employer workspace while your account awaits administrator approval." : "Your team’s hiring activity, applicant pipeline, and plan usage at a glance.")}
+          <section class="workspace-panel"><h2>Your account link</h2><form class="profile-fields" id="username-form" novalidate><label class="profile-field">Username<input name="username" type="text" pattern="[A-Za-z0-9][A-Za-z0-9-]{2,29}" minlength="3" maxlength="30" autocomplete="username" required value="${escapeHtml(authState.user.username || "")}"></label><p class="profile-field">Company page link: <a href="/u/${encodeURIComponent(authState.user.username || "")}" target="_blank" rel="noopener noreferrer">${escapeHtml(location.origin)}/u/${escapeHtml(authState.user.username || "")}</a></p><div class="profile-form-actions full"><button class="button button-light" type="submit">Update link</button></div></form><small>Employer account links redirect to your public company page.</small></section>
           <section class="workspace-welcome"><h2>${pendingEmployer ? "Your employer workspace is awaiting approval." : "Build a great team, one thoughtful hire at a time."}</h2><p>${pendingEmployer ? "Once approved, you’ll be able to update your company, publish roles, review applications, and coordinate hiring." : "Publish roles, review candidate applications, coordinate interviews, and keep your hiring team aligned from one workspace."}</p>${pendingEmployer ? "" : '<a class="button button-lime" href="#dashboard/jobs">Manage open roles →</a>'}</section>
           <div class="workspace-stat-grid">
             <article class="workspace-stat"><span class="workspace-stat-label">Active jobs</span><strong class="workspace-stat-value">${metrics.activeJobs}</strong><span class="workspace-stat-note">${pendingEmployer ? "Job publishing unlocks after approval." : `${dashboard.limits.jobsRemaining} publish slot(s) remaining · limit ${dashboard.limits.activeJobs}`}</span></article>
@@ -7387,12 +7849,14 @@
               <label>Application deadline<input name="applicationDeadline" type="date"></label>
               <label>Experience<input name="experience" maxlength="80" placeholder="3+ years"></label>
               <label class="full">Job description <span>(at least 100 characters required to publish; drafts may be incomplete)</span><textarea name="description" maxlength="20000" placeholder="Responsibilities, requirements and benefits…"></textarea></label>
+              <label class="full">Application questions <span>(optional; one per line, up to 10. Prefix optional questions with [optional].)</span><textarea name="applicationQuestions" maxlength="3000" placeholder="Why are you interested in this role?&#10;[optional] When can you start?"></textarea></label>
+              <label class="full">Required application documents <span>(optional; one label per line, up to 5. Prefix optional documents with [optional]. Candidates can upload PDF or DOCX files.)</span><textarea name="requiredDocuments" maxlength="1000" placeholder="Resume or CV&#10;[optional] Portfolio"></textarea></label>
               <div class="employer-form-actions full"><button class="button button-dark" type="submit">Save draft</button><button class="button" type="reset" data-reset-employer-job>Clear</button><span id="employer-job-form-status" role="status"></span></div>
             </form>
           </section>`
           }
           <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Your listings</h2><p>${result.total} job(s) owned by this company.</p></div></div>
-            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applicants</th><th>Status</th><th>Created</th>${pendingEmployer ? "" : "<th>Actions</th>"}</tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.salaryMin == null && job.salaryMax == null ? "Not provided" : `${escapeHtml(job.salaryCurrency)} ${job.salaryMin ?? ""}${job.salaryMin != null && job.salaryMax != null ? "–" : ""}${job.salaryMax ?? ""} / ${escapeHtml(job.salaryPeriod)}`}</td><td>${job.numberOfOpenings ?? 1}</td><td>${escapeHtml(job.applicationDeadline || "—")}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.isActive ? "published" : "draft"}</span></td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td>${pendingEmployer ? "" : `<td><button class="button" type="button" data-edit-employer-job="${job.id}">Edit</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">Publish</button>`}</td>`}</tr>`).join("")}</tbody></table></div>${result.total > result.limit ? `<div class="employer-form-actions"><span>Page ${result.page} of ${Math.ceil(result.total / result.limit)} · ${result.total} jobs</span><button class="button" type="button" data-employer-jobs-page="${result.page - 1}"${result.page <= 1 ? " disabled" : ""}>← Previous</button><button class="button" type="button" data-employer-jobs-page="${result.page + 1}"${result.page * result.limit >= result.total ? " disabled" : ""}>Next →</button></div>` : ""}` : `<div class="empty-state"><h2>No job listings yet</h2><p>${pendingEmployer ? "Job creation will be available after administrator approval." : "Create your first draft above. You stay in control of when it goes live."}</p></div>`}
+            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applicants</th><th>Status</th><th>Created</th>${pendingEmployer ? "" : "<th>Actions</th>"}</tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.salaryMin == null && job.salaryMax == null ? "Not provided" : `${escapeHtml(job.salaryCurrency)} ${job.salaryMin ?? ""}${job.salaryMin != null && job.salaryMax != null ? "–" : ""}${job.salaryMax ?? ""} / ${escapeHtml(job.salaryPeriod)}`}</td><td>${job.numberOfOpenings ?? 1}</td><td>${escapeHtml(job.applicationDeadline || "—")}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.isActive ? "published" : escapeHtml(job.moderationStatus || "draft")}</span>${job.moderationNote ? `<small>${escapeHtml(job.moderationNote)}</small>` : ""}</td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td>${pendingEmployer ? "" : `<td><button class="button" type="button" data-edit-employer-job="${job.id}">Edit</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">${job.moderationStatus === "approved" ? "Publish" : "Submit for review"}</button>`}</td>`}</tr>`).join("")}</tbody></table></div>${result.total > result.limit ? `<div class="employer-form-actions"><span>Page ${result.page} of ${Math.ceil(result.total / result.limit)} · ${result.total} jobs</span><button class="button" type="button" data-employer-jobs-page="${result.page - 1}"${result.page <= 1 ? " disabled" : ""}>← Previous</button><button class="button" type="button" data-employer-jobs-page="${result.page + 1}"${result.page * result.limit >= result.total ? " disabled" : ""}>Next →</button></div>` : ""}` : `<div class="empty-state"><h2>No job listings yet</h2><p>${pendingEmployer ? "Job creation will be available after administrator approval." : "Create your first draft above. You stay in control of when it goes live."}</p></div>`}
           </section>`;
           if (!pendingEmployer) {
             const form = profileContent.querySelector("#employer-job-form");
@@ -7445,6 +7909,54 @@
           <section class="workspace-panel">${interviews.length ? `<div class="workspace-action-list">${interviews.map((item) => `<article class="workspace-action"><span><strong>${escapeHtml(item.candidateName)}</strong><br><small>${escapeHtml(item.jobTitle)} · ${escapeHtml(new Date(item.startsAt).toLocaleString())} · ${item.durationMinutes} minutes</small>${item.meetingUrl ? `<br><a class="text-link" href="${escapeHtml(item.meetingUrl)}" target="_blank" rel="noopener noreferrer">Meeting link</a>` : ""}${item.location ? `<br>${escapeHtml(item.location)}` : ""}</span><span><span class="employer-pill">${escapeHtml(item.status)}</span>${item.status === "scheduled" ? `<br><button class="button" type="button" data-cancel-interview="${item.id}">Cancel</button>` : ""}</span></article>`).join("")}</div>` : '<div class="empty-state"><h2>No interviews scheduled</h2><p>Schedule an interview from an applicant’s profile to see it here.</p></div>'}</section>`;
         } catch (error) {
           profileContent.innerHTML = `<div class="workspace-notice error">${escapeHtml(displayAuthError(error))}</div>`;
+        }
+
+        async function loadEmployerCandidates(
+          query = state.employerCandidateQuery,
+          page = state.employerCandidatePage,
+        ) {
+          state.employerCandidateQuery = query;
+          state.employerCandidatePage = page;
+          const params = new URLSearchParams({
+            q: query,
+            page: String(page),
+            limit: "20",
+          });
+          profileContent.innerHTML = `${workspaceHeading("Employer workspace", "Discover candidates", "Search profiles candidates have explicitly made discoverable to approved recruiters.")}<section class="workspace-panel"><form id="employer-candidate-search" class="results-searchbar" role="search"><input name="query" type="search" maxlength="500" placeholder='Boolean search: Python AND ("data engineer" OR analyst)' aria-label="Boolean candidate search" value="${escapeHtml(query)}"><input name="name" type="text" maxlength="100" placeholder="Name this search to save it" aria-label="Saved search name"><button class="button button-dark" type="submit" value="search">Search candidates</button><button class="button" type="submit" value="save">Save search</button></form><p class="workspace-muted">Use AND, OR, NOT and parentheses. Quoted phrases are supported; adjacent terms are combined with AND.</p><div id="employer-saved-searches"><p class="workspace-muted">Loading saved searches…</p></div><div id="employer-candidate-results"><div class="workspace-notice">Loading discoverable profiles…</div></div></section>`;
+          try {
+            const [response, savedSearchResponse] = await Promise.all([
+              employerRequest(`/api/employer/candidates?${params}`),
+              employerRequest("/api/employer/candidate-searches"),
+            ]);
+            const [result, savedSearches] = await Promise.all([
+              readAuthResponse(response),
+              readAuthResponse(savedSearchResponse),
+            ]);
+            const savedSearchContainer = profileContent.querySelector(
+              "#employer-saved-searches",
+            );
+            savedSearchContainer.innerHTML =
+              Array.isArray(savedSearches) && savedSearches.length
+                ? `<div class="workspace-action-list">${savedSearches.map((search) => `<article class="workspace-action"><span><strong>${escapeHtml(search.name)}</strong><br><small>${escapeHtml(search.query)}</small></span><span><button class="button" type="button" data-run-candidate-search="${escapeHtml(search.query)}">Run</button> <button class="button" type="button" data-delete-candidate-search="${search.id}">Delete</button></span></article>`).join("")}</div>`
+                : '<p class="workspace-muted">No saved searches yet.</p>';
+            const items = Array.isArray(result.items) ? result.items : [];
+            const pageCount = Math.max(
+              1,
+              Math.ceil(result.total / result.limit),
+            );
+            const results = profileContent.querySelector(
+              "#employer-candidate-results",
+            );
+            results.innerHTML = items.length
+              ? `<p class="workspace-muted">Monthly resume unlocks: ${result.resumeCredits.used}/${result.resumeCredits.monthlyLimit} used · ${result.resumeCredits.remaining} remaining. Each candidate unlock uses one credit per month and is audited.</p><div class="workspace-action-list">${items.map((candidate) => `<article class="workspace-action"><span><strong>${escapeHtml(candidate.displayName)}</strong>${candidate.profileBoosted ? ' <span class="employer-pill">Profile boost</span>' : ""}${candidate.headline ? `<br><small>${escapeHtml(candidate.headline)}</small>` : ""}<br><small>${escapeHtml(candidate.location || "Location not provided")}</small><p>${escapeHtml(candidate.summary || "")}</p><small>${escapeHtml((candidate.skills || []).join(" · "))}</small>${candidate.certifications?.length ? `<p>${escapeHtml(candidate.certifications.map((certification) => certification.name).join(" · "))}</p>` : ""}</span><span>${candidate.email ? `<a href="mailto:${escapeHtml(candidate.email)}">${escapeHtml(candidate.email)}</a>${candidate.phone ? `<br>${escapeHtml(candidate.phone)}` : ""}` : "Contact not enabled"}<br>${candidate.resumeAccessAvailable ? (candidate.resumeAlreadyUnlocked || result.resumeCredits.remaining > 0 ? `<button class="button" type="button" data-unlock-candidate-resume="${candidate.candidateId}">${candidate.resumeAlreadyUnlocked ? "Open shared resume" : "Unlock resume"}</button>` : "Monthly resume credits used") : "Resume not shared"}</span></article>`).join("")}</div>${pageCount > 1 ? `<div class="employer-form-actions"><button class="button" type="button" data-candidate-directory-page="${page - 1}"${page <= 1 ? " disabled" : ""}>← Previous</button><span>Page ${page} of ${pageCount} · ${result.total} profiles</span><button class="button" type="button" data-candidate-directory-page="${page + 1}"${page >= pageCount ? " disabled" : ""}>Next →</button></div>` : ""}`
+              : '<div class="empty-state"><h2>No discoverable candidates found</h2><p>Only candidates who opt in to recruiter visibility appear here. Try a broader search.</p></div>';
+          } catch (error) {
+            const results = profileContent.querySelector(
+              "#employer-candidate-results",
+            );
+            if (results)
+              results.innerHTML = `<div class="workspace-notice error" role="alert">Candidate directory unavailable: ${escapeHtml(displayAuthError(error))}</div>`;
+          }
         }
       }
 
@@ -7525,7 +8037,7 @@
             <p>Usage: ${dashboard.metrics.activeJobs}/${dashboard.limits.activeJobs} active job(s), ${dashboard.limits.seats} seat(s) included. Subscription checkout is ${billing.checkoutReady ? "connected to Razorpay" : "not configured on this deployment"}.</p>
             <p class="workspace-muted">If a subscription is halted or cancelled, your account returns to Free limits; excess active jobs are closed automatically and are not republished after an upgrade.</p>
           </section>
-          <section class="employer-plan-grid">${billing.plans.map((plan) => `<article class="employer-plan${billing.current.planKey === plan.key ? " current" : ""}"><h3>${escapeHtml(plan.name)}</h3><strong>${plan.key === "free" ? "Free" : plan.amountInr == null ? "Price not set" : `₹${formatter.format(plan.amountInr)} / month`}</strong><p>For teams that need ${plan.activeJobs} active job(s) and ${plan.seats} seat(s).</p><ul><li>${plan.activeJobs} active published roles</li><li>${plan.seats} team seats</li><li>Company hiring pipeline</li><li>Candidate notes, tags & interviews</li></ul>${plan.key === "free" ? '<span class="employer-pill">Included</span>' : billing.current.planKey === plan.key ? '<span class="employer-pill">Current plan</span>' : `<button class="button button-dark" type="button" data-start-subscription="${plan.key}"${billing.current.canManage && billing.checkoutReady && plan.razorpayPlanId && Number.isFinite(plan.amountInr) && plan.amountInr > 0 ? "" : " disabled"}>Choose ${escapeHtml(plan.name)}</button>`}</article>`).join("")}</section>
+          <section class="employer-plan-grid">${billing.plans.map((plan) => `<article class="employer-plan${billing.current.planKey === plan.key ? " current" : ""}"><h3>${escapeHtml(plan.name)}</h3><strong>${plan.key === "free" ? "Free" : plan.amountInr == null ? "Price not set" : `₹${formatter.format(plan.amountInr)} / month`}</strong><p>For teams that need ${plan.activeJobs} active job(s) and ${plan.seats} seat(s).</p><ul><li>${plan.activeJobs} active published roles</li><li>${plan.seats} team seats</li><li>${plan.resumeCredits} resume unlock credits per month</li><li>Company hiring pipeline</li><li>Candidate notes, tags & interviews</li></ul>${plan.key === "free" ? '<span class="employer-pill">Included</span>' : billing.current.planKey === plan.key ? '<span class="employer-pill">Current plan</span>' : `<button class="button button-dark" type="button" data-start-subscription="${plan.key}"${billing.current.canManage && billing.checkoutReady && plan.razorpayPlanId && Number.isFinite(plan.amountInr) && plan.amountInr > 0 ? "" : " disabled"}>Choose ${escapeHtml(plan.name)}</button>`}</article>`).join("")}</section>
           ${!billing.current.canManage ? '<div class="workspace-notice">Only the company owner or billing role can change subscription settings.</div>' : ""}
           ${!billing.checkoutReady || billing.plans.some((plan) => plan.key !== "free" && !plan.razorpayPlanId) ? '<div class="workspace-notice">For live subscriptions, configure Razorpay API keys, plan IDs, plan prices, and a verified webhook secret on the server. No payment credentials belong in frontend code.</div>' : ""}`;
         } catch (error) {
@@ -7574,7 +8086,11 @@
           <a class="workspace-action" href="#dashboard/jobs"><span>Explore currently published roles</span><span>Find jobs →</span></a>
           <a class="workspace-action" href="#dashboard/saved"><span>Review jobs saved to your account</span><span>Saved jobs →</span></a>
           <a class="workspace-action" href="#dashboard/applications"><span>Track submitted applications</span><span>Applications →</span></a>
+          <a class="workspace-action" href="#dashboard/interviews"><span>Check upcoming interviews</span><span>Interviews →</span></a>
+          <a class="workspace-action" href="#dashboard/recommendations"><span>Explore jobs matched to your profile</span><span>Recommendations →</span></a>
         </div></section>
+        <section class="workspace-panel" id="candidate-recommended-preview"><div class="workspace-panel-head"><div><h2>Recommended jobs</h2><p>Personalized matches based on your saved profile and preferences.</p></div><a class="text-link" href="#dashboard/recommendations">See all →</a></div><div class="workspace-notice">Loading recommendations…</div></section>
+        <section class="workspace-panel" id="candidate-premium-panel"><div class="workspace-panel-head"><div><h2>Optional career services</h2><p>Paid services are optional. Applying to jobs and using core candidate features stays free.</p></div></div><div class="workspace-notice">Loading services…</div></section>
         <div class="workspace-notice" id="workspace-notice" role="status"></div>`;
 
         const stats = document.querySelector("#candidate-dashboard-stats");
@@ -7601,12 +8117,139 @@
             throw new Error(
               "The applications service returned an unexpected response.",
             );
-          stats.innerHTML = `<article class="workspace-stat"><span class="workspace-stat-label">Profile completeness</span><strong class="workspace-stat-value">${profileCompleteness(profile)}%</strong><span class="workspace-stat-note">Based on 12 profile sections.</span></article>
+          stats.innerHTML = `          <article class="workspace-stat"><span class="workspace-stat-label">Profile completeness</span><strong class="workspace-stat-value">${profileCompleteness(profile)}%</strong><span class="workspace-stat-note">Based on 14 profile sections.</span></article>
           <article class="workspace-stat"><span class="workspace-stat-label">Published jobs</span><strong class="workspace-stat-value">${jobs.total}</strong><span class="workspace-stat-note">Available in the job search right now.</span></article>
           <article class="workspace-stat"><span class="workspace-stat-label">Applications</span><strong class="workspace-stat-value">${applications.total}</strong><span class="workspace-stat-note">Applications submitted from your account.</span></article>`;
+          await renderCandidateRecommendations(
+            document.querySelector("#candidate-recommended-preview"),
+            3,
+          );
+          await loadCandidatePremiumPanel();
         } catch (error) {
           notice.textContent = displayAuthError(error);
           notice.classList.add("error");
+        }
+      }
+
+      async function loadCandidatePremiumPanel() {
+        const panel = document.querySelector("#candidate-premium-panel");
+        if (!panel) return;
+        try {
+          const response = await authenticatedFetch("/api/candidate/premium");
+          const summary = await readAuthResponse(response);
+          const services = Array.isArray(summary.products)
+            ? summary.products
+            : [];
+          const orders = Array.isArray(summary.orders) ? summary.orders : [];
+          panel.innerHTML = `<div class="workspace-panel-head"><div><h2>Optional career services</h2><p>Paid services are optional. Applying to jobs and using core candidate features stays free.</p></div></div>
+            ${summary.premiumBoostUntil && new Date(summary.premiumBoostUntil) > new Date() ? `<div class="workspace-notice">Your recruiter-visible profile is boosted until ${escapeHtml(new Date(summary.premiumBoostUntil).toLocaleDateString())}. Your profile visibility and contact settings still apply.</div>` : ""}
+            ${!summary.checkoutReady ? '<div class="workspace-notice">Online checkout is not configured yet. Contact support if you would like to request a service.</div>' : ""}
+            ${services.length ? `<div class="workspace-action-list">${services.map((service) => `<article class="workspace-action"><span><strong>${escapeHtml(service.name)}</strong><br><small>${escapeHtml(service.description)}${service.key === "profile-boost" ? ` · ${service.fulfillmentDays} days` : ""}</small></span><span>${formatter.format(service.amountInr)} INR <button class="button button-dark" type="button" data-premium-buy="${escapeHtml(service.key)}"${summary.checkoutReady ? "" : " disabled"}>Choose</button></span></article>`).join("")}</div>` : '<p class="workspace-notice">No services are currently available.</p>'}
+            ${orders.length ? `<h3>My service requests</h3><div class="workspace-action-list">${orders.map((order) => `<div class="workspace-action"><span><strong>${escapeHtml(order.productName)}</strong><br><small>${escapeHtml(order.productDescription)}${order.fulfillmentDays ? ` · ${order.fulfillmentDays} days` : ""}</small><br><small>${escapeHtml(new Date(order.createdAt).toLocaleDateString())} · Payment: ${escapeHtml(order.paymentStatus)} · Service: ${escapeHtml(order.fulfillmentStatus.replaceAll("_", " "))}${order.fulfillmentNote ? ` · ${escapeHtml(order.fulfillmentNote)}` : ""}</small></span><span>${formatter.format(order.amountInr)} INR</span></div>`).join("")}</div>` : ""}`;
+          panel.querySelectorAll("[data-premium-buy]").forEach((button) => {
+            button.addEventListener("click", () => {
+              button.disabled = true;
+              startCandidatePremiumCheckout(button.dataset.premiumBuy)
+                .catch((error) => showToast(displayAuthError(error)))
+                .finally(() => {
+                  button.disabled = false;
+                });
+            });
+          });
+        } catch (error) {
+          panel.innerHTML = `<div class="workspace-panel-head"><div><h2>Optional career services</h2></div></div><div class="workspace-notice error">${escapeHtml(displayAuthError(error))}</div>`;
+        }
+      }
+
+      async function startCandidatePremiumCheckout(productKey) {
+        const response = await authenticatedFetch(
+          "/api/candidate/premium/checkout",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productKey }),
+          },
+        );
+        const checkout = await readAuthResponse(response);
+        await loadRazorpayCheckout();
+        const payment = new window.Razorpay({
+          key: checkout.keyId,
+          order_id: checkout.orderId,
+          amount: checkout.amount,
+          currency: checkout.currency,
+          name: checkout.name,
+          description: checkout.description,
+          prefill: checkout.prefill,
+          theme: checkout.theme,
+          handler: async (result) => {
+            try {
+              const verificationResponse = await authenticatedFetch(
+                "/api/candidate/premium/verify",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    orderId: checkout.orderId,
+                    paymentId: result.razorpay_payment_id,
+                    signature: result.razorpay_signature,
+                  }),
+                },
+              );
+              await readAuthResponse(verificationResponse);
+              showToast("Payment verified. Your service request is recorded.");
+              await loadCandidatePremiumPanel();
+            } catch (error) {
+              showToast(
+                `Payment may have completed, but verification failed: ${displayAuthError(error)}. Please contact support before paying again.`,
+              );
+            }
+          },
+        });
+        payment.on("payment.failed", () => {
+          showToast(
+            "The payment did not complete. You have not been charged for this service.",
+          );
+        });
+        payment.open();
+      }
+
+      async function renderCandidateRecommendations(container, limit = 20) {
+        if (!container) return;
+        try {
+          const response = await authenticatedFetch(
+            "/api/candidate/recommendations",
+          );
+          const result = await readAuthResponse(response);
+          const items = Array.isArray(result.items)
+            ? result.items.slice(0, limit)
+            : [];
+          container.innerHTML = `<div class="workspace-panel-head"><div><h2>Recommended jobs</h2><p>Matches are based on your saved profile and preferences; they are not automated hiring decisions.</p></div>${limit < 20 ? '<a class="text-link" href="#dashboard/recommendations">See all →</a>' : ""}</div>${items.length ? `<div class="workspace-action-list">${items.map(({ job, score, reasons }) => `<a class="workspace-action" href="#dashboard/job/${encodeURIComponent(job.id)}"><span><strong>${escapeHtml(job.title)}</strong><br><small>${escapeHtml(job.company)} · ${escapeHtml(job.location)} · ${escapeHtml((reasons || []).join(" · "))}</small></span><span>${escapeHtml(formatSalary(job))} · ${score} match points →</span></a>`).join("")}</div>` : `<p class="workspace-notice">${escapeHtml(result.message || "No recommendations are available.")}</p>`}`;
+        } catch (error) {
+          container.innerHTML = `<div class="workspace-notice error" role="alert">Recommendations could not be loaded: ${escapeHtml(displayAuthError(error))}</div>`;
+        }
+      }
+
+      async function loadCandidateRecommendations() {
+        profileContent.innerHTML = `${workspaceHeading("Candidate workspace", "Recommended jobs", "Relevant published roles, ranked against the preferences in your profile.")}<section class="workspace-panel" id="candidate-recommendations"><div class="workspace-notice">Loading personalized recommendations…</div></section>`;
+        await renderCandidateRecommendations(
+          profileContent.querySelector("#candidate-recommendations"),
+        );
+      }
+
+      async function loadCandidateInterviews() {
+        profileContent.innerHTML = `${workspaceHeading("Candidate workspace", "Your interviews", "Review interview times and meeting details shared by hiring teams.")}<section class="workspace-panel" id="candidate-interviews"><div class="workspace-notice">Loading interview schedule…</div></section>`;
+        const container = profileContent.querySelector("#candidate-interviews");
+        try {
+          const response = await authenticatedFetch(
+            "/api/candidate/interviews",
+          );
+          const result = await readAuthResponse(response);
+          const items = Array.isArray(result.items) ? result.items : [];
+          container.innerHTML = items.length
+            ? `<div class="workspace-action-list">${items.map((interview) => `<article class="workspace-action"><span><strong>${escapeHtml(interview.job.title)}</strong><br><small>${escapeHtml(interview.job.company)} · ${escapeHtml(new Date(interview.startsAt).toLocaleString())} · ${interview.durationMinutes} minutes${interview.location ? ` · ${escapeHtml(interview.location)}` : ""}</small></span><span>${interview.status === "cancelled" ? "Cancelled" : interview.meetingUrl ? `<a href="${escapeHtml(interview.meetingUrl)}" target="_blank" rel="noopener noreferrer">Join meeting →</a>` : escapeHtml(interview.status)}</span></article>`).join("")}</div>`
+            : '<div class="empty-state"><h2>No interviews scheduled</h2><p>Interview invitations from hiring teams will appear here.</p><a class="button button-dark" href="#dashboard/applications">Track applications</a></div>';
+        } catch (error) {
+          container.innerHTML = `<div class="workspace-notice error" role="alert">Interview schedule could not be loaded: ${escapeHtml(displayAuthError(error))}</div>`;
         }
       }
 
@@ -7933,6 +8576,10 @@
                       "rejected",
                     ];
                     const profile = application.profile;
+                    const myScorecard = (application.scorecards || []).find(
+                      (scorecard) =>
+                        scorecard.reviewerUserId === authState.user?.id,
+                    );
                     const currentStatusIsTerminal = [
                       "offer",
                       "offer_expired",
@@ -7951,6 +8598,32 @@
                 <div class="application-meta"><span class="application-status">${escapeHtml(String(application.status).replace(/[-_]/g, " "))}</span><span>Applied ${escapeHtml(new Date(application.createdAt).toLocaleDateString())}</span></div>
                 ${profile ? `<section class="application-candidate-profile"><h3>Candidate profile (shared)</h3>${profile.headline ? `<p><strong>${escapeHtml(profile.headline)}</strong></p>` : ""}${profile.location ? `<p>${escapeHtml(profile.location)}</p>` : ""}${profile.summary ? `<p>${escapeHtml(profile.summary)}</p>` : ""}${Array.isArray(profile.skills) ? `<p><strong>Skills:</strong> ${escapeHtml(profile.skills.join(", "))}</p>` : ""}${Array.isArray(profile.experience) ? profile.experience.map((item) => `<p>${escapeHtml(item.title)} · ${escapeHtml(item.company)}</p>`).join("") : ""}${Array.isArray(profile.education) ? profile.education.map((item) => `<p>${escapeHtml(item.qualification)} · ${escapeHtml(item.institution)}</p>`).join("") : ""}</section>` : "<p>Candidate chose not to share the additional profile snapshot. The candidate’s account name is shared for this application.</p>"}
                 ${application.coverLetter ? `<div class="application-note"><strong>Candidate note</strong><p>${escapeHtml(application.coverLetter)}</p></div>` : ""}
+                ${application.applicationAnswers?.length ? `<section class="application-candidate-profile"><h3>Application answers</h3>${application.applicationAnswers.map((item) => `<p><strong>${escapeHtml(item.question)}</strong><br>${escapeHtml(item.answer)}</p>`).join("")}</section>` : ""}
+                <section class="application-candidate-profile"><h3>Team scorecards</h3>${
+                  application.scorecards?.length
+                    ? application.scorecards
+                        .map(
+                          (scorecard) =>
+                            `<p><strong>${escapeHtml(scorecard.reviewerName)}</strong> · ${escapeHtml(scorecard.recommendation.replace(/_/g, " "))} · ${escapeHtml(
+                              Object.entries(scorecard.scores)
+                                .map(
+                                  ([criterion, score]) =>
+                                    `${criterion}: ${score}/5`,
+                                )
+                                .join(", "),
+                            )}${scorecard.notes ? `<br>${escapeHtml(scorecard.notes)}` : ""}</p>`,
+                        )
+                        .join("")
+                    : "<p>No scorecards yet.</p>"
+                }
+                  <form class="employer-scorecard-form employer-inline-form" data-application-id="${application.id}">
+                    <h4>Your evaluation (private to this company)</h4>
+                    ${["Skills", "Experience", "Communication", "Role fit"].map((criterion) => `<label>${criterion}<select name="score:${criterion}" required><option value="" disabled${myScorecard?.scores?.[criterion] ? "" : " selected"}>Choose a rating</option>${[1, 2, 3, 4, 5].map((score) => `<option value="${score}"${String(myScorecard?.scores?.[criterion] || "") === String(score) ? " selected" : ""}>${score}/5</option>`).join("")}</select></label>`).join("")}
+                    <label>Recommendation<select name="recommendation" required>${["strong_yes", "yes", "maybe", "no"].map((value) => `<option value="${value}"${(myScorecard?.recommendation || "maybe") === value ? " selected" : ""}>${value.replace(/_/g, " ")}</option>`).join("")}</select></label>
+                    <label>Internal notes<textarea name="notes" maxlength="5000">${escapeHtml(myScorecard?.notes || "")}</textarea></label>
+                    <button class="button" type="submit">Save scorecard</button>
+                  </form>
+                </section>
                 ${application.resumeUrl ? `<p><a class="text-link" href="${escapeHtml(application.resumeUrl)}" target="_blank" rel="noopener noreferrer">View ${escapeHtml(application.resumeFileName || "resume PDF")}</a> · temporary private link</p>` : "<p>No resume attached to this application.</p>"}
                 ${offer ? `<section class="application-candidate-profile"><h3>Offer · ${escapeHtml(offer.status)}</h3><p>${escapeHtml(offer.termsSummary)}</p><p>Expires ${escapeHtml(new Date(offer.expiresAt).toLocaleString())}</p></section>` : ""}
                 ${application.status === "withdrawal_requested" ? `<section class="application-candidate-profile"><h3>Candidate requested withdrawal</h3><p>Confirm or decline this request. A declined request restores the prior pipeline stage.</p><button class="button button-dark" type="button" data-resolve-withdrawal="approve" data-application-id="${application.id}">Confirm withdrawal</button> <button class="button" type="button" data-resolve-withdrawal="decline" data-application-id="${application.id}">Decline request</button></section>` : ""}
@@ -8078,15 +8751,20 @@
                 : state.dashboardJobReturn === "#dashboard/applications"
                   ? "← Back to applications"
                   : "← Back to jobs";
-            const [applicationResponse, profileResponse] = await Promise.all([
-              authenticatedFetch(
-                `/api/candidate/applications/${encodeURIComponent(jobId)}`,
-              ),
-              authenticatedFetch("/api/candidate/profile"),
-            ]);
+            const [applicationResponse, profileResponse, documentResponse] =
+              await Promise.all([
+                authenticatedFetch(
+                  `/api/candidate/applications/${encodeURIComponent(jobId)}`,
+                ),
+                authenticatedFetch("/api/candidate/profile"),
+                authenticatedFetch(
+                  `/api/candidate/applications/${encodeURIComponent(jobId)}/documents`,
+                ),
+              ]);
             const applicationPayload =
               await readAuthResponse(applicationResponse);
             const profile = await readAuthResponse(profileResponse);
+            const uploadedDocuments = await readAuthResponse(documentResponse);
             const application = applicationPayload?.application ?? null;
             profileContent.innerHTML = `<div class="detail-topline"><a class="back-link" href="${state.dashboardJobReturn}">${returnLabel}</a></div><div class="detail-layout">${detailMarkup({ ...job, isPreview: false }, application, true, profile)}</div>`;
             profileContent.querySelector(
@@ -8094,6 +8772,20 @@
             ).textContent =
               job.description?.trim() ||
               "The employer has not provided a detailed job description yet.";
+            for (const uploaded of uploadedDocuments) {
+              const status = [
+                ...profileContent.querySelectorAll(
+                  "[data-application-document-status]",
+                ),
+              ].find(
+                (item) =>
+                  item.dataset.applicationDocumentStatus ===
+                  uploaded.documentId,
+              );
+              if (!status) continue;
+              status.dataset.uploaded = "true";
+              status.textContent = `Uploaded: ${uploaded.fileName}`;
+            }
           } catch (error) {
             profileContent.innerHTML = `<div class="profile-card-form profile-gate"><h1>Job details unavailable</h1><p>${escapeHtml(displayAuthError(error))}</p><a class="button button-dark" href="#dashboard/jobs">Back to job search</a></div>`;
           }
@@ -8110,6 +8802,16 @@
         ) {
           await loadWorkspaceApplications();
         } else if (
+          page === "interviews" &&
+          authState.user.role === "candidate"
+        ) {
+          await loadCandidateInterviews();
+        } else if (
+          page === "recommendations" &&
+          authState.user.role === "candidate"
+        ) {
+          await loadCandidateRecommendations();
+        } else if (
           page === "notifications" &&
           authState.user.role === "candidate"
         ) {
@@ -8121,6 +8823,11 @@
           await loadEmployerApplicants();
         } else if (page === "company" && authState.user.role === "employer") {
           await loadEmployerCompany();
+        } else if (
+          page === "candidates" &&
+          authState.user.role === "employer"
+        ) {
+          await loadEmployerCandidates();
         } else if (page === "jobs" && authState.user.role === "employer") {
           if (!jobId) state.employerJobsPage = 1;
           await loadEmployerJobs();
@@ -8204,6 +8911,92 @@
       }
 
       profileContent.addEventListener("submit", async (event) => {
+        if (event.target.id === "username-form") {
+          event.preventDefault();
+          const form = event.target;
+          if (!form.reportValidity()) return;
+          const button = form.querySelector('[type="submit"]');
+          button.disabled = true;
+          try {
+            const result = await readAuthResponse(
+              await authenticatedFetch("/api/auth/me/username", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  username: String(
+                    new FormData(form).get("username") || "",
+                  ).trim(),
+                }),
+              }),
+            );
+            authState.user.username = result.username;
+            if (authState.user.role === "employer") {
+              await loadEmployerOverview();
+            } else {
+              await loadCandidateProfile();
+            }
+            showToast("Your username and profile link were updated.");
+          } catch (error) {
+            showToast(
+              `Username could not be updated: ${displayAuthError(error)}`,
+            );
+            button.disabled = false;
+          }
+          return;
+        }
+        if (event.target.id === "phone-change-request") {
+          event.preventDefault();
+          const form = event.target;
+          if (!form.reportValidity()) return;
+          const button = form.querySelector('[type="submit"]');
+          button.disabled = true;
+          try {
+            const result = await readAuthResponse(
+              await authenticatedFetch("/api/auth/phone/change/request", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  phoneNumber: String(
+                    new FormData(form).get("phoneNumber") || "",
+                  ).trim(),
+                }),
+              }),
+            );
+            profileContent.querySelector("#phone-change-verify").hidden = false;
+            profileContent.querySelector("#phone-change-verify input").focus();
+            showToast(result.message);
+          } catch (error) {
+            showToast(`SMS code could not be sent: ${displayAuthError(error)}`);
+            button.disabled = false;
+          }
+          return;
+        }
+        if (event.target.id === "phone-change-verify") {
+          event.preventDefault();
+          const form = event.target;
+          if (!form.reportValidity()) return;
+          const button = form.querySelector('[type="submit"]');
+          button.disabled = true;
+          try {
+            const result = await readAuthResponse(
+              await authenticatedFetch("/api/auth/phone/change/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  code: String(new FormData(form).get("code") || "").trim(),
+                }),
+              }),
+            );
+            await loadCandidateProfile();
+            showToast(result.message);
+          } catch (error) {
+            showToast(
+              `Mobile number could not be verified: ${displayAuthError(error)}`,
+            );
+            button.disabled = false;
+          }
+          return;
+        }
         if (event.target.matches(".candidate-application-message-form")) {
           event.preventDefault();
           const form = event.target;
@@ -8390,6 +9183,30 @@
               String(data.get("applicationDeadline") || "").trim() || null,
             experience: String(data.get("experience") || "").trim() || null,
             description: String(data.get("description") || "").trim() || null,
+            applicationQuestions: String(data.get("applicationQuestions") || "")
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line, index) => {
+                const optional = /^\[optional\]\s*/i.test(line);
+                return {
+                  id: `q${index + 1}`,
+                  question: line.replace(/^\[optional\]\s*/i, "").trim(),
+                  required: !optional,
+                };
+              }),
+            requiredDocuments: String(data.get("requiredDocuments") || "")
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line, index) => {
+                const optional = /^\[optional\]\s*/i.test(line);
+                return {
+                  id: `d${index + 1}`,
+                  label: line.replace(/^\[optional\]\s*/i, "").trim(),
+                  required: !optional,
+                };
+              }),
           };
           const jobId = String(data.get("jobId") || "");
           const button = form.querySelector('[type="submit"]');
@@ -8434,7 +9251,7 @@
                 }),
               }),
             );
-            showToast("Team invitation sent.");
+            showToast("Team invitation created; email queued for delivery.");
             await loadEmployerTeam();
           } catch (error) {
             status.textContent = displayAuthError(error);
@@ -8467,6 +9284,41 @@
           } catch (error) {
             showToast(`Note was not saved: ${displayAuthError(error)}`);
             button.disabled = false;
+          }
+          if (event.target.matches(".employer-scorecard-form")) {
+            event.preventDefault();
+            const form = event.target;
+            if (!form.reportValidity()) return;
+            const data = new FormData(form);
+            const scores = Object.fromEntries(
+              [...data.entries()]
+                .filter(([key]) => key.startsWith("score:"))
+                .map(([key, value]) => [key.slice(6), Number(value)]),
+            );
+            const button = form.querySelector('[type="submit"]');
+            button.disabled = true;
+            try {
+              await readAuthResponse(
+                await employerRequest(
+                  `/api/employer/applications/${encodeURIComponent(form.dataset.applicationId)}/scorecard`,
+                  {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      scores,
+                      recommendation: data.get("recommendation"),
+                      notes: String(data.get("notes") || "").trim(),
+                    }),
+                  },
+                ),
+              );
+              await loadEmployerApplicants();
+              showToast("Scorecard saved for your company team.");
+            } catch (error) {
+              showToast(`Scorecard was not saved: ${displayAuthError(error)}`);
+              button.disabled = false;
+            }
+            return;
           }
           return;
         }
@@ -8529,10 +9381,10 @@
             await loadEmployerApplicants();
             showToast(
               interview.notificationStatus === "failed"
-                ? "Interview scheduled, but the invitation email could not be delivered. Check server email configuration and logs."
+                ? "Interview scheduled, but the invitation could not be queued. Check server email configuration and logs."
                 : interview.notificationStatus === "disabled"
                   ? "Interview scheduled and the application moved to Interview. Candidate email updates are disabled; the in-app notification is available."
-                  : "Interview scheduled and the application moved to Interview.",
+                  : "Interview scheduled and the invitation email was queued for delivery.",
             );
           } catch (error) {
             showToast(
@@ -8658,6 +9510,14 @@
                   includeResume:
                     new FormData(form).get("includeResume") === "on",
                   shareProfile: new FormData(form).get("shareProfile") === "on",
+                  answers: Object.fromEntries(
+                    [
+                      ...form.querySelectorAll("[data-application-question]"),
+                    ].map((field) => [
+                      field.dataset.applicationQuestion,
+                      field.value,
+                    ]),
+                  ),
                 }),
               },
             );
@@ -8713,11 +9573,13 @@
                   }
                 : {},
             );
-            if (result.notificationStatus === "sent") {
-              showToast("Application status updated and candidate emailed.");
+            if (result.notificationStatus === "queued") {
+              showToast(
+                "Application status updated and candidate email queued for delivery.",
+              );
             } else if (result.notificationStatus === "failed") {
               showToast(
-                "Application status updated, but candidate email delivery failed. Check the server SMTP logs.",
+                "Application status updated, but candidate email could not be queued. Check server logs.",
               );
             } else {
               showToast(
@@ -8770,6 +9632,35 @@
             String(formData.get("query") || "").trim(),
             String(formData.get("location") || "").trim(),
           );
+          return;
+        }
+        if (event.target.id === "employer-candidate-search") {
+          event.preventDefault();
+          const formData = new FormData(event.target);
+          const query = String(formData.get("query") || "").trim();
+          if (event.submitter?.value === "save") {
+            const name = String(formData.get("name") || "").trim();
+            if (!name) {
+              event.target.elements.name.reportValidity();
+              return;
+            }
+            try {
+              await readAuthResponse(
+                await employerRequest("/api/employer/candidate-searches", {
+                  method: "POST",
+                  body: JSON.stringify({ name, query }),
+                }),
+              );
+              showToast("Candidate search saved.");
+              await loadEmployerCandidates(query, 1);
+            } catch (error) {
+              showToast(
+                `Search could not be saved: ${displayAuthError(error)}`,
+              );
+            }
+            return;
+          }
+          await loadEmployerCandidates(query, 1);
           return;
         }
         if (event.target.id !== "profile-form") return;
@@ -8828,6 +9719,17 @@
           endDate: readEntryValue(entry, '[data-edu-field="endDate"]'),
           description: readEntryValue(entry, '[data-edu-field="description"]'),
         }));
+        const certifications = [
+          ...form.querySelectorAll("[data-certification-entry]"),
+        ].map((entry) => ({
+          name: readEntryValue(entry, '[data-cert-field="name"]'),
+          issuer: readEntryValue(entry, '[data-cert-field="issuer"]'),
+          issueDate: readEntryValue(entry, '[data-cert-field="issueDate"]'),
+          credentialUrl: readEntryValue(
+            entry,
+            '[data-cert-field="credentialUrl"]',
+          ),
+        }));
         const saveButton = form.querySelector('[type="submit"]');
         saveButton.disabled = true;
         saveButton.textContent = "Saving profile…";
@@ -8856,6 +9758,38 @@
               ].map((input) => input.value),
               experience,
               education,
+              certifications,
+              salaryPreferences: {
+                ...(String(formData.get("salaryMinimum") || "").trim()
+                  ? {
+                      minimum: Number(
+                        String(formData.get("salaryMinimum")).trim(),
+                      ),
+                    }
+                  : {}),
+                currency: String(formData.get("salaryCurrency") || "INR"),
+                period: String(formData.get("salaryPeriod") || "year"),
+              },
+              profileVisibility:
+                form.querySelector('input[name="profileVisibility"]:checked')
+                  ?.value || "private",
+              allowRecruiterContact:
+                formData.get("allowRecruiterContact") === "on",
+              allowRecruiterResumeAccess:
+                formData.get("allowRecruiterResumeAccess") === "on",
+              publicProfileEnabled:
+                formData.get("publicProfileEnabled") === "on",
+              resumeBuilder: {
+                title: String(formData.get("resumeBuilderTitle") || "").trim(),
+                summary: String(
+                  formData.get("resumeBuilderSummary") || "",
+                ).trim(),
+                sectionOrder: [
+                  ...form.querySelectorAll(
+                    'input[name="resumeSections"]:checked',
+                  ),
+                ].map((input) => input.value),
+              },
               links: {
                 linkedin: String(formData.get("linkedin") || "").trim(),
                 portfolio: String(formData.get("portfolio") || "").trim(),
@@ -8887,6 +9821,49 @@
       });
 
       profileContent.addEventListener("click", async (event) => {
+        const documentUploadButton = event.target.closest(
+          "[data-upload-application-document]",
+        );
+        if (documentUploadButton) {
+          const form = documentUploadButton.closest(
+            "#candidate-application-form",
+          );
+          const documentId =
+            documentUploadButton.dataset.uploadApplicationDocument;
+          const fileInput = [
+            ...form.querySelectorAll("[data-application-document]"),
+          ].find((input) => input.dataset.applicationDocument === documentId);
+          const file = fileInput?.files?.[0];
+          const status = [
+            ...form.querySelectorAll("[data-application-document-status]"),
+          ].find(
+            (item) => item.dataset.applicationDocumentStatus === documentId,
+          );
+          if (!file) {
+            status.textContent = "Choose a PDF or DOCX file first.";
+            return;
+          }
+          const data = new FormData();
+          data.append("file", file);
+          documentUploadButton.disabled = true;
+          status.textContent = "Scanning and uploading…";
+          try {
+            const response = await authenticatedFetch(
+              `/api/candidate/applications/${encodeURIComponent(form.dataset.jobId)}/documents/${encodeURIComponent(documentId)}`,
+              { method: "POST", body: data },
+            );
+            const uploaded = await readAuthResponse(response);
+            status.dataset.uploaded = "true";
+            status.textContent = `Uploaded: ${uploaded.fileName}`;
+            fileInput.value = "";
+          } catch (error) {
+            delete status.dataset.uploaded;
+            status.textContent = `Upload failed: ${displayAuthError(error)}`;
+          } finally {
+            documentUploadButton.disabled = false;
+          }
+          return;
+        }
         const exportButton = event.target.closest(
           "[data-download-account-export]",
         );
@@ -8948,8 +9925,25 @@
             "applicationDeadline",
             "experience",
             "description",
+            "applicationQuestions",
+            "requiredDocuments",
           ]) {
-            form.elements[field].value = job[field] ?? "";
+            form.elements[field].value =
+              field === "applicationQuestions"
+                ? (job.applicationQuestions || [])
+                    .map(
+                      (question) =>
+                        `${question.required ? "" : "[optional] "}${question.question}`,
+                    )
+                    .join("\n")
+                : field === "requiredDocuments"
+                  ? (job.requiredDocuments || [])
+                      .map(
+                        (document) =>
+                          `${document.required ? "" : "[optional] "}${document.label}`,
+                      )
+                      .join("\n")
+                  : (job[field] ?? "");
           }
           form.querySelector("#employer-job-form-title").textContent =
             `Edit ${job.title}`;
@@ -8977,7 +9971,9 @@
             await loadEmployerJobs();
             showToast(
               publishJob
-                ? `Job published. ${result.alertResult?.sent || 0} matching job alert(s) sent${result.alertResult?.failed ? `; ${result.alertResult.failed} failed` : ""}.`
+                ? result.reviewRequired
+                  ? "Job submitted for administrator review; it will be public after approval."
+                  : `Job published. ${result.alertResult?.queued || 0} matching job alert email(s) queued${result.alertResult?.failed ? `; ${result.alertResult.failed} could not be queued` : ""}.`
                 : "Job closed and removed from public search.",
             );
           } catch (error) {
@@ -9001,6 +9997,80 @@
                   jobId: String(values.get("jobId") || ""),
                 }
               : {},
+          );
+          return;
+        }
+        const candidateDirectoryPage = event.target.closest(
+          "[data-candidate-directory-page]",
+        );
+        const unlockCandidateResume = event.target.closest(
+          "[data-unlock-candidate-resume]",
+        );
+        if (unlockCandidateResume) {
+          unlockCandidateResume.disabled = true;
+          try {
+            const result = await readAuthResponse(
+              await employerRequest(
+                `/api/employer/candidates/${encodeURIComponent(unlockCandidateResume.dataset.unlockCandidateResume)}/resume`,
+                { method: "POST" },
+              ),
+            );
+            const resumeUrl = new URL(result.resumeUrl);
+            if (resumeUrl.protocol !== "https:")
+              throw new Error("The resume service returned an unsafe link.");
+            const link = document.createElement("a");
+            link.href = resumeUrl.toString();
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = "Resume ready — open";
+            unlockCandidateResume.replaceWith(link);
+            showToast(
+              result.newlyUnlocked
+                ? "Resume unlocked; one monthly credit was used."
+                : "This resume was already unlocked for this month.",
+            );
+          } catch (error) {
+            showToast(`Resume access denied: ${displayAuthError(error)}`);
+            unlockCandidateResume.disabled = false;
+          }
+          return;
+        }
+        const runCandidateSearch = event.target.closest(
+          "[data-run-candidate-search]",
+        );
+        if (runCandidateSearch) {
+          await loadEmployerCandidates(
+            runCandidateSearch.dataset.runCandidateSearch || "",
+            1,
+          );
+          return;
+        }
+        const deleteCandidateSearch = event.target.closest(
+          "[data-delete-candidate-search]",
+        );
+        if (deleteCandidateSearch) {
+          deleteCandidateSearch.disabled = true;
+          try {
+            await readAuthResponse(
+              await employerRequest(
+                `/api/employer/candidate-searches/${encodeURIComponent(deleteCandidateSearch.dataset.deleteCandidateSearch)}`,
+                { method: "DELETE" },
+              ),
+            );
+            await loadEmployerCandidates();
+            showToast("Saved candidate search deleted.");
+          } catch (error) {
+            showToast(
+              `Saved search could not be deleted: ${displayAuthError(error)}`,
+            );
+            deleteCandidateSearch.disabled = false;
+          }
+          return;
+        }
+        if (candidateDirectoryPage) {
+          await loadEmployerCandidates(
+            state.employerCandidateQuery,
+            Number(candidateDirectoryPage.dataset.candidateDirectoryPage),
           );
           return;
         }
@@ -9063,7 +10133,9 @@
               ),
             );
             await loadEmployerTeam();
-            showToast("A new 30-day invitation link was sent.");
+            showToast(
+              "A new 30-day invitation link was queued for email delivery.",
+            );
           } catch (error) {
             showToast(
               `Invitation could not be resent: ${displayAuthError(error)}`,
@@ -9089,10 +10161,10 @@
             await loadEmployerInterviews();
             showToast(
               result.notificationStatus === "failed"
-                ? "Interview cancelled, but the candidate email could not be delivered. Check server email configuration and logs."
+                ? "Interview cancelled, but the candidate email could not be queued. Check server logs."
                 : result.notificationStatus === "disabled"
                   ? "Interview cancelled and the candidate was notified in the portal. Candidate email updates are disabled."
-                  : "Interview cancelled.",
+                  : "Interview cancelled; candidate email queued for delivery.",
             );
           } catch (error) {
             showToast(
@@ -9242,6 +10314,28 @@
         if (reviewButton) {
           const form = reviewButton.closest("#candidate-application-form");
           if (!form?.reportValidity()) return;
+          const missingDocuments = [
+            ...form.querySelectorAll(
+              '[data-application-document-required="true"]',
+            ),
+          ].filter((input) => {
+            const status = [
+              ...form.querySelectorAll("[data-application-document-status]"),
+            ].find(
+              (item) =>
+                item.dataset.applicationDocumentStatus ===
+                input.dataset.applicationDocument,
+            );
+            return status?.dataset.uploaded !== "true";
+          });
+          if (missingDocuments.length) {
+            const status = form.querySelector(
+              '[role="status"][aria-live="polite"]',
+            );
+            status.textContent =
+              "Upload each required application document before continuing.";
+            return;
+          }
           const user = authState.user;
           form.querySelector("#application-review-name").textContent =
             `${user.displayName} (your account name is always shared with this employer)`;
@@ -9252,6 +10346,17 @@
           form.querySelector("#application-review-note").textContent =
             form.querySelector("#application-cover-letter").value.trim() ||
             "No note included.";
+          form.querySelector("#application-review-answers").innerHTML = [
+            ...form.querySelectorAll("[data-application-question]"),
+          ]
+            .filter((field) => field.value.trim())
+            .map(
+              (field) =>
+                `<p><strong>${escapeHtml(
+                  field.closest("label").childNodes[0].textContent.trim(),
+                )}:</strong> ${escapeHtml(field.value.trim())}</p>`,
+            )
+            .join("");
           form.querySelector("#application-review-resume").textContent =
             form.querySelector('[name="includeResume"]').checked
               ? "Included"

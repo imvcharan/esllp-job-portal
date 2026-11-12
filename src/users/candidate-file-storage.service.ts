@@ -15,7 +15,11 @@ export class CandidateFileStorageService {
   private readonly bucket =
     process.env.SUPABASE_CANDIDATE_BUCKET?.trim() || "candidate-private";
 
-  newObjectPath(userId: number, kind: "photo" | "resume", extension: string) {
+  newObjectPath(
+    userId: number,
+    kind: "photo" | "resume" | "application",
+    extension: string,
+  ) {
     return `${userId}/${kind}/${randomUUID()}.${extension}`;
   }
 
@@ -85,17 +89,22 @@ export class CandidateFileStorageService {
   }
 
   async remove(path: string): Promise<void> {
+    await this.removeMany([path]);
+  }
+
+  async removeMany(paths: string[]): Promise<void> {
+    if (!paths.length) return;
     const response = await this.request(
       `/object/${encodeURIComponent(this.bucket)}`,
       {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prefixes: [path] }),
+        body: JSON.stringify({ prefixes: paths }),
       },
     );
     if (!response.ok) {
       throw new ServiceUnavailableException(
-        `Private file storage could not remove the previous file (HTTP ${response.status}).`,
+        `Private file storage could not remove candidate files (HTTP ${response.status}).`,
       );
     }
   }

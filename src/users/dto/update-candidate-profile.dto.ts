@@ -5,10 +5,13 @@ import {
   IsBoolean,
   IsIn,
   IsOptional,
+  IsNumber,
   IsString,
   IsUrl,
+  Max,
   MaxLength,
   Matches,
+  Min,
   MinLength,
   ValidateIf,
   ValidateNested,
@@ -113,6 +116,69 @@ export class CandidateLinksDto {
   github?: string;
 }
 
+export class CandidateCertificationDto {
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(160)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  issuer?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  @Matches(/^(?:\d{4}-(0[1-9]|1[0-2]))?$/)
+  issueDate?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @ValidateIf((_object, value) => value !== "")
+  @IsString()
+  @MaxLength(500)
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  credentialUrl?: string;
+}
+
+export class CandidateSalaryPreferencesDto {
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1_000_000_000)
+  minimum?: number;
+
+  @IsOptional()
+  @IsIn(["INR", "USD", "EUR", "GBP", "AUD", "CAD", "SGD"])
+  currency?: string;
+
+  @IsOptional()
+  @IsIn(["year", "month", "hour"])
+  period?: "year" | "month" | "hour";
+}
+
+export class CandidateResumeBuilderDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  summary?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @IsIn(["summary", "experience", "education", "certifications", "skills"], {
+    each: true,
+  })
+  sectionOrder?: string[];
+}
+
 export class UpdateCandidateProfileDto {
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
@@ -181,6 +247,39 @@ export class UpdateCandidateProfileDto {
   @ValidateNested({ each: true })
   @Type(() => CandidateEducationDto)
   education?: CandidateEducationDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => CandidateCertificationDto)
+  certifications?: CandidateCertificationDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CandidateSalaryPreferencesDto)
+  salaryPreferences?: CandidateSalaryPreferencesDto;
+
+  @IsOptional()
+  @IsIn(["private", "applications", "recruiters"])
+  profileVisibility?: "private" | "applications" | "recruiters";
+
+  @IsOptional()
+  @IsBoolean()
+  publicProfileEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowRecruiterContact?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowRecruiterResumeAccess?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CandidateResumeBuilderDto)
+  resumeBuilder?: CandidateResumeBuilderDto;
 
   @IsOptional()
   @ValidateNested()

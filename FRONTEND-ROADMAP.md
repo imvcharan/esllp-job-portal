@@ -118,11 +118,13 @@ the current API and workflow guide; use the following baseline instead.
   manage organization-owned jobs and company details.
 - Candidate profile and preferences, private photo/resume storage, saved jobs
   and searches, consent-based application data sharing, application history
-  and withdrawal, notifications, and interview updates are implemented.
+  and withdrawal, employer-defined application questions, notifications, and
+  interview updates are implemented.
 - Employer organization membership, invitations, applicant review/status
-  changes, notes/tags, interviews, notifications, plan limits, and Razorpay
-  subscription flows are implemented. Paid checkout still requires configured
-  plans, verified webhooks, and staging checks.
+  changes, notes/tags, interviews, notifications, configurable plan limits,
+  Boolean recruiter search, saved searches, candidate-consented resume access,
+  and Razorpay subscription flows are implemented. Paid checkout still
+  requires matching provider plans, verified webhooks, and staging checks.
 - Staff/admin/superadmin dashboards, employer approval, user administration,
   analytics, and the protected audit log are implemented.
 - TypeORM migrations and PostgreSQL configuration exist; startup runs pending
@@ -130,8 +132,8 @@ the current API and workflow guide; use the following baseline instead.
   local product surfaces.
 - Repository gaps still include database integration/browser end-to-end tests,
   company/user reporting controls and appeal/feedback workflows, an approved
-  account deletion/retention policy, malware scanning/quarantine for uploads,
-  and complete operational observability/recovery/support readiness.
+  account deletion/retention policy, upload quarantine/operational scanning
+  monitoring, and complete operational observability/recovery/support readiness.
   Provider-backed production configuration and verification are not evidenced
   by repository code.
 - See [README.md](./README.md) for setup, API, storage, email, billing, and
@@ -317,9 +319,9 @@ cannot read or modify another candidate's data; files are private and tested.
 - [x] Support core job listing fields for location,
       work arrangement, employment type, experience, compensation, application
       visibility, publication, and expiry.
-- [ ] Add application questions and explicit moderation/pause/rejection
-      transitions. Current job states cover draft, active/published, closed,
-      expired, and archived behavior; changes are audited.
+- [x] Add employer-defined application questions and explicit moderation,
+      pause, rejection, and closure transitions with required admin reasons
+      and audit events.
 - [x] Add bounded job-search pagination and database indexes for core lookup.
 - [ ] Test query behavior with realistic data volume.
 
@@ -327,8 +329,8 @@ cannot read or modify another candidate's data; files are private and tested.
 
 - [x] Build company setup/edit, team/member management, job posting, draft
       save, preview, publish, edit, and close flows on web.
-- [ ] Build company public pages using employer-supplied data and clearly
-      sourced verification status.
+- [x] Build public company pages using employer-supplied data and the explicit
+      employer-account approval record; do not label it as company verification.
 - [x] Keep public job search and job details aligned with server publication
       and moderation state.
 
@@ -348,7 +350,11 @@ verification or moderation cases.
       retry-safe submission.
 - [x] Define application eligibility, optional note, consent choices,
       duplicate behavior, withdrawal rules, and application profile snapshots.
-- [ ] Add employer-defined application questions and required documents.
+- [x] Add employer-defined required/optional application questions and persist
+      candidate answers with question snapshots.
+- [x] Support job-specific required/optional PDF and DOCX uploads, virus
+      scanning, private storage, required-document checks at application time,
+      and organization-authorized temporary employer access.
 - [x] Add application, status-history, and event records. Enforce
       candidate ownership and employer tenant access on every operation.
 - [x] Define and enforce the status lifecycle (submitted, in review,
@@ -358,7 +364,10 @@ verification or moderation cases.
       application/resume data.
 - [x] Add in-app notifications for application status, offers, messages,
       withdrawals, and interviews; respect candidate email preferences.
-- [ ] Add delivery retry/deduplication and push notification handling.
+- [x] Add durable idempotent email notification delivery, bounded retry,
+      payload clearing after success, and audited manual retry controls.
+- [ ] Configure push notification delivery after selecting a provider and
+      completing platform permission, privacy, and staging validation.
 
 **Clients**
 
@@ -367,6 +376,8 @@ verification or moderation cases.
       remain browser-local; published guest saves sync on sign-in.
 - [x] Build candidate application submission with an optional validated note;
       show success only after an API response and keep retries idempotent.
+- [x] Render employer-defined questions during application, validate required
+      answers on the API, and show submitted answers in the employer inbox.
 - [x] Build candidate application history with status history and job links.
 - [x] Add a review-and-confirm step, clear account-name disclosure, opt-in
       profile sharing, optional resume attachment, withdrawal requests, and
@@ -440,10 +451,16 @@ after the full local acceptance gate.
       reporting destinations. Add a support contact and response ownership.
 - [x] Add candidate JSON data export and a superadmin-reviewed deletion request
       queue.
+- [x] Purge candidate application-document and resume-version files from
+      private object storage before permanently deleting an eligible,
+      unlinked candidate account.
+- [x] Purge failed notification recipient/message/error data 30 days after
+      terminal delivery failure.
 - [ ] Define approved account deletion/anonymization, data retention, and
-      backup/vendor data handling with legal/privacy stakeholders; implement
-      the approved policy. The current deletion-request workflow does not
-      delete or anonymize data.
+      backup/vendor data handling with legal/privacy stakeholders and document
+      the database provider's actual backup expiry. Deletion requests remain
+      reviewed and do not automatically delete/anonymize accounts; linked
+      business records remain protected.
 - [ ] Ensure verification, freshness, match, salary, and performance claims
       are based on traceable real data; do not fabricate them.
 

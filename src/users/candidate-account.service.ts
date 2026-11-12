@@ -20,6 +20,9 @@ import {
 import { CandidateProfile } from "./candidate-profile.entity";
 import { CandidateSavedJob } from "./candidate-saved-job.entity";
 import { CandidateSavedSearch } from "./candidate-saved-search.entity";
+import { CandidateResumeVersion } from "./candidate-resume-version.entity";
+import { CandidatePremiumOrder } from "./candidate-premium-order.entity";
+import { CandidateApplicationDocument } from "./candidate-application-document.entity";
 import { CreateCandidateDeletionRequestDto } from "./dto/create-candidate-deletion-request.dto";
 import { UpdateCandidateDeletionRequestDto } from "./dto/update-candidate-deletion-request.dto";
 import { User, UserRole } from "./user.entity";
@@ -47,6 +50,12 @@ export class CandidateAccountService {
     private readonly notificationsRepository: Repository<UserNotification>,
     @InjectRepository(CandidateDeletionRequest)
     private readonly deletionRequestsRepository: Repository<CandidateDeletionRequest>,
+    @InjectRepository(CandidateResumeVersion)
+    private readonly resumeVersionsRepository: Repository<CandidateResumeVersion>,
+    @InjectRepository(CandidatePremiumOrder)
+    private readonly premiumOrdersRepository: Repository<CandidatePremiumOrder>,
+    @InjectRepository(CandidateApplicationDocument)
+    private readonly applicationDocumentsRepository: Repository<CandidateApplicationDocument>,
     private readonly auditService: AuditService,
   ) {}
 
@@ -57,6 +66,9 @@ export class CandidateAccountService {
         id: true,
         email: true,
         displayName: true,
+        username: true,
+        phoneE164: true,
+        phoneVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -71,6 +83,9 @@ export class CandidateAccountService {
       savedSearches,
       notifications,
       deletionRequests,
+      resumeVersions,
+      premiumOrders,
+      applicationDocuments,
     ] = await Promise.all([
       this.profilesRepository.findOneBy({ userId: user.id }),
       this.applicationsRepository.find({
@@ -93,6 +108,18 @@ export class CandidateAccountService {
       }),
       this.deletionRequestsRepository.find({
         where: { requesterUserId: user.id },
+        order: { createdAt: "ASC" },
+      }),
+      this.resumeVersionsRepository.find({
+        where: { userId: user.id },
+        order: { createdAt: "ASC" },
+      }),
+      this.premiumOrdersRepository.find({
+        where: { userId: user.id },
+        order: { createdAt: "ASC" },
+      }),
+      this.applicationDocumentsRepository.find({
+        where: { userId: user.id },
         order: { createdAt: "ASC" },
       }),
     ]);
@@ -143,6 +170,12 @@ export class CandidateAccountService {
             workplaceTypes: profile.workplaceTypes,
             experience: profile.experience,
             education: profile.education,
+            certifications: profile.certifications,
+            salaryPreferences: profile.salaryPreferences,
+            profileVisibility: profile.profileVisibility,
+            allowRecruiterContact: profile.allowRecruiterContact,
+            premiumBoostUntil: profile.premiumBoostUntil,
+            resumeBuilder: profile.resumeBuilder,
             links: profile.links,
             hasPhoto: Boolean(profile.photoPath),
             hasResume: Boolean(profile.resumePath),
@@ -164,6 +197,7 @@ export class CandidateAccountService {
           id: application.id,
           status: offerExpired ? "offer_expired" : application.status,
           coverLetter: application.coverLetter,
+          applicationAnswers: application.applicationAnswers ?? [],
           profileShared: application.profileShared,
           profileSnapshot: application.profileSnapshot,
           hasResume: Boolean(application.resumePath),
@@ -205,6 +239,49 @@ export class CandidateAccountService {
         savedAt: createdAt,
       })),
       savedSearches,
+      resumeVersions: resumeVersions.map(
+        ({ id, fileName, mimeType, parsedText, createdAt }) => ({
+          id,
+          fileName,
+          mimeType,
+          parsedText,
+          createdAt,
+        }),
+      ),
+      applicationDocuments: applicationDocuments.map(
+        ({
+          id,
+          jobId,
+          applicationId,
+          documentId,
+          documentLabel,
+          fileName,
+          contentType,
+          createdAt,
+        }) => ({
+          id,
+          jobId,
+          applicationId,
+          documentId,
+          documentLabel,
+          fileName,
+          contentType,
+          uploadedAt: createdAt,
+        }),
+      ),
+      premiumServices: premiumOrders.map((order) => ({
+        service: order.productName,
+        description: order.productDescription,
+        amountInr: order.amountPaise / 100,
+        fulfillmentDays: order.fulfillmentDays,
+        currency: order.currency,
+        paymentStatus: order.paymentStatus,
+        fulfillmentStatus: order.fulfillmentStatus,
+        fulfillmentNote: order.fulfillmentNote,
+        paidAt: order.paidAt,
+        fulfilledAt: order.fulfilledAt,
+        createdAt: order.createdAt,
+      })),
       notifications,
       deletionRequests,
     };

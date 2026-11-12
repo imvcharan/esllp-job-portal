@@ -8,7 +8,8 @@ import {
 import { User } from "../users/user.entity";
 import { JoinColumn, ManyToOne } from "typeorm";
 
-export type AuthTokenPurpose = "email_verification" | "password_reset";
+export type AuthTokenPurpose =
+  "email_verification" | "password_reset" | "email_otp" | "phone_verification";
 
 @Entity({ name: "auth_tokens" })
 export class AuthToken {
@@ -31,6 +32,9 @@ export class AuthToken {
 
   @Column({ name: "used_at", type: "timestamptz", nullable: true })
   usedAt!: Date | null;
+
+  @Column({ type: "integer", default: 0 })
+  attempts!: number;
 
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;

@@ -22,6 +22,8 @@
       --navy-2: #20354a;
       --teal: #117b78;
       --teal-dark: #0c6968;
+      --scrollbar-track: #e9f2f0;
+      --scrollbar-thumb: #82aaa5;
       --mint: #e5f5ef;
       --lime: #c7f075;
       --blue: #6585f5;
@@ -32,11 +34,11 @@
       font-synthesis: none;
       text-rendering: optimizeLegibility;
     }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
     *::-webkit-scrollbar { width: 10px; height: 10px; }
-    *::-webkit-scrollbar-track { background: #edf0f3; }
-    *::-webkit-scrollbar-thumb { border: 2px solid #edf0f3; border-radius: 8px; background: #aab4c0; }
-    *::-webkit-scrollbar-thumb:hover { background: #778596; }
+    *::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+    *::-webkit-scrollbar-thumb { border: 2px solid var(--scrollbar-track); border-radius: 8px; background: var(--scrollbar-thumb); }
+    *::-webkit-scrollbar-thumb:hover { background: var(--teal); }
     [hidden] { display: none !important; }
     .skip-link { position: fixed; z-index: 1000; top: 8px; left: 8px; transform: translateY(-160%); padding: 10px 14px; border-radius: 6px; color: #fff; background: #18283f; font-weight: 700; }
     .skip-link:focus { transform: translateY(0); }
@@ -163,7 +165,7 @@
     .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 18px 13px; }
     .panel-title-row h2 { margin: 0; font: 700 12px "Manrope", sans-serif; }
     .panel-title-row a { color: var(--teal); font-size: 9px; font-weight: 700; }
-    .table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; scrollbar-color: #8996a5 #edf0f3; -webkit-overflow-scrolling: touch; }
+    .table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
     .table-wrap:focus-visible { outline: 3px solid #edb82f; outline-offset: -3px; }
     .table-scroll-hint { display: none; margin: 0; padding: 7px 14px; color: #647084; background: #f7f9fa; font-size: 11px; }
     .table-scroll-controls { display: none; align-items: center; justify-content: flex-end; gap: 8px; padding: 8px 12px; color: #647084; background: #f7f9fa; font-size: 11px; }
@@ -249,6 +251,10 @@
     .form-row input, .form-row select, .form-row textarea { width: 100%; max-width: 380px; min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; color: #465469; background: #fff; font-size: 9px; }
     .form-row textarea { padding: 9px; resize: vertical; }
     .form-row .toggle { width: 31px; height: 17px; accent-color: var(--teal); }
+    .razorpay-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; margin: 18px 0; }
+    .razorpay-field { display: grid; gap: 7px; color: #465469; font-size: 12px; }
+    .razorpay-field input { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; outline-color: #83beb7; color: #344256; background: #fff; font-size: 12px; }
+    .razorpay-field small { color: #68746c; font-size: 11px; }
     .toast { position: fixed; z-index: 80; right: 24px; bottom: 24px; max-width: min(440px, calc(100vw - 32px)); padding: 12px 16px; border-radius: 8px; color: #fff; background: #20354a; box-shadow: 0 9px 30px rgba(23,37,56,.2); font-size: 11px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s ease; }
     .toast.success { background: #176e62; }
     .toast.error { background: #a93148; }
@@ -280,6 +286,13 @@
       .source-legend { width: min(250px, 60%); }
     }
     @media (max-width: 560px) {
+      .auth-gate { padding: 12px; }
+      .auth-card { padding: 24px; }
+      .auth-card h1 { margin: 16px 0 6px; font-size: 26px; }
+      .auth-card > p { margin-bottom: 12px; font-size: 13px; }
+      .auth-card .form-row { padding-block: 5px; }
+      .auth-card .auth-submit { min-height: 44px; margin-top: 8px; }
+      .auth-footnote { margin-top: 12px; padding-top: 10px; font-size: 11px; line-height: 1.45; }
       .sidebar { width: 0; overflow: hidden; padding: 0; border: 0; transition: width .2s ease, padding .2s ease; }
       .sidebar.open { width: 248px; align-items: stretch; padding: 20px 16px 16px; }
       .sidebar.open .brand { padding: 0 11px 22px; }.sidebar.open .brand > span:last-child, .sidebar.open .nav-label, .sidebar.open .nav-link .nav-text, .sidebar.open .nav-count, .sidebar.open .support-card, .sidebar.open .profile-mini > span:not(.profile-initials), .sidebar.open .profile-more { display: initial; }
@@ -379,6 +392,8 @@
       <nav class="nav-list" aria-label="Management pages">
         <a class="nav-link superadmin-only" href="#users" data-view="users" hidden><span class="nav-icon">♙</span><span class="nav-text">User accounts</span></a>
         <a class="nav-link superadmin-only" href="#privacy" data-view="privacy" hidden><span class="nav-icon">⌑</span><span class="nav-text">Privacy requests</span></a>
+        <a class="nav-link superadmin-only" href="#candidate-premium" data-view="candidate-premium" hidden><span class="nav-icon">₹</span><span class="nav-text">Candidate services</span></a>
+        <a class="nav-link superadmin-only" href="#razorpay-config" data-view="razorpay-config" hidden><span class="nav-icon">◈</span><span class="nav-text">Razorpay settings</span></a>
         <a class="nav-link superadmin-only" href="#audit" data-view="audit" hidden><span class="nav-icon">◷</span><span class="nav-text">Audit log</span></a>
         <a class="nav-link admin-only" href="#activity" data-view="activity" hidden><span class="nav-icon">◷</span><span class="nav-text">Recent activity</span></a>
         <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Account security</span></a>
@@ -446,7 +461,7 @@
           </div>
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>All listings</h2><button class="button" type="button" data-export>↓&nbsp; Export CSV</button></div>
-            <div class="table-toolbar"><input class="table-search page-filter" type="search" placeholder="⌕  Search jobs…" aria-label="Search jobs"><select class="select" id="jobs-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="draft">Draft</option></select><select class="select" id="jobs-company-filter"><option value="all">All companies</option></select></div>
+            <div class="table-toolbar"><input class="table-search page-filter" type="search" placeholder="⌕  Search jobs…" aria-label="Search jobs"><select class="select" id="jobs-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="draft">Draft</option><option value="pending_review">Pending review</option><option value="rejected">Rejected</option><option value="paused">Paused</option><option value="closed">Closed</option></select><select class="select" id="jobs-company-filter"><option value="all">All companies</option></select></div>
             <div class="table-wrap"><table class="jobs-table"><thead><tr><th>Job title</th><th>Company</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applications</th><th>Status</th><th>Posted</th><th>Actions</th></tr></thead><tbody class="filterable" id="jobs-table-body"></tbody></table></div>
             <p class="operation-feedback" id="jobs-action-feedback" role="status" aria-live="polite" hidden></p>
           </article>
@@ -482,6 +497,126 @@
             <div class="table-toolbar"><span id="privacy-requests-page-summary">Requests load here.</span><button class="button" id="privacy-prev" type="button">← Previous</button><button class="button" id="privacy-next" type="button">Next →</button></div>
           </article>
           <div class="demo-note" id="privacy-requests-data-note" hidden></div>
+        </section>
+
+        <section class="view" id="view-candidate-premium" data-title="Candidate services">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Superadmin controls</div><h1>Candidate services</h1><p>Set candidate service prices and availability, then track paid service requests and fulfillment.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-candidate-premium>↻&nbsp; Refresh</button></div>
+          </div>
+          <div class="demo-note">Default prices (₹499 resume review, ₹299 for a 30-day profile boost, and ₹1,499 career consultation) are illustrative launch values, not market-validated. Edit them before enabling live checkout. Applications and core job-seeking features remain free. Only paid resume-review and career-consultation requests require manual fulfillment; profile boosts activate automatically and preserve each candidate’s visibility/contact preferences.</div>
+          <article class="panel table-panel">
+            <div class="panel-title-row"><h2>Service catalog</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Service</th><th>Description</th><th>Price (INR)</th><th>Boost days</th><th>Available</th><th>Action</th></tr></thead><tbody id="candidate-premium-products-body"></tbody></table></div>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Purchases &amp; fulfillment</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Purchased</th><th>Service</th><th>Candidate</th><th>Price</th><th>Payment</th><th>Fulfillment</th><th>Note / action</th></tr></thead><tbody id="candidate-premium-orders-body"></tbody></table></div>
+            <div class="table-toolbar"><span id="candidate-premium-orders-summary">Orders load here.</span><span class="demo-note">Cancellation stops service fulfillment only; it does not issue a refund.</span></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-razorpay-config" data-title="Razorpay settings">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Superadmin controls</div><h1>Razorpay settings</h1><p>Configure the payment gateway used for candidate purchases and employer subscriptions.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-razorpay-config>↻&nbsp; Reload</button></div>
+          </div>
+          <div class="demo-note">Credentials are encrypted before being stored. API and webhook secrets are write-only and never returned to the browser. The encryption key must remain stable and be backed up securely; losing or changing it makes saved secrets unreadable. Do not enter live credentials until your HTTPS domain and both webhooks are ready.</div>
+          <article class="panel table-panel">
+            <div class="panel-title-row"><h2>Gateway credentials</h2><span id="razorpay-config-status">Loading configuration…</span></div>
+            <p class="demo-note" id="razorpay-encryption-note" hidden></p>
+            <form id="razorpay-config-form">
+              <div class="razorpay-fields">
+                <label class="razorpay-field" for="razorpay-enabled"><span>Enable paid checkout</span>
+                  <input id="razorpay-enabled" name="enabled" type="checkbox">
+                  <small>When disabled, new candidate purchases and employer subscriptions are blocked.</small>
+                </label>
+                <label class="razorpay-field" for="razorpay-key-id">Razorpay key ID
+                  <input id="razorpay-key-id" name="keyId" type="text" maxlength="255" autocomplete="off" placeholder="rzp_test_… or rzp_live_…">
+                </label>
+                <label class="razorpay-field" for="razorpay-api-secret">Razorpay API secret
+                  <input id="razorpay-api-secret" name="apiSecret" type="password" maxlength="255" autocomplete="new-password" placeholder="Leave blank to keep the saved secret">
+                  <small id="razorpay-api-secret-state">Secret status loads here.</small>
+                </label>
+                <label class="razorpay-field" for="razorpay-webhook-secret">Webhook signing secret
+                  <input id="razorpay-webhook-secret" name="webhookSecret" type="password" maxlength="255" autocomplete="new-password" placeholder="Leave blank to keep the saved secret">
+                  <small id="razorpay-webhook-secret-state">Secret status loads here.</small>
+                </label>
+              </div>
+              <div class="workspace-panel-head"><div><h3>Employer subscription plans</h3><p>Plan IDs must refer to monthly INR plans in the same Razorpay account as the API key.</p></div></div>
+              <div class="razorpay-fields">
+                <label class="razorpay-field" for="razorpay-starter-plan">Starter Razorpay plan ID
+                  <input id="razorpay-starter-plan" name="starterPlanId" type="text" maxlength="100">
+                </label>
+                <label class="razorpay-field" for="razorpay-starter-price">Starter price (INR/month)
+                  <input id="razorpay-starter-price" name="starterAmountInr" type="number" min="0" max="10000000" step="0.01">
+                </label>
+                <label class="razorpay-field" for="razorpay-starter-jobs">Starter active job limit
+                  <input id="razorpay-starter-jobs" name="starterActiveJobs" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-starter-seats">Starter team seats
+                  <input id="razorpay-starter-seats" name="starterSeats" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-starter-resume-credits">Starter resume unlock credits / month
+                  <input id="razorpay-starter-resume-credits" name="starterResumeCredits" type="number" min="0" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-growth-plan">Growth Razorpay plan ID
+                  <input id="razorpay-growth-plan" name="growthPlanId" type="text" maxlength="100">
+                </label>
+                <label class="razorpay-field" for="razorpay-growth-price">Growth price (INR/month)
+                  <input id="razorpay-growth-price" name="growthAmountInr" type="number" min="0" max="10000000" step="0.01">
+                </label>
+                <label class="razorpay-field" for="razorpay-growth-jobs">Growth active job limit
+                  <input id="razorpay-growth-jobs" name="growthActiveJobs" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-growth-seats">Growth team seats
+                  <input id="razorpay-growth-seats" name="growthSeats" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-growth-resume-credits">Growth resume unlock credits / month
+                  <input id="razorpay-growth-resume-credits" name="growthResumeCredits" type="number" min="0" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-business-plan">Business Razorpay plan ID
+                  <input id="razorpay-business-plan" name="businessPlanId" type="text" maxlength="100">
+                </label>
+                <label class="razorpay-field" for="razorpay-business-price">Business price (INR/month)
+                  <input id="razorpay-business-price" name="businessAmountInr" type="number" min="0" max="10000000" step="0.01">
+                </label>
+                <label class="razorpay-field" for="razorpay-business-jobs">Business active job limit
+                  <input id="razorpay-business-jobs" name="businessActiveJobs" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-business-seats">Business team seats
+                  <input id="razorpay-business-seats" name="businessSeats" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-business-resume-credits">Business resume unlock credits / month
+                  <input id="razorpay-business-resume-credits" name="businessResumeCredits" type="number" min="0" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-enterprise-plan">Enterprise Razorpay plan ID
+                  <input id="razorpay-enterprise-plan" name="enterprisePlanId" type="text" maxlength="100">
+                </label>
+                <label class="razorpay-field" for="razorpay-enterprise-price">Enterprise price (INR/month)
+                  <input id="razorpay-enterprise-price" name="enterpriseAmountInr" type="number" min="0" max="10000000" step="0.01" placeholder="Set a negotiated price">
+                </label>
+                <label class="razorpay-field" for="razorpay-enterprise-jobs">Enterprise active job limit
+                  <input id="razorpay-enterprise-jobs" name="enterpriseActiveJobs" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-enterprise-seats">Enterprise team seats
+                  <input id="razorpay-enterprise-seats" name="enterpriseSeats" type="number" min="1" max="1000000" step="1">
+                </label>
+                <label class="razorpay-field" for="razorpay-enterprise-resume-credits">Enterprise resume unlock credits / month
+                  <input id="razorpay-enterprise-resume-credits" name="enterpriseResumeCredits" type="number" min="0" max="1000000" step="1">
+                </label>
+              </div>
+              <div class="heading-actions"><button class="button button-primary" type="submit">Save Razorpay settings</button><button class="button" id="razorpay-test-connection" type="button">Test API connection</button></div>
+              <p class="form-feedback" id="razorpay-config-feedback" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Webhook endpoints</h2></div>
+            <p>Configure these HTTPS endpoints in Razorpay and select the listed events:</p>
+            <p><strong>Employer subscriptions:</strong> <code id="razorpay-employer-webhook-path">/api/billing/razorpay/webhook</code> — subscription.activated, subscription.charged, subscription.resumed, subscription.halted, subscription.cancelled, subscription.completed.</p>
+            <p><strong>Candidate one-time payments:</strong> <code id="razorpay-candidate-webhook-path">/api/billing/razorpay/candidate-webhook</code> — payment.captured.</p>
+            <p class="demo-note">Use the same webhook signing secret for both endpoints. Updating it here takes effect immediately; update the secret in Razorpay at the same time.</p>
+          </article>
         </section>
 
         <section class="view" id="view-candidates" data-title="Candidates">
@@ -777,7 +912,7 @@
       const applicationCounts = new Map((adminInsights?.applicationsByJob || []).map((item) => [item.jobId, item.count]));
       jobs.forEach((job) => {
         const row = document.createElement("tr");
-        row.dataset.status = job.isActive ? "active" : "draft";
+        row.dataset.status = job.isActive ? "active" : (job.moderationStatus || "draft");
         row.dataset.company = job.company;
         const salary = job.salaryMin == null && job.salaryMax == null
           ? "Not provided"
@@ -791,7 +926,7 @@
         const statusCell = document.createElement("td");
         const status = document.createElement("span");
         status.className = `status${job.isActive ? "" : " closed"}`;
-        status.textContent = job.isActive ? "Active" : "Draft";
+        status.textContent = job.isActive ? "Active" : (job.moderationStatus || "Draft").replaceAll("_", " ");
         statusCell.append(status);
         const posted = document.createElement("td");
         posted.textContent = formatDate(job.createdAt);
@@ -807,37 +942,66 @@
           toggleButton.className = "button";
           toggleButton.type = "button";
           toggleButton.style.marginLeft = "5px";
-          toggleButton.textContent = job.isActive ? "Pause" : "Publish";
+          toggleButton.textContent = job.isActive ? "Pause" : "Approve";
           toggleButton.addEventListener("click", async () => {
-            toggleButton.disabled = true;
-            setRowFeedback(rowFeedback, "");
-            let updated;
-            try {
-              updated = await authRequest(`/api/admin/jobs/${job.id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ isActive: !job.isActive })
-              });
-            } catch (error) {
-              const message = error instanceof Error ? error.message : "Unable to update the job.";
-              setRowFeedback(rowFeedback, message);
-              showOperationToast(message, "error");
-              toggleButton.disabled = false;
+            const nextStatus = job.isActive ? "paused" : "approved";
+            const reason = window.prompt(
+              `Enter the reason for ${nextStatus === "approved" ? "approving" : "pausing"} this listing (required).`,
+              job.moderationNote || "",
+            );
+            if (reason === null) return;
+            if (reason.trim().length < 3) {
+              showToast("Enter a reason of at least three characters.", "error");
               return;
             }
-            const delivery = updated.notificationDelivery;
-            const alertSummary = delivery
-              ? ` ${delivery.sent} matching job alert(s) emailed${delivery.failed ? `; ${delivery.failed} failed (see server logs)` : ""}.`
-              : "";
-            const successMessage = job.isActive ? "Job paused." : `Job published.${alertSummary}`;
-            setInlineFeedback("#jobs-action-feedback", successMessage, "success");
-            showOperationToast(successMessage);
+            toggleButton.disabled = true;
+            setRowFeedback(rowFeedback, "");
             try {
+              const updated = await authRequest(`/api/admin/jobs/${job.id}/moderation`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: nextStatus, reason: reason.trim() })
+              });
+              const delivery = updated.notificationDelivery;
+              const alertSummary = delivery
+                ? ` ${delivery.queued} matching job alert email(s) queued${delivery.failed ? `; ${delivery.failed} could not be queued (see server logs)` : ""}.`
+                : "";
+              const successMessage = nextStatus === "approved"
+                ? `Job approved and published.${alertSummary}`
+                : "Job paused and removed from public listings.";
+              setInlineFeedback("#jobs-action-feedback", successMessage, "success");
+              showOperationToast(successMessage);
               await loadAdminJobs();
               await refreshOverviewData();
             } catch (error) {
-              const message = error instanceof Error ? error.message : "Unable to refresh job data.";
-              setInlineFeedback("#jobs-action-feedback", `Job updated, but the list could not refresh: ${message}`, "error");
-              showOperationToast(`Job updated, but the list could not refresh: ${message}`, "error");
+              const message = error instanceof Error ? error.message : "Unable to moderate the job.";
+              setRowFeedback(rowFeedback, message);
+              showOperationToast(message, "error");
+              toggleButton.disabled = false;
+            }
+          });
+          const rejectButton = document.createElement("button");
+          rejectButton.className = "button";
+          rejectButton.type = "button";
+          rejectButton.textContent = "Reject";
+          rejectButton.addEventListener("click", async () => {
+            const reason = window.prompt("Enter the reason for rejecting this listing (required).");
+            if (reason === null) return;
+            if (reason.trim().length < 3) {
+              showToast("Enter a reason of at least three characters.", "error");
+              return;
+            }
+            rejectButton.disabled = true;
+            try {
+              await authRequest(`/api/admin/jobs/${job.id}/moderation`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "rejected", reason: reason.trim() })
+              });
+              await loadAdminJobs();
+              setInlineFeedback("#jobs-action-feedback", "Job rejected and removed from public listings.", "success");
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "Unable to reject the job.";
+              setRowFeedback(rowFeedback, message);
+              rejectButton.disabled = false;
             }
           });
           const archiveButton = document.createElement("button");
@@ -949,7 +1113,7 @@
               showOperationToast(`Job deleted, but the list could not refresh: ${message}`, "error");
             }
           });
-          actions.append(editButton, toggleButton, ownerButton, archiveButton, deleteButton, rowFeedback);
+          actions.append(editButton, toggleButton, rejectButton, ownerButton, archiveButton, deleteButton, rowFeedback);
         }
         row.append(statusCell, posted, actions);
         body.append(row);
@@ -1739,6 +1903,231 @@
       note.textContent = companies.length ? "" : "No employer organizations are registered yet.";
     }
 
+    async function loadAdminCandidatePremium() {
+      const [products, orders] = await Promise.all([
+        authRequest("/api/admin/candidate-premium/products"),
+        authRequest("/api/admin/candidate-premium/orders"),
+      ]);
+      if (!Array.isArray(products) || !Array.isArray(orders)) {
+        throw new Error("The candidate services API returned an unexpected response.");
+      }
+
+      const productsBody = document.querySelector("#candidate-premium-products-body");
+      productsBody.replaceChildren();
+      products.forEach((product) => {
+        const row = document.createElement("tr");
+        const name = document.createElement("td");
+        name.textContent = product.name;
+        const descriptionCell = document.createElement("td");
+        const description = document.createElement("input");
+        description.type = "text";
+        description.maxLength = 500;
+        description.value = product.description;
+        description.setAttribute("aria-label", `${product.name} description`);
+        descriptionCell.append(description);
+        const priceCell = document.createElement("td");
+        const price = document.createElement("input");
+        price.type = "number";
+        price.min = "1";
+        price.max = "1000000";
+        price.step = "0.01";
+        price.value = String(product.amountInr);
+        price.setAttribute("aria-label", `${product.name} price in rupees`);
+        priceCell.append(price);
+        const daysCell = document.createElement("td");
+        const days = document.createElement("input");
+        days.type = "number";
+        days.min = "0";
+        days.max = "3650";
+        days.step = "1";
+        days.value = String(product.fulfillmentDays);
+        days.disabled = product.key !== "profile-boost";
+        days.setAttribute("aria-label", `${product.name} boost duration in days`);
+        daysCell.append(days);
+        const enabledCell = document.createElement("td");
+        const enabled = document.createElement("input");
+        enabled.type = "checkbox";
+        enabled.checked = product.enabled;
+        enabled.setAttribute("aria-label", `${product.name} available for purchase`);
+        enabledCell.append(enabled);
+        const actionCell = document.createElement("td");
+        const save = document.createElement("button");
+        save.className = "button button-primary";
+        save.type = "button";
+        save.textContent = "Save";
+        save.addEventListener("click", async () => {
+          save.disabled = true;
+          try {
+            await authRequest(`/api/admin/candidate-premium/products/${encodeURIComponent(product.key)}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                amountInr: Number(price.value),
+                fulfillmentDays: Number(days.value),
+                enabled: enabled.checked,
+                description: description.value.trim(),
+              }),
+            });
+            showToast(`${product.name} settings saved.`, "success");
+            await loadAdminCandidatePremium();
+          } catch (error) {
+            showToast(error instanceof Error ? error.message : "Unable to update service pricing.", "error");
+            save.disabled = false;
+          }
+        });
+        actionCell.append(save);
+        row.append(name, descriptionCell, priceCell, daysCell, enabledCell, actionCell);
+        productsBody.append(row);
+      });
+
+      const ordersBody = document.querySelector("#candidate-premium-orders-body");
+      ordersBody.replaceChildren();
+      orders.forEach((order) => {
+        const row = document.createElement("tr");
+        const purchased = document.createElement("td");
+        purchased.textContent = formatDate(order.createdAt, { dateStyle: "medium", timeStyle: "short" });
+        const service = document.createElement("td");
+        service.textContent = order.productName;
+        const candidate = document.createElement("td");
+        candidate.textContent = `${order.candidateName} · ${order.candidateEmail}`;
+        const amount = document.createElement("td");
+        amount.textContent = `₹${Number(order.amountInr).toLocaleString("en-IN")}`;
+        const payment = document.createElement("td");
+        payment.textContent = order.paymentStatus;
+        const fulfillmentCell = document.createElement("td");
+        const fulfillment = document.createElement("select");
+        fulfillment.setAttribute("aria-label", `Fulfillment status for order ${order.id}`);
+        ["pending", "in_progress", "completed", "cancelled"].forEach((value) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value.replaceAll("_", " ");
+          fulfillment.append(option);
+        });
+        fulfillment.value = order.fulfillmentStatus;
+        fulfillment.disabled = order.paymentStatus !== "paid" ||
+          order.productKey === "profile-boost" ||
+          ["completed", "cancelled"].includes(order.fulfillmentStatus);
+        fulfillmentCell.append(fulfillment);
+        const actionCell = document.createElement("td");
+        const note = document.createElement("input");
+        note.type = "text";
+        note.maxLength = 2000;
+        note.placeholder = order.productKey === "profile-boost" ? "Auto-fulfilled" : "Candidate-visible update";
+        note.value = order.fulfillmentNote || "";
+        note.setAttribute("aria-label", `Fulfillment note for order ${order.id}`);
+        note.disabled = fulfillment.disabled;
+        const save = document.createElement("button");
+        save.className = "button";
+        save.type = "button";
+        save.textContent = "Update";
+        save.disabled = fulfillment.disabled;
+        save.addEventListener("click", async () => {
+          save.disabled = true;
+          try {
+            await authRequest(`/api/admin/candidate-premium/orders/${order.id}/fulfillment`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: fulfillment.value, note: note.value.trim() }),
+            });
+            showToast("Service fulfillment updated.", "success");
+            await loadAdminCandidatePremium();
+          } catch (error) {
+            showToast(error instanceof Error ? error.message : "Unable to update service fulfillment.", "error");
+            save.disabled = false;
+          }
+        });
+        actionCell.append(note, save);
+        row.append(purchased, service, candidate, amount, payment, fulfillmentCell, actionCell);
+        ordersBody.append(row);
+      });
+      document.querySelector("#candidate-premium-orders-summary").textContent =
+        `${orders.length} most recent order${orders.length === 1 ? "" : "s"} shown.`;
+      if (!orders.length) {
+        const row = document.createElement("tr");
+        const empty = document.createElement("td");
+        empty.colSpan = 7;
+        empty.textContent = "No candidate service orders yet.";
+        row.append(empty);
+        ordersBody.append(row);
+      }
+    }
+
+    async function loadRazorpayConfiguration() {
+      const configuration = await authRequest("/api/admin/razorpay-config");
+      document.querySelector("#razorpay-enabled").checked =
+        configuration.enabled;
+      document.querySelector("#razorpay-key-id").value =
+        configuration.keyId || "";
+      document.querySelector("#razorpay-starter-plan").value =
+        configuration.starterPlanId || "";
+      document.querySelector("#razorpay-starter-price").value =
+        configuration.starterAmountInr ?? "";
+      document.querySelector("#razorpay-starter-jobs").value =
+        configuration.starterActiveJobs;
+      document.querySelector("#razorpay-starter-seats").value =
+        configuration.starterSeats;
+      document.querySelector("#razorpay-starter-resume-credits").value =
+        configuration.starterResumeCredits;
+      document.querySelector("#razorpay-growth-plan").value =
+        configuration.growthPlanId || "";
+      document.querySelector("#razorpay-growth-price").value =
+        configuration.growthAmountInr ?? "";
+      document.querySelector("#razorpay-growth-jobs").value =
+        configuration.growthActiveJobs;
+      document.querySelector("#razorpay-growth-seats").value =
+        configuration.growthSeats;
+      document.querySelector("#razorpay-growth-resume-credits").value =
+        configuration.growthResumeCredits;
+      document.querySelector("#razorpay-business-plan").value =
+        configuration.businessPlanId || "";
+      document.querySelector("#razorpay-business-price").value =
+        configuration.businessAmountInr ?? "";
+      document.querySelector("#razorpay-business-jobs").value =
+        configuration.businessActiveJobs;
+      document.querySelector("#razorpay-business-seats").value =
+        configuration.businessSeats;
+      document.querySelector("#razorpay-business-resume-credits").value =
+        configuration.businessResumeCredits;
+      document.querySelector("#razorpay-enterprise-plan").value =
+        configuration.enterprisePlanId || "";
+      document.querySelector("#razorpay-enterprise-price").value =
+        configuration.enterpriseAmountInr ?? "";
+      document.querySelector("#razorpay-enterprise-jobs").value =
+        configuration.enterpriseActiveJobs;
+      document.querySelector("#razorpay-enterprise-seats").value =
+        configuration.enterpriseSeats;
+      document.querySelector("#razorpay-enterprise-resume-credits").value =
+        configuration.enterpriseResumeCredits;
+      document.querySelector("#razorpay-api-secret").value = "";
+      document.querySelector("#razorpay-webhook-secret").value = "";
+      document.querySelector("#razorpay-api-secret").placeholder =
+        configuration.apiSecretConfigured
+          ? "Saved — enter a new value only to rotate"
+          : "Not configured";
+      document.querySelector("#razorpay-webhook-secret").placeholder =
+        configuration.webhookSecretConfigured
+          ? "Saved — enter a new value only to rotate"
+          : "Not configured";
+      document.querySelector("#razorpay-api-secret-state").textContent =
+        configuration.apiSecretConfigured
+          ? "API secret is configured; its value is never shown."
+          : "API secret is not configured.";
+      document.querySelector("#razorpay-webhook-secret-state").textContent =
+        configuration.webhookSecretConfigured
+          ? "Webhook secret is configured; its value is never shown."
+          : "Webhook secret is not configured.";
+      document.querySelector("#razorpay-config-status").textContent =
+        configuration.keyId
+          ? `Key ID configured (${configuration.keyId.startsWith("rzp_test_") ? "test" : "live"} mode)`
+          : "Payment gateway not configured";
+      const encryptionNote = document.querySelector("#razorpay-encryption-note");
+      encryptionNote.hidden = configuration.encryptionReady;
+      encryptionNote.textContent =
+        "Secret entry is disabled until RAZORPAY_CONFIG_ENCRYPTION_KEY is set to a stable, random value of at least 32 characters on the server and the app is restarted. Existing environment-provided gateway settings remain usable.";
+      document.querySelector("#razorpay-employer-webhook-path").textContent =
+        `${location.origin}${configuration.employerWebhookPath}`;
+      document.querySelector("#razorpay-candidate-webhook-path").textContent =
+        `${location.origin}${configuration.candidateWebhookPath}`;
+    }
+
     async function loadAdminActivity() {
       const activity = await authRequest("/api/admin/activity");
       if (!Array.isArray(activity)) throw new Error("The activity API returned an unexpected response.");
@@ -2051,7 +2440,7 @@
       }
       const view = document.querySelector(`#view-${name}`)
         ?? document.querySelector("#view-overview");
-      if ((name === "users" || name === "audit" || name === "privacy") && currentAdminUser?.role !== "superadmin") {
+      if ((name === "users" || name === "audit" || name === "privacy" || name === "candidate-premium" || name === "razorpay-config") && currentAdminUser?.role !== "superadmin") {
         showToast("This page is available to superadmins only.");
         return;
       }
@@ -2095,6 +2484,16 @@
           document.querySelector("#candidate-data-note").textContent = "Candidate account details are restricted to superadmins. Application stage totals are aggregated from live records.";
         }
       }
+      if (view.id === "view-candidate-premium" && adminAccessToken) {
+        loadAdminCandidatePremium().catch((error) =>
+          showToast(`Unable to load candidate services: ${error.message}`, "error"),
+        );
+      }
+      if (view.id === "view-razorpay-config" && adminAccessToken) {
+        loadRazorpayConfiguration().catch((error) =>
+          showToast(`Unable to load Razorpay settings: ${error.message}`, "error"),
+        );
+      }
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
@@ -2130,6 +2529,80 @@
     });
     document.querySelector("[data-refresh-companies]").addEventListener("click", () => {
       loadAdminCompanies().catch((error) => showToast(`Unable to load companies: ${error.message}`));
+    });
+    document.querySelector("[data-refresh-candidate-premium]").addEventListener("click", () => {
+      loadAdminCandidatePremium().catch((error) => showToast(`Unable to load candidate services: ${error.message}`, "error"));
+    });
+    document.querySelector("[data-refresh-razorpay-config]").addEventListener("click", () => {
+      loadRazorpayConfiguration().catch((error) => showToast(`Unable to load Razorpay settings: ${error.message}`, "error"));
+    });
+    document.querySelector("#razorpay-config-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const payload = {
+        enabled: form.elements.enabled.checked,
+        keyId: String(data.get("keyId") || "").trim(),
+        starterPlanId: String(data.get("starterPlanId") || "").trim(),
+        starterAmountInr: data.get("starterAmountInr") === "" ? null : Number(data.get("starterAmountInr")),
+        starterActiveJobs: Number(data.get("starterActiveJobs")),
+        starterSeats: Number(data.get("starterSeats")),
+        starterResumeCredits: Number(data.get("starterResumeCredits")),
+        growthPlanId: String(data.get("growthPlanId") || "").trim(),
+        growthAmountInr: data.get("growthAmountInr") === "" ? null : Number(data.get("growthAmountInr")),
+        growthActiveJobs: Number(data.get("growthActiveJobs")),
+        growthSeats: Number(data.get("growthSeats")),
+        growthResumeCredits: Number(data.get("growthResumeCredits")),
+        businessPlanId: String(data.get("businessPlanId") || "").trim(),
+        businessAmountInr: data.get("businessAmountInr") === "" ? null : Number(data.get("businessAmountInr")),
+        businessActiveJobs: Number(data.get("businessActiveJobs")),
+        businessSeats: Number(data.get("businessSeats")),
+        businessResumeCredits: Number(data.get("businessResumeCredits")),
+        enterprisePlanId: String(data.get("enterprisePlanId") || "").trim(),
+        enterpriseAmountInr: data.get("enterpriseAmountInr") === "" ? null : Number(data.get("enterpriseAmountInr")),
+        enterpriseActiveJobs: Number(data.get("enterpriseActiveJobs")),
+        enterpriseSeats: Number(data.get("enterpriseSeats")),
+        enterpriseResumeCredits: Number(data.get("enterpriseResumeCredits")),
+      };
+      const apiSecret = String(data.get("apiSecret") || "");
+      const webhookSecret = String(data.get("webhookSecret") || "");
+      if (apiSecret) payload.apiSecret = apiSecret;
+      if (webhookSecret) payload.webhookSecret = webhookSecret;
+      const submit = form.querySelector('[type="submit"]');
+      const feedback = document.querySelector("#razorpay-config-feedback");
+      submit.disabled = true;
+      feedback.textContent = "";
+      feedback.dataset.state = "";
+      try {
+        await authRequest("/api/admin/razorpay-config", {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        form.reset();
+        await loadRazorpayConfiguration();
+        feedback.textContent = "Razorpay settings saved. Any new secrets were encrypted and are not displayed.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to save Razorpay settings.";
+        feedback.dataset.state = "error";
+        feedback.setAttribute("role", "alert");
+        feedback.setAttribute("aria-live", "assertive");
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    document.querySelector("#razorpay-test-connection").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const result = await authRequest("/api/admin/razorpay-config/test", { method: "POST" });
+        showToast(`Razorpay API connection succeeded (${result.mode} mode).`, "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Razorpay connection failed.", "error");
+      } finally {
+        button.disabled = false;
+      }
     });
     document.querySelector("[data-refresh-reports]").addEventListener("click", () => {
       loadAdminReports().catch((error) => showToast(`Unable to load reports: ${error.message}`));

@@ -37,6 +37,7 @@ function createService(overrides = {}) {
           id: 5,
           status: "submitted",
           coverLetter: "Interested",
+          applicationAnswers: [{ questionId: "q1", answer: "Yes" }],
           resumePath: "private/resumes/2.pdf",
           resumeFileName: "resume.pdf",
           profileShared: false,
@@ -84,6 +85,27 @@ function createService(overrides = {}) {
     notifications: {
       find: async () => [],
     },
+    resumeVersions: {
+      find: async () => [],
+    },
+    premiumOrders: {
+      find: async () => [],
+    },
+    applicationDocuments: {
+      find: async () => [
+        {
+          id: 8,
+          jobId: 7,
+          applicationId: 5,
+          documentId: "d1",
+          documentLabel: "Portfolio",
+          filePath: "private/documents/portfolio.pdf",
+          fileName: "portfolio.pdf",
+          contentType: "application/pdf",
+          createdAt: new Date("2026-01-02T00:00:00Z"),
+        },
+      ],
+    },
     deletionRequests: {
       find: async () => [],
       findOne: async () => null,
@@ -106,6 +128,9 @@ function createService(overrides = {}) {
     repositories.savedSearches,
     repositories.notifications,
     repositories.deletionRequests,
+    repositories.resumeVersions,
+    repositories.premiumOrders,
+    repositories.applicationDocuments,
     { record: async (event) => audits.push(event) },
   );
   return {
@@ -132,6 +157,11 @@ test("candidate export includes their records without exposing storage object pa
   assert.equal("photoPath" in result.profile, false);
   assert.equal("resumePath" in result.profile, false);
   assert.equal("resumePath" in result.applications[0], false);
+  assert.deepEqual(result.applications[0].applicationAnswers, [
+    { questionId: "q1", answer: "Yes" },
+  ]);
+  assert.equal("filePath" in result.applicationDocuments[0], false);
+  assert.equal(result.applicationDocuments[0].fileName, "portfolio.pdf");
   assert.equal(result.applications[0].job.title, "Engineer");
   assert.equal(result.applications[0].offer.termsSummary, "Offer summary");
   assert.equal(result.applications[0].messages[0].message, "Thank you");

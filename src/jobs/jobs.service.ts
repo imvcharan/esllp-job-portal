@@ -194,7 +194,7 @@ export class JobsService {
     actor: AuthenticatedUser,
     ipAddress?: string,
   ): Promise<
-    Job & { notificationDelivery?: { sent: number; failed: number } }
+    Job & { notificationDelivery?: { queued: number; failed: number } }
   > {
     this.assertDeadlineAllowsPublishing(dto.isActive, dto.applicationDeadline);
     if (dto.isActive) {
@@ -228,6 +228,8 @@ export class JobsService {
         experience: dto.experience?.trim() || null,
         description: dto.description?.trim() || null,
         isActive: dto.isActive ?? false,
+        moderationStatus: dto.isActive ? "approved" : "draft",
+        moderationNote: null,
         organizationId: employerOrganizationId,
       }),
     );
@@ -254,7 +256,7 @@ export class JobsService {
     actor: AuthenticatedUser,
     ipAddress?: string,
   ): Promise<
-    (Job & { notificationDelivery?: { sent: number; failed: number } }) | null
+    (Job & { notificationDelivery?: { queued: number; failed: number } }) | null
   > {
     const job = await this.jobsRepository.findOneBy({ id });
     if (!job) {
@@ -296,6 +298,8 @@ export class JobsService {
     }
 
     Object.assign(job, dto);
+    if (dto.isActive !== undefined)
+      job.moderationStatus = dto.isActive ? "approved" : "closed";
     if (dto.title !== undefined) job.title = dto.title.trim();
     if (dto.company !== undefined) job.company = dto.company.trim();
     if (dto.location !== undefined) job.location = dto.location.trim();
@@ -331,6 +335,7 @@ export class JobsService {
       return null;
     }
     job.isActive = false;
+    job.moderationStatus = "closed";
     const archived = await this.jobsRepository.save(job);
     await this.auditService.record({
       actorUserId: actor.id,
@@ -341,6 +346,48 @@ export class JobsService {
       ipAddress,
     });
     return archived;
+  }
+
+  async moderate(
+    id: number,
+    status: "approved" | "rejected" | "paused",
+    reason: string,
+    actor: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    const job = await this.jobsRepository.findOneBy({ id });
+    if (!job) throw new NotFoundException(`Job ${id} was not found`);
+    const previousStatus = job.moderationStatus;
+    const wasActive = job.isActive;
+    job.moderationStatus = status;
+    job.moderationNote = reason.trim();
+    job.isActive = status === "approved";
+    if (job.isActive) {
+      const readinessError = jobPublicationError(job);
+      if (readinessError) throw new BadRequestException(readinessError);
+      this.assertDeadlineAllowsPublishing(
+        job.isActive,
+        job.applicationDeadline,
+      );
+    }
+    const saved = await this.jobsRepository.save(job);
+    await this.auditService.record({
+      actorUserId: actor.id,
+      action: `job.moderation_${status}`,
+      targetType: "job",
+      targetId: saved.id,
+      details: {
+        previousStatus,
+        status,
+        reason: saved.moderationNote,
+      },
+      ipAddress,
+    });
+    const notificationDelivery =
+      status === "approved" && !wasActive
+        ? await this.notifyMatchingCandidates(saved)
+        : undefined;
+    return { ...saved, notificationDelivery };
   }
 
   async permanentlyDelete(
@@ -468,7 +515,32 @@ export class JobsService {
         const employmentMatches =
           !profile.employmentTypes.length ||
           profile.employmentTypes.includes(job.employmentType);
-        return roleMatches && workplaceMatches && employmentMatches;
+        const preferredLocations = profile.location
+          .split(/[,;|]/)
+          .map((value) => value.trim().toLocaleLowerCase())
+          .filter(Boolean);
+        const jobLocation = job.location.toLocaleLowerCase();
+        const locationMatches =
+          !preferredLocations.length ||
+          preferredLocations.some(
+            (preferred) =>
+              jobLocation.includes(preferred) ||
+              (preferred.includes("remote") && job.workplaceType === "remote"),
+          );
+        const salary = profile.salaryPreferences;
+        const salaryMatches =
+          !salary.minimum ||
+          (job.salaryMin !== null &&
+            job.salaryMin >= salary.minimum &&
+            (!salary.currency || salary.currency === job.salaryCurrency) &&
+            (!salary.period || salary.period === job.salaryPeriod));
+        return (
+          roleMatches &&
+          workplaceMatches &&
+          employmentMatches &&
+          locationMatches &&
+          salaryMatches
+        );
       });
       let savedSearches: Awaited<
         ReturnType<CandidateSavedSearchesService["matchingForJob"]>
@@ -490,7 +562,7 @@ export class JobsService {
           ...savedSearches.map((search) => search.userId),
         ]),
       ];
-      if (!userIds.length) return { sent: 0, failed: savedSearchFailure };
+      if (!userIds.length) return { queued: 0, failed: savedSearchFailure };
       const recipients = await this.usersRepository.findBy(
         userIds.map((id) => ({ id, isActive: true })),
       );
@@ -510,26 +582,27 @@ export class JobsService {
             recipient.email,
             `New job matching your preferences: ${job.title}`,
             `${job.title} at ${job.company} in ${job.location} matches your saved job preferences${matchingSearches.has(recipient.id) ? ` (${matchingSearches.get(recipient.id)?.join(", ")})` : ""}.${jobUrl ? ` View this listing: ${jobUrl}` : ""}`,
+            `job-alert:${job.id}:${recipient.id}:${job.createdAt.toISOString()}`,
           ),
         ),
       );
-      const sent = results.filter(
+      const queued = results.filter(
         (result) => result.status === "fulfilled",
       ).length;
-      const failed = results.length - sent + savedSearchFailure;
+      const failed = results.length - queued + savedSearchFailure;
       if (failed) {
         this.logger.error(
-          `${failed} job alert email(s) could not be delivered for job ${job.id}.`,
+          `${failed} job alert email(s) could not be queued for job ${job.id}.`,
         );
       }
-      return { sent, failed };
+      return { queued, failed };
     } catch (error) {
       this.logger.error(
         `Job alerts could not be processed for job ${job.id}: ${
           error instanceof Error ? error.message : "unknown notification error"
         }`,
       );
-      return { sent: 0, failed: 1 };
+      return { queued: 0, failed: 1 };
     }
   }
 }

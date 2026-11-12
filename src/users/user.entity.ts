@@ -5,67 +5,105 @@ import {
   Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-} from 'typeorm';
+} from "typeorm";
 
 export enum UserRole {
-  CANDIDATE = 'candidate',
-  EMPLOYER = 'employer',
-  STAFF = 'staff',
-  ADMIN = 'admin',
-  SUPERADMIN = 'superadmin',
+  CANDIDATE = "candidate",
+  EMPLOYER = "employer",
+  STAFF = "staff",
+  ADMIN = "admin",
+  SUPERADMIN = "superadmin",
 }
 
 export enum EmployerApprovalStatus {
-  NOT_APPLICABLE = 'not_applicable',
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
+  NOT_APPLICABLE = "not_applicable",
+  PENDING = "pending",
+  APPROVED = "approved",
+  REJECTED = "rejected",
 }
 
-@Entity({ name: 'users' })
+@Entity({ name: "users" })
 export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Index({ unique: true })
+  @Index("UQ_users_google_subject", { unique: true })
   @Column({ length: 254 })
   email!: string;
 
-  @Column({ name: 'password_hash', length: 100, select: false })
+  @Column({ name: "password_hash", length: 100, select: false })
   passwordHash!: string;
 
-  @Column({ name: 'display_name', length: 120 })
+  @Column({ name: "display_name", length: 120 })
   displayName!: string;
 
-  @Column({ name: 'company_name', type: 'varchar', length: 160, nullable: true })
+  @Index("UQ_users_username", { unique: true })
+  @Column({ type: "varchar", length: 30, nullable: true })
+  username!: string | null;
+
+  @Index("UQ_users_phone_e164", { unique: true })
+  @Column({ name: "phone_e164", type: "varchar", length: 16, nullable: true })
+  phoneE164!: string | null;
+
+  @Column({
+    name: "pending_phone_e164",
+    type: "varchar",
+    length: 16,
+    nullable: true,
+  })
+  pendingPhoneE164!: string | null;
+
+  @Column({ name: "phone_verified", type: "boolean", default: false })
+  phoneVerified!: boolean;
+
+  @Column({
+    name: "company_name",
+    type: "varchar",
+    length: 160,
+    nullable: true,
+  })
   companyName!: string | null;
 
-  @Column({ name: 'company_website', type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: "company_website",
+    type: "varchar",
+    length: 500,
+    nullable: true,
+  })
   companyWebsite!: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: UserRole.CANDIDATE })
+  @Column({ type: "varchar", length: 20, default: UserRole.CANDIDATE })
   role!: UserRole;
 
   @Column({
-    name: 'employer_approval_status',
-    type: 'varchar',
+    name: "employer_approval_status",
+    type: "varchar",
     length: 20,
     default: EmployerApprovalStatus.NOT_APPLICABLE,
   })
   employerApprovalStatus!: EmployerApprovalStatus;
 
-  @Column({ name: 'email_verified', type: 'boolean', default: false })
+  @Column({ name: "email_verified", type: "boolean", default: false })
   emailVerified!: boolean;
 
-  @Column({ name: 'is_active', type: 'boolean', default: true })
+  @Column({ name: "is_active", type: "boolean", default: true })
   isActive!: boolean;
 
-  @Column({ name: 'must_change_password', type: 'boolean', default: false })
+  @Column({ name: "must_change_password", type: "boolean", default: false })
   mustChangePassword!: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @Index({ unique: true })
+  @Column({
+    name: "google_subject",
+    type: "varchar",
+    length: 255,
+    nullable: true,
+  })
+  googleSubject!: string | null;
+
+  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
   updatedAt!: Date;
 }

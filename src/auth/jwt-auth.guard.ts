@@ -50,10 +50,10 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException("This account is unavailable");
     }
     const allowsForcedPasswordChange =
-      this.reflector.getAllAndOverride<boolean>(
-        ALLOW_FORCED_PASSWORD_CHANGE,
-        [context.getHandler(), context.getClass()],
-      );
+      this.reflector.getAllAndOverride<boolean>(ALLOW_FORCED_PASSWORD_CHANGE, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
     if (user.mustChangePassword && !allowsForcedPasswordChange) {
       throw new ForbiddenException(
         "Change your temporary password before continuing.",
@@ -76,6 +76,8 @@ export class JwtAuthGuard implements CanActivate {
       role: user.role,
       employerApprovalStatus: user.employerApprovalStatus,
       mustChangePassword: user.mustChangePassword,
+      username: user.username ?? `user-${user.id}`,
+      phoneVerified: user.phoneVerified,
     };
     return true;
   }

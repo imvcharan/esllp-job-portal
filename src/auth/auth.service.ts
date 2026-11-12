@@ -7,11 +7,17 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
+import { OAuth2Client } from "google-auth-library";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { compare, hash } from "bcryptjs";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { DataSource, IsNull, Repository } from "typeorm";
+import {
+  createHash,
+  randomBytes,
+  randomInt,
+  timingSafeEqual,
+} from "node:crypto";
+import { DataSource, IsNull, QueryFailedError, Repository } from "typeorm";
 import { AuthToken, AuthTokenPurpose } from "./auth-token.entity";
 import { EmailDeliveryService } from "./email-delivery.service";
 import { AuthenticatedUser } from "./auth.types";
@@ -29,6 +35,7 @@ import {
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
 import { AuditService } from "../audit/audit.service";
+import { SmsDeliveryService } from "./sms-delivery.service";
 
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -36,6 +43,7 @@ const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly googleClient = new OAuth2Client();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -47,13 +55,21 @@ export class AuthService {
     @InjectRepository(AuthToken)
     private readonly tokensRepository: Repository<AuthToken>,
     private readonly emailDelivery: EmailDeliveryService,
+    private readonly smsDelivery: SmsDeliveryService,
     private readonly auditService: AuditService,
   ) {}
 
   async registerCandidate(
     dto: RegisterDto,
-  ): Promise<{ id: number; email: string }> {
+  ): Promise<{
+    id: number;
+    email: string;
+    phoneNumber: string;
+    message: string;
+  }> {
     const email = this.normalizeEmail(dto.email);
+    this.smsDelivery.assertConfigured();
+    const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber);
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
       throw new BadRequestException(
         "Password must be no longer than 72 UTF-8 bytes",
@@ -63,13 +79,34 @@ export class AuthService {
       throw new ConflictException("An account with this email already exists");
     }
 
+    if (await this.usersRepository.findOneBy({ phoneE164: phoneNumber })) {
+      throw new ConflictException(
+        "That phone number is already associated with an account.",
+      );
+    }
+
     const user = this.usersRepository.create({
       email,
       passwordHash: await hash(dto.password, 12),
       displayName: dto.displayName.trim(),
       role: UserRole.CANDIDATE,
+      phoneE164: phoneNumber,
+      phoneVerified: false,
     });
     const saved = await this.usersRepository.save(user);
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    await this.issueOtp(saved, code, "phone_verification", phoneNumber);
+    let phoneCodeSent = true;
+    try {
+      await this.smsDelivery.sendVerificationCode(phoneNumber, code);
+    } catch (error) {
+      phoneCodeSent = false;
+      this.logger.error(
+        `Candidate registration SMS delivery failed for user ${saved.id}: ${
+          error instanceof Error ? error.message : "unknown SMS delivery error"
+        }`,
+      );
+    }
     await this.auditService.record({
       actorUserId: saved.id,
       action: "auth.candidate_registered",
@@ -77,8 +114,23 @@ export class AuthService {
       targetId: saved.id,
       details: { role: saved.role },
     });
-    await this.sendVerification(saved);
-    return { id: saved.id, email: saved.email };
+    try {
+      await this.sendVerification(saved);
+    } catch (error) {
+      this.logger.error(
+        `Candidate registration verification email failed for user ${saved.id}: ${
+          error instanceof Error ? error.message : "unknown delivery error"
+        }`,
+      );
+    }
+    return {
+      id: saved.id,
+      email: saved.email,
+      phoneNumber,
+      message: phoneCodeSent
+        ? "Account created. Verify your email using the link we sent and enter the SMS code before signing in."
+        : "Account created. Verify your email using the link we sent. The SMS could not be sent; use the resend code option before signing in.",
+    };
   }
 
   async bootstrapSuperadminStatus(): Promise<{ available: boolean }> {
@@ -183,8 +235,15 @@ export class AuthService {
 
   async registerEmployer(
     dto: RegisterEmployerDto,
-  ): Promise<{ id: number; email: string; message: string }> {
+  ): Promise<{
+    id: number;
+    email: string;
+    phoneNumber: string;
+    message: string;
+  }> {
     const email = this.normalizeEmail(dto.email);
+    this.smsDelivery.assertConfigured();
+    const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber);
     const companyName = dto.companyName?.trim();
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
       throw new BadRequestException(
@@ -199,6 +258,11 @@ export class AuthService {
     if (await this.usersRepository.findOneBy({ email })) {
       throw new ConflictException("An account with this email already exists");
     }
+    if (await this.usersRepository.findOneBy({ phoneE164: phoneNumber })) {
+      throw new ConflictException(
+        "That phone number is already associated with an account.",
+      );
+    }
 
     const user = this.usersRepository.create({
       email,
@@ -208,6 +272,8 @@ export class AuthService {
       companyWebsite: dto.companyWebsite?.trim() || null,
       role: UserRole.EMPLOYER,
       employerApprovalStatus: EmployerApprovalStatus.PENDING,
+      phoneE164: phoneNumber,
+      phoneVerified: false,
     });
     const registration = await this.dataSource.transaction(async (manager) => {
       const savedUser = await manager.getRepository(User).save(user);
@@ -271,6 +337,19 @@ export class AuthService {
       return { user: savedUser, invited: false };
     });
     const saved = registration.user;
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    await this.issueOtp(saved, code, "phone_verification", phoneNumber);
+    let phoneCodeSent = true;
+    try {
+      await this.smsDelivery.sendVerificationCode(phoneNumber, code);
+    } catch (error) {
+      phoneCodeSent = false;
+      this.logger.error(
+        `Employer registration SMS delivery failed for user ${saved.id}: ${
+          error instanceof Error ? error.message : "unknown SMS delivery error"
+        }`,
+      );
+    }
     await this.auditService.record({
       actorUserId: saved.id,
       action: "auth.employer_registered",
@@ -293,9 +372,12 @@ export class AuthService {
     return {
       id: saved.id,
       email: saved.email,
-      message: registration.invited
-        ? "Company invitation recorded. Verify your email to preview the read-only workspace while your employer account awaits administrator approval."
-        : "Employer registration received. Verify your email to preview the read-only workspace while your account awaits administrator approval.",
+      phoneNumber,
+      message: phoneCodeSent
+        ? registration.invited
+          ? "Company invitation recorded. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
+          : "Employer registration received. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
+        : "Account created. Verify your email, then request a new SMS code before signing in.",
     };
   }
 
@@ -328,6 +410,12 @@ export class AuthService {
         "Verify your email before signing in. You can request a new verification link.",
       );
     }
+    if (user.phoneE164 && !user.phoneVerified) {
+      await this.recordLoginFailure(user.id, "phone_not_verified");
+      throw new UnauthorizedException(
+        "Verify your mobile number before signing in. Request a new SMS code from the registration verification page.",
+      );
+    }
     if (
       user.role === UserRole.EMPLOYER &&
       ![
@@ -349,6 +437,164 @@ export class AuthService {
       targetType: "user",
       targetId: user.id,
       details: { role: user.role },
+    });
+    return session;
+  }
+
+  async requestEmailOtp(emailInput: string): Promise<{ message: string }> {
+    const user = await this.usersRepository.findOneBy({
+      email: this.normalizeEmail(emailInput),
+      isActive: true,
+      role: UserRole.CANDIDATE,
+      emailVerified: true,
+    });
+    if (user && (!user.phoneE164 || user.phoneVerified)) {
+      const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      await this.issueOtp(user, code, "email_otp", user.email);
+      try {
+        await this.emailDelivery.sendLoginCode(user.email, code);
+      } catch (error) {
+        this.logger.error(
+          `Candidate sign-in code delivery failed: ${
+            error instanceof Error ? error.message : "unknown delivery error"
+          }`,
+        );
+        throw error;
+      }
+    }
+    return {
+      message:
+        "If a verified candidate account exists for that email, a sign-in code will be sent.",
+    };
+  }
+
+  async verifyEmailOtp(
+    emailInput: string,
+    code: string,
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: AuthenticatedUser;
+  }> {
+    const email = this.normalizeEmail(emailInput);
+    const user = await this.usersRepository.findOneBy({
+      email,
+      isActive: true,
+      role: UserRole.CANDIDATE,
+      emailVerified: true,
+    });
+    if (
+      !user ||
+      (user.phoneE164 && !user.phoneVerified) ||
+      !(await this.consumeOtp(user.id, code, "email_otp", user.email))
+    ) {
+      await this.recordLoginFailure(user?.id ?? null, "invalid_email_otp");
+      throw new UnauthorizedException("Email or code is incorrect or expired.");
+    }
+    const session = await this.createSession(user);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.login",
+      targetType: "user",
+      targetId: user.id,
+      details: { role: user.role, method: "email_otp" },
+    });
+    return session;
+  }
+
+  async googleSignIn(idToken: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: AuthenticatedUser;
+  }> {
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+    if (!clientId) {
+      throw new ServiceUnavailableException(
+        "Google sign-in is not configured for this deployment.",
+      );
+    }
+    let payload;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken,
+        audience: clientId,
+      });
+      payload = ticket.getPayload();
+    } catch (error) {
+      await this.recordLoginFailure(null, "invalid_google_token");
+      throw new UnauthorizedException("Google sign-in could not be verified.", {
+        cause: error,
+      });
+    }
+    if (!payload?.sub || !payload.email || payload.email_verified !== true) {
+      await this.recordLoginFailure(null, "unverified_google_email");
+      throw new UnauthorizedException(
+        "Use a Google account with a verified email address.",
+      );
+    }
+
+    const email = this.normalizeEmail(payload.email);
+    let user = await this.usersRepository.findOneBy({
+      googleSubject: payload.sub,
+    });
+    if (user) {
+      if (
+        !user.isActive ||
+        user.email !== email ||
+        user.role !== UserRole.CANDIDATE
+      ) {
+        throw new UnauthorizedException(
+          "This Google account is not linked to an available candidate account.",
+        );
+      }
+    } else {
+      user = await this.usersRepository.findOneBy({ email });
+      if (user && !user.isActive) {
+        throw new UnauthorizedException("This account is unavailable.");
+      }
+      if (user && user.role !== UserRole.CANDIDATE) {
+        throw new UnauthorizedException(
+          "Google sign-in is available for candidate accounts only.",
+        );
+      }
+      if (user && user.googleSubject && user.googleSubject !== payload.sub) {
+        throw new UnauthorizedException(
+          "This candidate account is linked to a different Google account.",
+        );
+      }
+      if (!user) {
+        throw new BadRequestException(
+          "To create a new account, register with your email and mobile number so both can be verified. You can link Google after signing in.",
+        );
+      } else {
+        user.googleSubject = payload.sub;
+        user.emailVerified = true;
+      }
+      try {
+        user = await this.usersRepository.save(user);
+      } catch (error) {
+        if (
+          !(error instanceof QueryFailedError) ||
+          !this.isUniqueViolation(error)
+        ) {
+          throw error;
+        }
+        user = await this.usersRepository.findOneBy({
+          googleSubject: payload.sub,
+          email,
+          role: UserRole.CANDIDATE,
+        });
+        if (!user?.isActive) throw error;
+      }
+    }
+
+    const session = await this.createSession(user);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.login",
+      targetType: "user",
+      targetId: user.id,
+      details: { role: user.role, method: "google" },
     });
     return session;
   }
@@ -411,6 +657,168 @@ export class AuthService {
     };
   }
 
+  async requestRegistrationPhoneVerification(
+    emailInput: string,
+  ): Promise<{ message: string }> {
+    const user = await this.usersRepository.findOneBy({
+      email: this.normalizeEmail(emailInput),
+      isActive: true,
+    });
+    if (user?.phoneE164 && !user.phoneVerified) {
+      const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      await this.issueOtp(user, code, "phone_verification", user.phoneE164);
+      await this.smsDelivery.sendVerificationCode(user.phoneE164, code);
+    }
+    return {
+      message:
+        "If the account needs phone verification, a new code will be sent.",
+    };
+  }
+
+  async verifyRegistrationPhone(
+    emailInput: string,
+    code: string,
+  ): Promise<{ message: string }> {
+    const user = await this.usersRepository.findOneBy({
+      email: this.normalizeEmail(emailInput),
+      isActive: true,
+    });
+    const phoneNumber = user?.pendingPhoneE164 ?? user?.phoneE164;
+    if (
+      !user ||
+      !phoneNumber ||
+      !(await this.consumeOtp(user.id, code, "phone_verification", phoneNumber))
+    ) {
+      throw new UnauthorizedException(
+        "Phone number or verification code is incorrect or expired.",
+      );
+    }
+    await this.usersRepository.update(
+      { id: user.id },
+      {
+        phoneE164: phoneNumber,
+        pendingPhoneE164: null,
+        phoneVerified: true,
+      },
+    );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.phone_verified",
+      targetType: "user",
+      targetId: user.id,
+    });
+    return {
+      message: user.emailVerified
+        ? "Phone verified. Your email and phone are verified; you can now sign in."
+        : "Phone verified. Verify your email before signing in.",
+    };
+  }
+
+  async requestPhoneChange(
+    userId: number,
+    phoneInput: string,
+  ): Promise<{ message: string }> {
+    this.smsDelivery.assertConfigured();
+    const phoneNumber = this.normalizePhoneNumber(phoneInput);
+    const existing = await this.usersRepository.findOneBy({
+      phoneE164: phoneNumber,
+    });
+    if (existing && existing.id !== userId) {
+      throw new ConflictException(
+        "That phone number is already associated with another account.",
+      );
+    }
+    const user = await this.usersRepository.findOneBy({
+      id: userId,
+      isActive: true,
+    });
+    if (!user) throw new NotFoundException("Account was not found.");
+    if (user.phoneE164 === phoneNumber && user.phoneVerified) {
+      throw new BadRequestException("That mobile number is already verified.");
+    }
+    user.pendingPhoneE164 = phoneNumber;
+    await this.usersRepository.save(user);
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    await this.issueOtp(user, code, "phone_verification", phoneNumber);
+    await this.smsDelivery.sendVerificationCode(phoneNumber, code);
+    return {
+      message: "A verification code was sent to the new mobile number.",
+    };
+  }
+
+  async verifyPhoneChange(
+    userId: number,
+    code: string,
+  ): Promise<{ message: string }> {
+    const user = await this.usersRepository.findOneBy({
+      id: userId,
+      isActive: true,
+    });
+    const phoneNumber = user?.pendingPhoneE164;
+    if (
+      !user ||
+      !phoneNumber ||
+      !(await this.consumeOtp(user.id, code, "phone_verification", phoneNumber))
+    ) {
+      throw new UnauthorizedException(
+        "Mobile number or verification code is incorrect or expired.",
+      );
+    }
+    await this.usersRepository.update(
+      { id: user.id },
+      {
+        phoneE164: phoneNumber,
+        pendingPhoneE164: null,
+        phoneVerified: true,
+      },
+    );
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.phone_number_changed",
+      targetType: "user",
+      targetId: user.id,
+    });
+    return { message: "Your mobile number has been verified and updated." };
+  }
+
+  async updateUsername(
+    userId: number,
+    usernameInput: string,
+  ): Promise<{ username: string }> {
+    const username = usernameInput.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{2,29}$/.test(username)) {
+      throw new BadRequestException(
+        "Username must be 3–30 characters using letters, numbers, and hyphens; it must start with a letter or number.",
+      );
+    }
+    const user = await this.usersRepository.findOneBy({
+      id: userId,
+      isActive: true,
+    });
+    if (!user) throw new NotFoundException("Account was not found.");
+    const conflict = await this.usersRepository.findOneBy({ username });
+    if (conflict && conflict.id !== user.id) {
+      throw new ConflictException("That username is already taken.");
+    }
+    user.username = username;
+    try {
+      await this.usersRepository.save(user);
+    } catch (error) {
+      if (error instanceof QueryFailedError && this.isUniqueViolation(error)) {
+        throw new ConflictException("That username is already taken.");
+      }
+      throw error;
+    }
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "account.username_changed",
+      targetType: "user",
+      targetId: user.id,
+      details: { username },
+    });
+    return { username };
+  }
+
   async verifyEmail(rawToken: string): Promise<{ message: string }> {
     const userId = await this.consumeEmailToken(rawToken, "email_verification");
     await this.usersRepository.update(
@@ -435,10 +843,17 @@ export class AuthService {
     ) {
       return {
         message:
-          "Email address verified. You can sign in to a read-only workspace while your employer account awaits administrator approval.",
+          user.phoneE164 && !user.phoneVerified
+            ? "Email address verified. Verify your mobile number before signing in; employer publishing also requires administrator approval."
+            : "Email address verified. You can sign in to a read-only workspace while your employer account awaits administrator approval.",
       };
     }
-    return { message: "Email address verified. You can now sign in." };
+    return {
+      message:
+        user.phoneE164 && !user.phoneVerified
+          ? "Email address verified. Verify your mobile number before signing in."
+          : "Email address verified. You can now sign in.",
+    };
   }
 
   async resetPassword(
@@ -612,11 +1027,23 @@ export class AuthService {
       role: user.role,
       employerApprovalStatus: user.employerApprovalStatus,
       mustChangePassword: user.mustChangePassword,
+      username: user.username ?? `user-${user.id}`,
+      phoneVerified: user.phoneVerified,
     };
   }
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  private normalizePhoneNumber(phoneNumber: string): string {
+    const normalized = phoneNumber.trim().replace(/[\s().-]/g, "");
+    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+      throw new BadRequestException(
+        "Enter a valid international mobile number including its country code, such as +919876543210.",
+      );
+    }
+    return normalized;
   }
 
   private recordLoginFailure(
@@ -654,7 +1081,7 @@ export class AuthService {
       user.email,
       "Verify your esllp email",
       "verify your email",
-      this.buildAccountLink("verify-email", token),
+      this.buildAccountLink("verify-email", token, user.email),
     );
   }
 
@@ -687,6 +1114,77 @@ export class AuthService {
       );
     }
     return token;
+  }
+
+  private async issueOtp(
+    user: User,
+    code: string,
+    purpose: "email_otp" | "phone_verification",
+    destination: string,
+  ): Promise<void> {
+    await this.tokensRepository.update(
+      { userId: user.id, purpose, usedAt: IsNull() },
+      { usedAt: new Date() },
+    );
+    await this.tokensRepository.save(
+      this.tokensRepository.create({
+        tokenHash: this.hashToken(
+          `${purpose}:${user.id}:${destination}:${code}`,
+        ),
+        userId: user.id,
+        purpose,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        usedAt: null,
+      }),
+    );
+  }
+
+  private async consumeOtp(
+    userId: number,
+    code: string,
+    purpose: "email_otp" | "phone_verification",
+    destination: string,
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      const tokens = manager.getRepository(AuthToken);
+      const token = await tokens
+        .createQueryBuilder("token")
+        .where("token.userId = :userId", { userId })
+        .andWhere("token.purpose = :purpose", { purpose })
+        .andWhere("token.usedAt IS NULL")
+        .andWhere("token.expiresAt > :now", { now: new Date() })
+        .orderBy("token.createdAt", "DESC")
+        .setLock("pessimistic_write")
+        .getOne();
+      if (!token || token.attempts >= 5) return false;
+      const expected = Buffer.from(
+        this.hashToken(`${purpose}:${userId}:${destination}:${code}`),
+        "hex",
+      );
+      const supplied = Buffer.from(token.tokenHash, "hex");
+      if (
+        expected.length === supplied.length &&
+        timingSafeEqual(expected, supplied)
+      ) {
+        token.usedAt = new Date();
+        await tokens.save(token);
+        return true;
+      }
+      token.attempts += 1;
+      if (token.attempts >= 5) token.usedAt = new Date();
+      await tokens.save(token);
+      return false;
+    });
+  }
+
+  private isUniqueViolation(error: QueryFailedError): boolean {
+    const driverError = error.driverError;
+    return (
+      typeof driverError === "object" &&
+      driverError !== null &&
+      "code" in driverError &&
+      driverError.code === "23505"
+    );
   }
 
   private async consumeEmailToken(
@@ -722,7 +1220,11 @@ export class AuthService {
     return user.id;
   }
 
-  private buildAccountLink(action: string, token: string): string {
+  private buildAccountLink(
+    action: string,
+    token: string,
+    email?: string,
+  ): string {
     const configuredUrl = process.env.PUBLIC_APP_URL?.trim();
     if (!configuredUrl) {
       throw new ServiceUnavailableException(
@@ -746,7 +1248,9 @@ export class AuthService {
         "PUBLIC_APP_URL must use HTTPS in production.",
       );
     }
-    baseUrl.hash = `#${action}?token=${encodeURIComponent(token)}`;
+    const parameters = new URLSearchParams({ token });
+    if (email) parameters.set("email", email);
+    baseUrl.hash = `#${action}?${parameters.toString()}`;
     return baseUrl.toString();
   }
 }

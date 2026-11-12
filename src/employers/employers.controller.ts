@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from "@nestjs/common";
@@ -39,6 +40,8 @@ import {
 } from "./dto/employer-workflow.dto";
 import { UpdateApplicationStatusDto } from "../users/dto/update-application-status.dto";
 import { EmployersService } from "./employers.service";
+import { CreateEmployerSavedSearchDto } from "./dto/employer-saved-search.dto";
+import { EmployerApplicationScorecardDto } from "./dto/employer-application-scorecard.dto";
 import { CreateCandidateApplicationMessageDto } from "../users/dto/create-candidate-application-message.dto";
 import { ResolveCandidateWithdrawalDto } from "../users/dto/resolve-candidate-withdrawal.dto";
 import {
@@ -192,6 +195,75 @@ export class EmployersController {
     );
   }
 
+  @Get("candidates")
+  @Header("Cache-Control", "private, no-store")
+  candidates(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query("q") query = "",
+    @Query("page", new DefaultValuePipe(1), ParseIntPipe) page = 1,
+    @Query("limit", new DefaultValuePipe(20), ParseIntPipe) limit = 20,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.searchCandidates(
+      user,
+      query,
+      page,
+      limit,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("candidates/:candidateId/resume")
+  @Header("Cache-Control", "private, no-store")
+  unlockCandidateResume(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("candidateId", ParseIntPipe) candidateId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.unlockCandidateResume(
+      user,
+      candidateId,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Get("candidate-searches")
+  candidateSearches(
+    @CurrentUser() user: AuthenticatedUser,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.listCandidateSearches(
+      user,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("candidate-searches")
+  saveCandidateSearch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: CreateEmployerSavedSearchDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.saveCandidateSearch(
+      user,
+      body,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Delete("candidate-searches/:searchId")
+  deleteCandidateSearch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("searchId", ParseIntPipe) searchId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.deleteCandidateSearch(
+      user,
+      searchId,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
   @Patch("applications/:applicationId/status")
   updateApplicationStatus(
     @CurrentUser() user: AuthenticatedUser,
@@ -204,6 +276,21 @@ export class EmployersController {
       applicationId,
       body.status,
       body.note,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Put("applications/:applicationId/scorecard")
+  saveApplicationScorecard(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Body() dto: EmployerApplicationScorecardDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.saveApplicationScorecard(
+      user,
+      applicationId,
+      dto,
       optionalOrganizationId(organizationId),
     );
   }

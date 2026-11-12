@@ -24,6 +24,10 @@ import { CandidateDeletionRequest } from "../users/candidate-deletion-request.en
 import { CandidateProfile } from "../users/candidate-profile.entity";
 import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
 import { CandidateSavedSearch } from "../users/candidate-saved-search.entity";
+import { CandidatePremiumOrder } from "../users/candidate-premium-order.entity";
+import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
+import { CandidateResumeVersion } from "../users/candidate-resume-version.entity";
+import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
 import {
   EmployerOrganizationMember,
   OrganizationMemberRole,
@@ -52,6 +56,7 @@ export class AdminUsersService {
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     private readonly auditService: AuditService,
+    private readonly candidateFileStorage: CandidateFileStorageService,
   ) {}
 
   async list(
@@ -240,6 +245,7 @@ export class AdminUsersService {
           notifications,
           deletionRequests,
           reports,
+          premiumOrders,
         ] = await Promise.all([
           manager
             .getRepository(CandidateApplication)
@@ -291,6 +297,9 @@ export class AdminUsersService {
               { targetType: ReportTargetType.USER, targetId: targetUserId },
             ],
           }),
+          manager
+            .getRepository(CandidatePremiumOrder)
+            .countBy({ userId: targetUserId }),
         ]);
         const linkedRecordLabels = [
           applications && "candidate applications",
@@ -308,11 +317,32 @@ export class AdminUsersService {
           notifications && "notifications",
           deletionRequests && "privacy requests",
           reports && "moderation reports",
+          premiumOrders && "candidate premium orders",
         ].filter((label): label is string => Boolean(label));
         if (linkedRecordLabels.length) {
           throw new ConflictException(
             `This account has linked ${linkedRecordLabels[0]} and cannot be permanently deleted. Deactivate it instead to preserve history.`,
           );
+        }
+
+        if (user.role === UserRole.CANDIDATE) {
+          const [applicationDocuments, resumeVersions] = await Promise.all([
+            manager.getRepository(CandidateApplicationDocument).find({
+              where: { userId: targetUserId },
+              select: { filePath: true },
+            }),
+            manager.getRepository(CandidateResumeVersion).find({
+              where: { userId: targetUserId },
+              select: { storagePath: true },
+            }),
+          ]);
+          const filePaths = [
+            ...new Set([
+              ...applicationDocuments.map(({ filePath }) => filePath),
+              ...resumeVersions.map(({ storagePath }) => storagePath),
+            ]),
+          ];
+          await this.candidateFileStorage.removeMany(filePaths);
         }
 
         const deletedUser = { email: user.email, role: user.role };

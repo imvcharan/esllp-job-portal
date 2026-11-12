@@ -26,6 +26,17 @@ import { EmployerApplicationNote } from "../employers/employer-application-note.
 import { EmployerApplicationTag } from "../employers/employer-application-tag.entity";
 import { UserNotification } from "../employers/user-notification.entity";
 import { Report } from "../reports/report.entity";
+import { CandidatePremiumProduct } from "../users/candidate-premium-product.entity";
+import { CandidatePremiumOrder } from "../users/candidate-premium-order.entity";
+import { AdminCandidatePremiumController } from "../users/candidate-premium.controller";
+import { CandidatePremiumService } from "../users/candidate-premium.service";
+import { PaymentsModule } from "../payments/payments.module";
+import { AdminRazorpayConfigurationController } from "../payments/admin-razorpay-configuration.controller";
+import { AdminEmailOutboxController } from "./admin-email-outbox.controller";
+import { EmailNotificationOutbox } from "../notifications/email-notification-outbox.entity";
+import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
+import { CandidateResumeVersion } from "../users/candidate-resume-version.entity";
+import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
 
 @Module({
   imports: [
@@ -48,16 +59,30 @@ import { Report } from "../reports/report.entity";
       EmployerApplicationTag,
       UserNotification,
       Report,
+      CandidatePremiumProduct,
+      CandidatePremiumOrder,
+      EmailNotificationOutbox,
+      CandidateApplicationDocument,
+      CandidateResumeVersion,
     ]),
     AuditModule,
     AuthModule,
+    PaymentsModule,
   ],
   controllers: [
     AdminUsersController,
     AdminAuditController,
     AdminEmployersController,
     AdminInsightsController,
+    AdminCandidatePremiumController,
+    AdminRazorpayConfigurationController,
+    AdminEmailOutboxController,
   ],
-  providers: [AdminUsersService, AdminInsightsService],
+  providers: [
+    AdminUsersService,
+    AdminInsightsService,
+    CandidatePremiumService,
+    CandidateFileStorageService,
+  ],
 })
 export class AdminModule {}

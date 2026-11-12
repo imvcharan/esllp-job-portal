@@ -22,6 +22,12 @@ import { EmployersService } from "./employers.service";
 import { EmployerApprovalGuard } from "./employer-approval.guard";
 import { CandidateApplicationOffer } from "../users/candidate-application-offer.entity";
 import { CandidateApplicationMessage } from "../users/candidate-application-message.entity";
+import { CandidateProfile } from "../users/candidate-profile.entity";
+import { PaymentsModule } from "../payments/payments.module";
+import { EmployerSavedSearch } from "./employer-saved-search.entity";
+import { PublicCompanyPagesController } from "./public-company-pages.controller";
+import { EmployerApplicationScorecard } from "./employer-application-scorecard.entity";
+import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
 
 @Module({
   imports: [
@@ -37,15 +43,24 @@ import { CandidateApplicationMessage } from "../users/candidate-application-mess
       CandidateApplicationStatus,
       CandidateApplicationOffer,
       CandidateApplicationMessage,
+      CandidateProfile,
       Job,
       User,
+      EmployerSavedSearch,
+      EmployerApplicationScorecard,
+      CandidateApplicationDocument,
     ]),
     AuthModule,
     AuditModule,
     JobsModule,
     CandidateProfileModule,
+    PaymentsModule,
   ],
-  controllers: [EmployersController, RazorpayWebhookController],
+  controllers: [
+    EmployersController,
+    RazorpayWebhookController,
+    PublicCompanyPagesController,
+  ],
   providers: [EmployersService, EmployerApprovalGuard],
 })
 export class EmployersModule {}

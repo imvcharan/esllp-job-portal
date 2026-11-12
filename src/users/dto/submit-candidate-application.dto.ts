@@ -1,4 +1,10 @@
-import { IsBoolean, IsOptional, IsString, MaxLength } from "class-validator";
+import {
+  IsBoolean,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from "class-validator";
 
 export class SubmitCandidateApplicationDto {
   @IsOptional()
@@ -13,4 +19,8 @@ export class SubmitCandidateApplicationDto {
   @IsOptional()
   @IsBoolean()
   shareProfile?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  answers?: Record<string, string>;
 }
