@@ -50,7 +50,7 @@ test("email verification uses route parameters in its submit handler", () => {
 
   assert.match(
     submitHandler,
-    /const actionParams = new URLSearchParams\(\s*location\.hash\.split\("\?"\)\[1\] \|\| "",?\s*\)/,
+    /const actionParams = new URLSearchParams\(\s*currentRouteHash\.split\("\?"\)\[1\] \|\| "",?\s*\)/,
   );
   assert.match(
     submitHandler,
@@ -93,7 +93,28 @@ test("skill filtering is included in public searches and saved-search links", ()
   assert.match(html, /\["skill", "#filter-skill", ""\]/);
   assert.match(html, /skill: readFilter\("#filter-skill", ""\)/);
   assert.match(html, /skill: filters\.skill/);
-  assert.match(html, /history\.replaceState\(null, "", state\.searchHash\)/);
+  assert.match(html, /replaceRoute\(state\.searchHash\)/);
+});
+
+test("public SPA routes use clean paths and restore navigation with browser history", () => {
+  const html = readFileSync("public/index.html", "utf8");
+  const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
+  const applicationScript = scripts.at(-1)?.[1];
+  assert.ok(applicationScript, "main application script exists");
+  const source = ts.createSourceFile(
+    "public/index.html.script.js",
+    applicationScript,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+
+  assert.equal(source.parseDiagnostics.length, 0, "application script parses");
+  assert.match(html, /home: "\/"/);
+  assert.match(html, /"how-it-works-page": "\/how-it-works"/);
+  assert.match(html, /"employer-solutions": "\/for-employers"/);
+  assert.match(html, /window\.addEventListener\("popstate"/);
+  assert.doesNotMatch(html, /window\.addEventListener\("hashchange"/);
 });
 
 test("the public contact route is linked and provides a support destination", () => {

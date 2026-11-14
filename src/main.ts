@@ -7,6 +7,7 @@ import { ValidationPipe } from "@nestjs/common";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { RequestMethod } from "@nestjs/common";
+import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
 import { createRequestContextMiddleware } from "./audit/request-context.middleware";
 
@@ -35,6 +36,34 @@ async function bootstrap(): Promise<void> {
   app.use(createRequestContextMiddleware());
   app.useStaticAssets(resolve(process.cwd(), "public"), {
     index: "index.html",
+  });
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    const path = request.path;
+    if (
+      request.method !== "GET" ||
+      path === "/api" ||
+      path.startsWith("/api/") ||
+      path === "/admin" ||
+      path.startsWith("/admin/") ||
+      path === "/setup-superadmin" ||
+      path.startsWith("/setup-superadmin/") ||
+      path.startsWith("/share/") ||
+      path.startsWith("/pages/") ||
+      path.startsWith("/jobs/categories/") ||
+      path.startsWith("/jobs/locations/") ||
+      path === "/health/live" ||
+      path === "/health/ready" ||
+      /\.[^/]+$/.test(path)
+    ) {
+      next();
+      return;
+    }
+    response.sendFile(
+      resolve(process.cwd(), "public", "index.html"),
+      (error?: Error) => {
+        if (error) next(error);
+      },
+    );
   });
   app.setGlobalPrefix("api", {
     exclude: [

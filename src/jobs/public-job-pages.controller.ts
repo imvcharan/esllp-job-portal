@@ -108,7 +108,7 @@ export class PublicJobPagesController {
 
     const origin = publicOrigin();
     const canonical = `${origin}/share/jobs/${job.id}`;
-    const appJobUrl = `${origin}/#job/${encodeURIComponent(job.id)}`;
+    const appJobUrl = `${origin}/job/${encodeURIComponent(job.id)}`;
     const description =
       plainText(job.description ?? "") ||
       `${job.title} at ${job.company} in ${job.location}.`;
@@ -361,7 +361,7 @@ export class PublicJobPagesController {
       ? `<ul>${result.items
           .map(
             (job) =>
-              `<li><a href="/#job/${encodeURIComponent(job.id)}">${escapeHtml(job.title)}</a> · ${escapeHtml(job.company)} · ${escapeHtml(job.location)} · ${escapeHtml(job.workplaceType)}</li>`,
+              `<li><a href="/job/${encodeURIComponent(job.id)}">${escapeHtml(job.title)}</a> · ${escapeHtml(job.company)} · ${escapeHtml(job.location)} · ${escapeHtml(job.workplaceType)}</li>`,
           )
           .join("")}</ul>`
       : "<p>No published jobs match this page right now. Check back soon.</p>";
@@ -374,6 +374,6 @@ export class PublicJobPagesController {
 <link rel="canonical" href="${escapeHtml(canonical)}"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(canonical)}">
 <script type="application/ld+json">${jsonLd}</script>
 <style>body{margin:0;padding:24px;font:16px/1.6 system-ui,sans-serif;color:#18322b;background:#f7f8f5}main{max-width:900px;margin:5vh auto;padding:32px;border:1px solid #e1e8e1;border-radius:16px;background:white}h1{line-height:1.2}li{padding:10px 0;border-bottom:1px solid #e1e8e1}a{color:#17665a}p{color:#52645c}</style>
-</head><body><main><p>esllp · Published job opportunities</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p><p>${result.total} published role${result.total === 1 ? "" : "s"}</p>${list}<p><a href="/#search">Search all published jobs</a></p></main></body></html>`);
+</head><body><main><p>esllp · Published job opportunities</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p><p>${result.total} published role${result.total === 1 ? "" : "s"}</p>${list}<p><a href="/search">Search all published jobs</a></p></main></body></html>`);
   }
 }
