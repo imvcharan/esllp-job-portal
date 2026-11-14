@@ -864,10 +864,53 @@
         font-size: 12px;
         margin: 10px 0 0;
       }
+      .employer-entry-actions {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        flex: 0 0 250px;
+        width: 250px;
+        gap: 11px;
+      }
       .banner .button {
         position: relative;
         z-index: 1;
+        width: 100%;
+        min-height: 48px;
+        justify-content: center;
         white-space: nowrap;
+      }
+      .employer-signup-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        min-height: 46px;
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.62);
+        border-radius: 9px;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.09);
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.35;
+        text-align: center;
+        text-decoration: none;
+        transition:
+          transform 0.18s,
+          color 0.18s,
+          background 0.18s,
+          border-color 0.18s;
+      }
+      .employer-signup-link:hover {
+        transform: translateY(-1px);
+        color: #12364a;
+        border-color: #fff;
+        background: #fff;
+      }
+      .employer-signup-link:focus-visible {
+        outline: 3px solid #f3c969;
+        outline-offset: 3px;
       }
 
       .how {
@@ -1235,6 +1278,12 @@
         .banner .button {
           width: 100%;
         }
+        .employer-entry-actions {
+          flex: 0 1 auto;
+          align-self: center;
+          width: 100%;
+          max-width: 340px;
+        }
         .how {
           grid-template-columns: 1fr;
           gap: 28px;
@@ -1253,6 +1302,21 @@
         }
         .footer-bottom {
           flex-direction: column;
+        }
+      }
+      @media (min-width: 701px) and (max-width: 900px) {
+        .banner-inner {
+          gap: 20px;
+          padding: 32px;
+        }
+        .employer-entry-actions {
+          flex-basis: 220px;
+          width: 220px;
+        }
+        .employer-signup-link {
+          padding-right: 10px;
+          padding-left: 10px;
+          font-size: 13px;
         }
       }
       @media (max-width: 380px) {
@@ -4592,8 +4656,8 @@
           <div class="employer-entry-actions">
             <a class="button button-lime" href="#sign-in?role=employer"
               >Employer sign in <span aria-hidden="true">↗</span></a
-            ><a class="text-link" href="#sign-up?role=employer"
-              >Create an employer account</a
+            ><a class="employer-signup-link" href="#sign-up?role=employer"
+              >Create an employer account <span aria-hidden="true">→</span></a
             >
           </div>
         </div>

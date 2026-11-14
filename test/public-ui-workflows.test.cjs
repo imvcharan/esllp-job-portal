@@ -117,6 +117,18 @@ test("public SPA routes use clean paths and restore navigation with browser hist
   assert.doesNotMatch(html, /window\.addEventListener\("hashchange"/);
 });
 
+test("employer account CTA stays visible across desktop, tablet, and mobile layouts", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(
+    html,
+    /class="employer-signup-link" href="#sign-up\?role=employer"/,
+  );
+  assert.match(html, /\.employer-signup-link\s*\{[^}]*color:\s*#fff/);
+  assert.match(html, /@media \(min-width: 701px\) and \(max-width: 900px\)/);
+  assert.match(html, /\.employer-entry-actions\s*\{[^}]*max-width:\s*340px/);
+});
+
 test("login uses one clear divider and aligned alternate sign-in buttons", () => {
   const html = readFileSync("public/index.html", "utf8");
 
