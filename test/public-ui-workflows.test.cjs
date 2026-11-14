@@ -128,6 +128,10 @@ test("login uses one clear divider and aligned alternate sign-in buttons", () =>
   assert.match(html, /class="button button-light auth-email-code" href="#email-otp"/);
   assert.match(html, /Other ways to sign in/);
   assert.doesNotMatch(html, /Or continue with Google|Or use a one-time code/);
+  assert.match(html, /\.auth-tabs a\s*\{[^}]*background:\s*#e2eee8/);
+  assert.match(html, /\.auth-tabs a\[aria-current="page"\]\s*\{[^}]*background:\s*var\(--green\)/);
+  assert.match(html, /theme: "filled_blue"/);
+  assert.match(html, /shape: "pill"/);
   assert.match(html, /\.auth-divider\s*\{[^}]*font-size:\s*12px/);
   assert.match(html, /\.auth-google-option #google-sign-in\s*\{[^}]*max-width:\s*320px/);
   assert.match(html, /\.auth-email-code\s*\{[^}]*max-width:\s*320px/);

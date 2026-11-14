@@ -2422,7 +2422,10 @@
         background: #f4f7f3;
       }
       .auth-tabs {
+        gap: 6px;
         margin-bottom: 22px;
+        border-color: #d7e6df;
+        background: #edf5f1;
       }
       .auth-role-options {
         margin: 0 0 20px;
@@ -2439,11 +2442,37 @@
         font-size: 12px;
         font-weight: 700;
       }
-      .auth-tabs a[aria-current="page"],
       .auth-role-options a[aria-current="page"] {
         color: var(--ink);
         background: #fff;
         box-shadow: 0 1px 4px rgba(18, 57, 74, 0.12);
+      }
+      .auth-tabs a {
+        min-height: 42px;
+        font-size: 13px;
+        border: 1px solid #d2e3da;
+        color: #315c4d;
+        background: #e2eee8;
+        text-decoration: none;
+        transition:
+          color 0.18s,
+          background 0.18s,
+          border-color 0.18s,
+          box-shadow 0.18s;
+      }
+      .auth-tabs a:hover:not([aria-current="page"]) {
+        color: var(--green);
+        border-color: #c9ded4;
+        background: #fff;
+      }
+      .auth-tabs a[aria-current="page"] {
+        color: #fff;
+        border-color: var(--green);
+        background: var(--green);
+        box-shadow: 0 3px 9px rgba(23, 107, 75, 0.2);
+      }
+      .auth-tabs a[aria-current="page"]:hover {
+        background: var(--green-dark);
       }
       .info-page {
         min-height: calc(100vh - 76px);
@@ -6335,9 +6364,9 @@
             },
           });
           window.google.accounts.id.renderButton(container, {
-            theme: "outline",
+            theme: "filled_blue",
             size: "large",
-            shape: "rectangular",
+            shape: "pill",
             text: "continue_with",
             width: Math.min(320, Math.floor(container.clientWidth || 320)),
           });
