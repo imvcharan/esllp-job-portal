@@ -499,6 +499,16 @@ export class CandidateApplicationsService {
           document.applicationId = application.id;
         if (applicationDocuments.length)
           await documentRepository.save(applicationDocuments);
+        await this.auditService.record(
+          {
+            actorUserId: user.id,
+            action: "candidate.application_submitted",
+            targetType: "application",
+            targetId: application.id,
+            details: { jobId, status: application.status },
+          },
+          manager,
+        );
       }
     });
 
@@ -511,13 +521,6 @@ export class CandidateApplicationsService {
       throw new Error("Submitted application could not be loaded");
     }
     if (created) {
-      await this.auditService.record({
-        actorUserId: user.id,
-        action: "candidate.application_submitted",
-        targetType: "application",
-        targetId: application.id,
-        details: { jobId, status: application.status },
-      });
       await this.notifyEmployer(application.job, application.id);
     }
     const histories = await this.getHistories([application]);

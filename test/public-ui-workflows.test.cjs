@@ -306,3 +306,78 @@ test("admin SMS navigation displays one accessible label", () => {
     /<span class="nav-icon">SMS<\/span><span class="nav-text">SMS settings<\/span>/,
   );
 });
+
+test("admin content save and list refresh report distinct outcomes", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  const start = html.indexOf('#content-entry-form").addEventListener("submit"');
+  const end = html.indexOf('#content-table-body").addEventListener("click"', start);
+  assert.notEqual(start, -1, "content submit handler exists");
+  const handler = html.slice(start, end);
+
+  assert.match(handler, /await authRequest\(id \? `\/api\/admin\/content/);
+  assert.match(handler, /resetContentForm\(\);\s*feedback\.textContent = "Content saved\."/);
+  assert.match(
+    handler,
+    /Content saved, but the list could not be refreshed:[\s\S]*Use Refresh to update the list/,
+  );
+  assert.doesNotMatch(
+    handler,
+    /Content saved, but the list could not be refreshed:[\s\S]{0,180}Unable to save content/,
+  );
+});
+
+test("admin dashboard and reports retain inline retry controls after load failures", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  assert.match(html, /id="overview-load-error" role="alert" hidden/);
+  assert.match(html, /Dashboard data could not be loaded:[\s\S]*retry\.dataset\.retryOverview/);
+  assert.match(html, /refreshOverviewData\(\)\s*\.catch\(\(\) => \{\}\)/);
+  assert.match(html, /Unable to load reports:[\s\S]*retry\.dataset\.retryReports = String\(page\)/);
+  assert.match(
+    html,
+    /loadAdminReports\(Number\(retry\.dataset\.retryReports\)\)\s*\.catch\(\(\) => \{\}\)/,
+  );
+});
+
+test("admin API failures use endpoint-neutral fallback text", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  assert.match(html, /message \|\| "The request could not be completed\."/);
+  assert.doesNotMatch(html, /message \|\| "Unable to sign in\."/);
+});
+
+test("job modal close paths restore focus to the opener", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  assert.match(html, /let jobModalOpener = null/);
+  assert.match(html, /function closeJobModal\(\)[\s\S]*?jobModalOpener\?\.isConnected[\s\S]*?jobModalOpener\.focus\(\)/);
+  assert.match(html, /if \(event\.key === "Escape"\) \{\s+closeJobModal\(\)/);
+  assert.match(html, /addEventListener\("click", closeJobModal\)/);
+  assert.match(html, /if \(event\.target === jobModal\) closeJobModal\(\)/);
+});
+
+test("candidate dashboard and reports failures include persistent retry actions", () => {
+  const html = readFileSync("public/index.html", "utf8");
+  assert.match(html, /stats\.querySelectorAll\("\.workspace-stat-value"\)[\s\S]*?Unavailable/);
+  assert.match(html, /retry\.textContent = "Retry dashboard"/);
+  assert.match(html, /retry\.addEventListener\("click", \(\) => void loadWorkspaceOverview\(\)\)/);
+  assert.match(html, /data-retry-workspace-reports/);
+  assert.match(html, /addEventListener\("click", \(\) => void loadWorkspaceReports\(\)\)/);
+});
+
+test("successful reports require an explicit new-report action before another submission", () => {
+  const html = readFileSync("public/index.html", "utf8");
+  assert.match(html, /if \(form\.dataset\.reportSubmitted === "true"\) return/);
+  assert.match(html, /Report received\. Thank you for helping us keep the community safe\./);
+  assert.match(html, /button\.disabled = true;\s+button\.textContent = "Report received"/);
+  assert.match(html, /newReport\.dataset\.reportNew = ""/);
+  assert.match(html, /form\.dataset\.reportSubmitted = "false"/);
+  assert.match(html, /newReport\.textContent = "Start a new report"/);
+});
+
+test("failed job searches can retry the same query and filters", () => {
+  const html = readFileSync("public/index.html", "utf8");
+  assert.match(html, /id="empty-retry">Retry this search/);
+  assert.match(
+    html,
+    /const terms = parseSearchHash\(state\.searchHash\);\s+void searchJobs\(terms\.query, terms\.location, state\.page\)/,
+  );
+  assert.match(html, /aria-live="polite">\s*Illustrative preview listings/);
+});

@@ -198,6 +198,7 @@
     .activity p strong { color: #344256; font-weight: 700; }
     .activity small { display: block; margin-top: 4px; color: #a0a8b3; font-size: 8px; }
     .demo-note { display: flex; align-items: center; gap: 8px; margin-top: 15px; padding: 10px 12px; border: 1px solid #e6eee9; border-radius: 8px; color: #758477; background: #f7faf7; font-size: 9px; }
+    .demo-note.error { color: #8d293d; border-color: #efc7cf; background: #fff3f5; }
     .demo-note span { color: #4c936f; font-size: 13px; }
     .managed-user-create-body { padding: 0 24px 24px; }
     .managed-user-create-body > .demo-note { margin: 0 0 16px; }
@@ -590,6 +591,7 @@
             <article class="stat-card"><div class="stat-top"><span>Applications</span><span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-applications">—</div><div class="stat-note" data-metric-note="total-applications">Loading live application records</div></article>
             <article class="stat-card"><div class="stat-top"><span>Scheduled interviews</span><span class="stat-icon">◷</span></div><div class="stat-value" data-metric="scheduled-interviews">—</div><div class="stat-note" data-metric-note="scheduled-interviews">Loading live interview records</div></article>
           </div>
+          <p class="demo-note error" id="overview-load-error" role="alert" hidden></p>
           <div class="analytics-grid">
             <article class="panel admin-only" hidden>
               <div class="panel-head"><div><h2>Applications by week</h2><p>Weekly application volume from live records</p></div></div>
@@ -1090,6 +1092,7 @@
     const mobileMenu = document.querySelector("#mobile-menu");
     const toastElement = document.querySelector("#toast");
     const jobModal = document.querySelector("#job-modal");
+    let jobModalOpener = null;
     const authGate = document.querySelector("#auth-gate");
     const adminApp = document.querySelector("#admin-app");
     const authError = document.querySelector("#auth-error");
@@ -1524,20 +1527,41 @@
       const status = document.querySelector("#reports-status-filter").value;
       const params = new URLSearchParams({ page: String(page), limit: "25" });
       if (status) params.set("status", status);
-      const result = await authRequest(`/api/admin/reports?${params}`);
-      if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
-        throw new Error("The reports API returned an unexpected response.");
-      }
-      reportsPage = result.page;
-      reportsTotal = result.total;
-      renderReports(result.items);
-      const start = result.total === 0 ? 0 : (result.page - 1) * result.limit + 1;
-      setText("#reports-page-summary", `${start}–${Math.min(result.page * result.limit, result.total)} of ${result.total} reports`);
-      document.querySelector("#reports-prev").disabled = result.page <= 1;
-      document.querySelector("#reports-next").disabled = result.page * result.limit >= result.total;
       const note = document.querySelector("#reports-data-note");
-      note.hidden = result.total !== 0;
-      note.textContent = result.total ? "" : "No reports match this filter.";
+      try {
+        const result = await authRequest(`/api/admin/reports?${params}`);
+        if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
+          throw new Error("The reports API returned an unexpected response.");
+        }
+        reportsPage = result.page;
+        reportsTotal = result.total;
+        renderReports(result.items);
+        const start = result.total === 0 ? 0 : (result.page - 1) * result.limit + 1;
+        setText("#reports-page-summary", `${start}–${Math.min(result.page * result.limit, result.total)} of ${result.total} reports`);
+        document.querySelector("#reports-prev").disabled = result.page <= 1;
+        document.querySelector("#reports-next").disabled = result.page * result.limit >= result.total;
+        note.classList.remove("error");
+        note.removeAttribute("role");
+        note.hidden = result.total !== 0;
+        note.textContent = result.total ? "" : "No reports match this filter.";
+      } catch (error) {
+        document.querySelector("#reports-table-body").innerHTML =
+          '<tr><td colspan="7">Reports could not be loaded.</td></tr>';
+        setText("#reports-page-summary", "Reports could not be loaded.");
+        document.querySelector("#reports-prev").disabled = true;
+        document.querySelector("#reports-next").disabled = true;
+        note.classList.add("error");
+        note.setAttribute("role", "alert");
+        note.textContent = `Unable to load reports: ${error instanceof Error ? error.message : "Unexpected error."} `;
+        const retry = document.createElement("button");
+        retry.className = "button";
+        retry.type = "button";
+        retry.dataset.retryReports = String(page);
+        retry.textContent = "Retry";
+        note.append(retry);
+        note.hidden = false;
+        throw error;
+      }
     }
 
     function escapeContentHtml(value) {
@@ -3175,44 +3199,58 @@
     }
 
     async function refreshOverviewData() {
-      const [jobs, users, candidates, insights] = await Promise.all([
-        authRequest("/api/admin/jobs"),
-        currentAdminUser?.role === "superadmin"
-          ? authRequest("/api/admin/users?page=1&limit=100")
-          : Promise.resolve(null),
-        currentAdminUser?.role === "superadmin"
-          ? authRequest("/api/admin/users?page=1&limit=100&role=candidate")
-          : Promise.resolve(null),
-        authRequest("/api/admin/insights")
-      ]);
-      if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
-      adminJobs = jobs;
-      updateJobMetrics(jobs);
-      renderJobsTable(jobs);
-      renderOverviewJobs(jobs);
-      renderInsights(insights);
-      if (users) {
-        if (!Array.isArray(users.items) || typeof users.total !== "number") throw new Error("The users API returned an unexpected response.");
-        adminUsers = users.items;
-        setText('[data-metric="total-users"]', users.total);
-        setText('[data-metric-note="total-users"]', "Live user accounts");
-        if (!Array.isArray(candidates.items)) throw new Error("The candidate accounts API returned an unexpected response.");
-        renderCandidateAccounts(candidates.items);
-        if (candidates.total === 0) {
+      try {
+        const [jobs, users, candidates, insights] = await Promise.all([
+          authRequest("/api/admin/jobs"),
+          currentAdminUser?.role === "superadmin"
+            ? authRequest("/api/admin/users?page=1&limit=100")
+            : Promise.resolve(null),
+          currentAdminUser?.role === "superadmin"
+            ? authRequest("/api/admin/users?page=1&limit=100&role=candidate")
+            : Promise.resolve(null),
+          authRequest("/api/admin/insights")
+        ]);
+        if (!Array.isArray(jobs)) throw new Error("The jobs API returned an unexpected response.");
+        adminJobs = jobs;
+        updateJobMetrics(jobs);
+        renderJobsTable(jobs);
+        renderOverviewJobs(jobs);
+        renderInsights(insights);
+        if (users) {
+          if (!Array.isArray(users.items) || typeof users.total !== "number") throw new Error("The users API returned an unexpected response.");
+          adminUsers = users.items;
+          setText('[data-metric="total-users"]', users.total);
+          setText('[data-metric-note="total-users"]', "Live user accounts");
+          if (!Array.isArray(candidates.items)) throw new Error("The candidate accounts API returned an unexpected response.");
+          renderCandidateAccounts(candidates.items);
+          if (candidates.total === 0) {
+            document.querySelector("#candidate-data-note").textContent =
+              "No candidate accounts are in the database yet.";
+          }
+          if (users.total === 0) {
+            const note = document.querySelector("#users-data-note");
+            note.hidden = false;
+            note.textContent = "No accounts are in the database yet.";
+            renderUsersTable([]);
+          }
+        } else {
           document.querySelector("#candidate-data-note").textContent =
-            "No candidate accounts are in the database yet.";
+            "Candidate account details are restricted to superadmins. Aggregated application-stage counts remain visible.";
         }
-        if (users.total === 0) {
-          const note = document.querySelector("#users-data-note");
-          note.hidden = false;
-          note.textContent = "No accounts are in the database yet.";
-          renderUsersTable([]);
-        }
-      } else {
-        document.querySelector("#candidate-data-note").textContent =
-          "Candidate account details are restricted to superadmins. Aggregated application-stage counts remain visible.";
+        if (currentAdminUser?.role !== "staff") await loadAdminActivity();
+        document.querySelector("#overview-load-error").hidden = true;
+      } catch (error) {
+        const note = document.querySelector("#overview-load-error");
+        note.textContent = `Dashboard data could not be loaded: ${error instanceof Error ? error.message : "Unexpected error."} `;
+        const retry = document.createElement("button");
+        retry.className = "button";
+        retry.type = "button";
+        retry.dataset.retryOverview = "";
+        retry.textContent = "Retry";
+        note.append(retry);
+        note.hidden = false;
+        throw error;
       }
-      if (currentAdminUser?.role !== "staff") await loadAdminActivity();
     }
 
     async function refreshAdminSession() {
@@ -3282,7 +3320,7 @@
         const message = Array.isArray(payload.message)
           ? payload.message.join(", ")
           : payload.message;
-        throw new Error(message || "Unable to sign in.");
+        throw new Error(message || "The request could not be completed.");
       }
       return payload;
     }
@@ -4037,6 +4075,26 @@
     document.querySelector("[data-refresh-reports]").addEventListener("click", () => {
       loadAdminReports().catch((error) => showToast(`Unable to load reports: ${error.message}`));
     });
+    document.querySelector("#reports-data-note").addEventListener("click", (event) => {
+      const retry = event.target.closest("[data-retry-reports]");
+      if (!retry) return;
+      retry.disabled = true;
+      loadAdminReports(Number(retry.dataset.retryReports))
+        .catch(() => {})
+        .finally(() => {
+          if (retry.isConnected) retry.disabled = false;
+        });
+    });
+    document.querySelector("#overview-load-error").addEventListener("click", (event) => {
+      const retry = event.target.closest("[data-retry-overview]");
+      if (!retry) return;
+      retry.disabled = true;
+      refreshOverviewData()
+        .catch(() => {})
+        .finally(() => {
+          if (retry.isConnected) retry.disabled = false;
+        });
+    });
     document.querySelector("[data-refresh-privacy]").addEventListener("click", () => {
       loadPrivacyRequests().catch((error) => showToast(`Unable to load privacy requests: ${error.message}`));
     });
@@ -4079,10 +4137,18 @@
         });
         resetContentForm();
         feedback.textContent = "Content saved.";
-        await loadAdminContent();
       } catch (error) {
         feedback.textContent = error instanceof Error ? error.message : "Unable to save content.";
         feedback.setAttribute("role", "alert");
+        submit.disabled = false;
+        return;
+      }
+      try {
+        await loadAdminContent();
+      } catch (error) {
+        feedback.textContent = `Content saved, but the list could not be refreshed: ${error instanceof Error ? error.message : "Unexpected error."} Use Refresh to update the list.`;
+        feedback.setAttribute("role", "status");
+        feedback.setAttribute("aria-live", "polite");
       } finally {
         submit.disabled = false;
       }
@@ -4250,13 +4316,21 @@
         globalSearch.focus();
       }
       if (event.key === "Escape") {
-        jobModal.classList.remove("open");
+        closeJobModal();
         sidebar.classList.remove("open");
         mobileMenu.setAttribute("aria-expanded", "false");
       }
     });
 
-    async function openJobModal(job = null) {
+    function closeJobModal() {
+      if (!jobModal.classList.contains("open")) return;
+      jobModal.classList.remove("open");
+      if (jobModalOpener?.isConnected) jobModalOpener.focus();
+      jobModalOpener = null;
+    }
+
+    async function openJobModal(job = null, opener = document.activeElement) {
+      jobModalOpener = opener instanceof HTMLElement ? opener : null;
       await loadAdminJobOptions();
       const form = document.querySelector("#create-job-form");
       editingJobId = job?.id ?? null;
@@ -4295,12 +4369,12 @@
       document.querySelector("#new-job-title").focus();
     }
 
-    document.querySelectorAll("[data-modal-open]").forEach((button) => button.addEventListener("click", () => {
-      openJobModal().catch((error) => showToast(`Unable to load job options: ${error.message}`, "error"));
+    document.querySelectorAll("[data-modal-open]").forEach((button) => button.addEventListener("click", (event) => {
+      openJobModal(null, event.currentTarget).catch((error) => showToast(`Unable to load job options: ${error.message}`, "error"));
     }));
-    document.querySelectorAll(".modal-close, .modal-cancel").forEach((button) => button.addEventListener("click", () => jobModal.classList.remove("open")));
+    document.querySelectorAll(".modal-close, .modal-cancel").forEach((button) => button.addEventListener("click", closeJobModal));
     jobModal.addEventListener("click", (event) => {
-      if (event.target === jobModal) jobModal.classList.remove("open");
+      if (event.target === jobModal) closeJobModal();
     });
     document.querySelector("#create-job-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -4341,7 +4415,7 @@
         : `“${saved.title}” was saved as draft #${saved.id}.`;
       form.reset();
       editingJobId = null;
-      jobModal.classList.remove("open");
+      closeJobModal();
       setInlineFeedback("#jobs-action-feedback", successMessage, "success");
       showOperationToast(successMessage);
       try {

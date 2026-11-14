@@ -4632,7 +4632,7 @@
               >See all jobs <span aria-hidden="true">→</span></a
             >
           </div>
-          <p class="source-note" id="featured-source-note" role="status">
+          <p class="source-note" id="featured-source-note" role="status" aria-live="polite">
             Illustrative preview listings. Live roles will appear here when
             available.
           </p>
@@ -5939,7 +5939,11 @@
             : state.noMatches
               ? "No published roles match this search yet. Try a different title, skill, or location."
               : "No roles match these filters. Try changing or clearing a filter.";
-          resultsList.innerHTML = `<div class="empty-state"><h2>${state.searchError ? "Job listings unavailable" : "No matching roles yet"}</h2><p>${escapeHtml(emptyText)}</p><button class="button button-light" type="button" id="empty-reset">Clear search and filters</button></div>`;
+          resultsList.innerHTML = `<div class="empty-state"><h2>${state.searchError ? "Job listings unavailable" : "No matching roles yet"}</h2><p>${escapeHtml(emptyText)}</p>${state.searchError ? '<button class="button button-dark" type="button" id="empty-retry">Retry this search</button> ' : ""}<button class="button button-light" type="button" id="empty-reset">Clear search and filters</button></div>`;
+          document.querySelector("#empty-retry")?.addEventListener("click", () => {
+            const terms = parseSearchHash(state.searchHash);
+            void searchJobs(terms.query, terms.location, state.page);
+          });
           document
             .querySelector("#empty-reset")
             .addEventListener("click", () => {
@@ -6258,6 +6262,7 @@
         const form = event.target.closest("[data-report-target]");
         if (!form) return;
         event.preventDefault();
+        if (form.dataset.reportSubmitted === "true") return;
         if (!form.reportValidity()) return;
         const button = form.querySelector('[type="submit"]');
         const status = form.querySelector('[role="status"]');
@@ -6278,13 +6283,24 @@
               }),
             }),
           );
-          form.reset();
+          form.dataset.reportSubmitted = "true";
           status.textContent =
-            "Thank you. Your report has been sent to the moderation team.";
+            "Report received. Thank you for helping us keep the community safe.";
+          button.disabled = true;
+          button.textContent = "Report received";
+          form.querySelectorAll("select, textarea").forEach((field) => {
+            field.disabled = true;
+          });
+          const newReport = document.createElement("button");
+          newReport.className = "button button-light";
+          newReport.type = "button";
+          newReport.dataset.reportNew = "";
+          newReport.textContent = "Start a new report";
+          button.insertAdjacentElement("afterend", newReport);
         } catch (error) {
           status.textContent = displayAuthError(error);
         } finally {
-          button.disabled = false;
+          if (form.dataset.reportSubmitted !== "true") button.disabled = false;
         }
       }
 
@@ -6292,6 +6308,25 @@
         .querySelector("#detail-content")
         .addEventListener("submit", submitUserReport);
       profileContent.addEventListener("submit", submitUserReport);
+      document.addEventListener("click", (event) => {
+        const newReport = event.target.closest("[data-report-new]");
+        if (!newReport) return;
+        const form = newReport.closest("form[data-report-target]");
+        if (!form) return;
+        form.reset();
+        form.dataset.reportSubmitted = "false";
+        form.querySelectorAll("select, textarea").forEach((field) => {
+          field.disabled = false;
+        });
+        const submit = form.querySelector('[type="submit"]');
+        submit.disabled = false;
+        submit.textContent =
+          form.dataset.reportTarget === "company"
+            ? "Send company report"
+            : "Send report";
+        form.querySelector('[role="status"]').textContent = "";
+        newReport.remove();
+      });
 
       function hideViews() {
         contentRouteRequest += 1;
@@ -9676,7 +9711,10 @@
               : '<div class="empty-state"><h2>No reports submitted</h2><p>Reports you submit about jobs, companies, or candidate profiles will appear here.</p><a class="button button-dark" href="#search">Browse published jobs</a></div>'
           }</div></section>`;
         } catch (error) {
-          profileContent.innerHTML = `${workspaceHeading("Trust & safety", "My reports", "Check the status and any update shared by the moderation team.")}<div class="workspace-notice error" role="alert">${escapeHtml(displayAuthError(error))}</div>`;
+          profileContent.innerHTML = `${workspaceHeading("Trust & safety", "My reports", "Check the status and any update shared by the moderation team.")}<div class="workspace-notice error" role="alert">${escapeHtml(displayAuthError(error))} <button class="button button-light" type="button" data-retry-workspace-reports>Retry loading reports</button></div>`;
+          profileContent
+            .querySelector("[data-retry-workspace-reports]")
+            .addEventListener("click", () => void loadWorkspaceReports());
         }
       }
 
@@ -9790,8 +9828,23 @@
           );
           await loadCandidatePremiumPanel();
         } catch (error) {
-          notice.textContent = displayAuthError(error);
+          const message = displayAuthError(error);
+          stats.querySelectorAll(".workspace-stat-value").forEach((value) => {
+            value.textContent = "Unavailable";
+          });
+          stats.querySelectorAll(".workspace-stat-note").forEach((item) => {
+            item.textContent = "Dashboard data could not be loaded.";
+          });
+          notice.textContent = `${message} `;
           notice.classList.add("error");
+          notice.setAttribute("role", "alert");
+          notice.setAttribute("aria-live", "assertive");
+          const retry = document.createElement("button");
+          retry.className = "button button-light";
+          retry.type = "button";
+          retry.textContent = "Retry dashboard";
+          retry.addEventListener("click", () => void loadWorkspaceOverview());
+          notice.append(retry);
         }
       }
 
