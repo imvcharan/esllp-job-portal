@@ -201,3 +201,16 @@ test("admin email template controls use separate labels and full-width fields", 
     /\.notification-template-form \.form-row textarea \{ max-width: none; min-height: 200px; \}/,
   );
 });
+
+test("admin SMS navigation displays one accessible label", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+
+  assert.match(
+    html,
+    /href="#twilio-config" data-view="twilio-config" hidden><span class="nav-icon" aria-hidden="true">☎<\/span><span class="nav-text">SMS settings<\/span>/,
+  );
+  assert.doesNotMatch(
+    html,
+    /<span class="nav-icon">SMS<\/span><span class="nav-text">SMS settings<\/span>/,
+  );
+});
