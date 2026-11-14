@@ -2585,6 +2585,54 @@
         text-decoration: underline;
         text-underline-offset: 3px;
       }
+      .auth-alternatives {
+        display: grid;
+        gap: 9px;
+        margin-top: 13px;
+      }
+      .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 10px;
+        text-align: center;
+      }
+      .auth-divider::before,
+      .auth-divider::after {
+        height: 1px;
+        flex: 1;
+        background: var(--line);
+        content: "";
+      }
+      .auth-alternative-methods {
+        display: grid;
+        gap: 8px;
+      }
+      .auth-google-option {
+        display: flex;
+        min-width: 0;
+        justify-content: center;
+      }
+      .auth-google-option #google-sign-in {
+        max-width: 100%;
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      .auth-google-option #google-sign-in.error {
+        color: #8b302a;
+      }
+      .auth-email-code {
+        width: 100%;
+        min-height: 40px;
+        gap: 8px;
+        margin-top: 0;
+      }
+      .auth-email-code svg {
+        width: 16px;
+        height: 16px;
+      }
       .auth-notice {
         margin: 0 0 17px;
         padding: 11px 13px;
@@ -3897,6 +3945,297 @@
         }
         .workspace-action > span:last-child {
           text-align: left;
+        }
+      }
+      .page-view:not(#profile-view) {
+        padding: clamp(36px, 4vw, 58px) 0 76px;
+      }
+      .page-view > .wrap {
+        width: min(1240px, calc(100% - 64px));
+      }
+      #profile-view > .profile-layout {
+        width: min(1360px, calc(100% - 64px));
+      }
+      .workspace-main {
+        padding: 0 clamp(24px, 3vw, 44px) 44px;
+      }
+      .workspace-topbar {
+        min-height: 82px;
+        margin-bottom: 28px;
+      }
+      .workspace-heading {
+        align-items: center;
+        margin-bottom: 0;
+      }
+      .workspace-content {
+        gap: 22px;
+      }
+      .workspace-stat-grid {
+        gap: 16px;
+      }
+      .workspace-stat,
+      .workspace-panel {
+        padding: 22px;
+      }
+      .workspace-stat-label {
+        font-size: 13px;
+      }
+      .workspace-stat-note {
+        color: #647782;
+        font-size: 12px;
+      }
+      .workspace-panel-head {
+        margin-bottom: 17px;
+      }
+      .workspace-panel-head h2 {
+        font-size: 17px;
+      }
+      .workspace-panel-head p {
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .workspace-action {
+        min-height: 58px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .workspace-action span:last-child {
+        font-size: 12px;
+      }
+      .workspace-notice {
+        padding: 14px 16px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .application-card {
+        gap: 18px;
+        padding: 19px;
+      }
+      .application-card p {
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .application-meta {
+        flex-wrap: wrap;
+        font-size: 12px;
+      }
+      .application-status {
+        font-size: 11px;
+      }
+      .application-form {
+        gap: 13px;
+      }
+      .application-form label,
+      .employer-form label {
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .application-form textarea {
+        min-height: 120px;
+        padding: 11px 12px;
+        font-size: 14px;
+      }
+      .application-form small,
+      .employer-plan p,
+      .employer-plan li,
+      .employer-notification p {
+        font-size: 12px;
+      }
+      .application-review {
+        padding: 15px;
+        font-size: 13px;
+      }
+      .application-review h3 {
+        font-size: 14px;
+      }
+      .employer-form input,
+      .employer-form textarea,
+      .employer-form select,
+      .workspace-filter input,
+      .workspace-filter select,
+      .employer-inline-form input,
+      .employer-inline-form textarea,
+      .employer-inline-form select,
+      .team-member-role {
+        min-height: 44px;
+        padding: 10px 12px;
+        border-color: #d5e0e4;
+        border-radius: 9px;
+        font-size: 14px;
+      }
+      .workspace-filter > label {
+        display: grid;
+        min-width: 0;
+        gap: 7px;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .employer-inline-form {
+        gap: 11px;
+      }
+      .employer-form-actions,
+      .employer-card-tools {
+        gap: 10px;
+      }
+      .employer-card-tools .button {
+        min-height: 38px;
+        font-size: 12px;
+      }
+      .employer-table {
+        white-space: nowrap;
+        font-size: 12px;
+      }
+      .employer-table th {
+        font-size: 11px;
+      }
+      .employer-table td {
+        font-size: 12px;
+      }
+      .employer-table td small {
+        display: inline-block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .workspace-panel .table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .profile-card-form {
+        padding: clamp(20px, 3vw, 34px);
+      }
+      .profile-intro {
+        font-size: 14px;
+      }
+      .profile-fields {
+        gap: 18px;
+      }
+      .profile-field {
+        font-size: 13px;
+      }
+      .profile-field input:not([type="checkbox"]),
+      .profile-field textarea,
+      .profile-field select {
+        min-height: 46px;
+        padding: 10px 12px;
+        border-color: #d5e0e4;
+        border-radius: 9px;
+        font-size: 14px;
+      }
+      .profile-field textarea {
+        min-height: 120px;
+      }
+      .profile-field small {
+        font-size: 12px;
+      }
+      .auth-form {
+        gap: 17px;
+      }
+      .auth-field {
+        font-size: 13px;
+      }
+      .auth-field input {
+        min-height: 48px;
+      }
+      .auth-card-copy {
+        font-size: 14px;
+      }
+      .filter-panel {
+        padding: 22px;
+      }
+      .filter-field {
+        font-size: 13px;
+      }
+      .filter-hint {
+        font-size: 12px;
+      }
+      .result-card {
+        padding: 20px;
+      }
+      .result-meta span {
+        font-size: 12px;
+      }
+      .result-aside {
+        font-size: 13px;
+      }
+      .result-aside strong {
+        font-size: 15px;
+      }
+      @media (max-width: 800px) {
+        .page-view > .wrap,
+        #profile-view > .profile-layout {
+          width: min(100% - 36px, 720px);
+        }
+        .workspace-main {
+          padding-inline: 24px;
+        }
+        .workspace-panel-head {
+          align-items: flex-start;
+        }
+      }
+      @media (max-width: 700px) {
+        .application-card {
+          flex-direction: column;
+        }
+        .workspace-panel-head {
+          flex-direction: column;
+          gap: 8px;
+        }
+        .workspace-panel-head > .button,
+        .workspace-panel-head > .text-link {
+          align-self: flex-start;
+        }
+      }
+      @media (max-width: 560px) {
+        .page-view:not(#profile-view) {
+          padding: 26px 0 50px;
+        }
+        .page-view > .wrap,
+        #profile-view > .profile-layout {
+          width: calc(100% - 28px);
+        }
+        .workspace-main {
+          padding: 0 14px 28px;
+        }
+        .workspace-content {
+          gap: 16px;
+        }
+        .workspace-topbar {
+          min-height: 61px;
+          margin-bottom: 20px;
+        }
+        .workspace-stat-grid {
+          gap: 10px;
+        }
+        .workspace-stat,
+        .workspace-panel {
+          padding: 16px;
+        }
+        .workspace-panel-head {
+          margin-bottom: 14px;
+        }
+        .workspace-stat-note {
+          font-size: 11px;
+        }
+        .profile-card-form {
+          padding: 18px;
+        }
+        .profile-fields {
+          gap: 15px;
+        }
+        .filter-panel {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .result-card {
+          padding: 15px;
+        }
+        .application-card {
+          padding: 16px;
         }
       }
     </style>
@@ -5932,6 +6271,7 @@
       async function mountGoogleSignInButton() {
         const container = authCard.querySelector("#google-sign-in");
         if (!container) return;
+        const googleOption = container.closest("[data-google-signin-option]");
         try {
           await loadPublicPlatformConfiguration();
           const configResponse = await fetch("/api/auth/config", {
@@ -5939,10 +6279,10 @@
           });
           const config = await readAuthResponse(configResponse);
           if (!config.googleClientId) {
-            container.textContent =
-              "Google sign-in is unavailable until configured by the service.";
+            if (googleOption) googleOption.hidden = true;
             return;
           }
+          if (googleOption) googleOption.hidden = false;
           if (!window.google?.accounts?.id) {
             await new Promise((resolve, reject) => {
               const script = document.createElement("script");
@@ -5990,9 +6330,10 @@
             size: "large",
             shape: "rectangular",
             text: "continue_with",
-            width: 320,
+            width: Math.min(320, Math.floor(container.clientWidth || 320)),
           });
         } catch (error) {
+          if (googleOption) googleOption.hidden = false;
           container.textContent = displayAuthError(error);
           container.classList.add("error");
         }
@@ -6355,7 +6696,25 @@
           <div class="auth-captcha" data-recaptcha-container></div>
           <button class="button button-dark" type="submit">${isSignup ? (accountType === "employer" ? (inviteToken ? "Create account" : "Submit for approval") : "Create candidate account") : "Log in"} <span aria-hidden="true">→</span></button>
         </form>
-        ${!isSignup && accountType === "candidate" && !inviteToken ? '<div class="auth-alternatives"><p>Or continue with Google</p><div id="google-sign-in"></div><p>Or use a one-time code</p><a class="button button-light" href="#email-otp">Sign in with email code</a></div>' : ""}
+        ${
+          !isSignup && accountType === "candidate" && !inviteToken
+            ? `<div class="auth-alternatives" aria-label="Other sign-in options">
+                <div class="auth-divider"><span>Other ways to sign in</span></div>
+                <div class="auth-alternative-methods">
+                  <div class="auth-google-option" data-google-signin-option hidden>
+                    <div id="google-sign-in"></div>
+                  </div>
+                  <a class="button button-light auth-email-code" href="#email-otp">
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <rect x="2.5" y="4" width="15" height="12" rx="2"></rect>
+                      <path d="m3.5 5 6.5 5.5L16.5 5"></path>
+                    </svg>
+                    Use email code
+                  </a>
+                </div>
+              </div>`
+            : ""
+        }
         ${!isSignup ? '<p class="auth-switch"><a href="#forgot-password">Forgot password?</a> · <a href="#resend-verification">Resend email verification</a> · <a href="#registration-verification">Verify mobile</a></p>' : ""}`;
         if (isSignup) {
           void updateRegistrationAvailability(accountType);

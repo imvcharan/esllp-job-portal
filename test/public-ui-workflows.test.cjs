@@ -117,6 +117,22 @@ test("public SPA routes use clean paths and restore navigation with browser hist
   assert.doesNotMatch(html, /window\.addEventListener\("hashchange"/);
 });
 
+test("login hides unconfigured Google auth and keeps the email-code option compact", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(html, /data-google-signin-option hidden/);
+  assert.match(
+    html,
+    /if \(!config\.googleClientId\) \{\s+if \(googleOption\) googleOption\.hidden = true;/,
+  );
+  assert.match(html, /class="button button-light auth-email-code" href="#email-otp"/);
+  assert.doesNotMatch(
+    html,
+    /Google sign-in is unavailable until configured by the service/,
+  );
+  assert.match(html, /\.auth-alternatives\s*\{/);
+});
+
 test("the public contact route is linked and provides a support destination", () => {
   const html = readFileSync("public/index.html", "utf8");
   assert.match(html, /href="#contact">Contact<\/a>/);
@@ -172,4 +188,16 @@ test("admin messaging settings expose independent SMS and WhatsApp controls", ()
   assert.match(html, /name="whatsappFrom"/);
   assert.match(html, /name="whatsappTemplateSid"/);
   assert.match(html, /configuration\.whatsappReady/);
+});
+
+test("admin email template controls use separate labels and full-width fields", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+
+  assert.match(html, /form\.className = "notification-template-form"/);
+  assert.match(html, /label\.htmlFor = field\.id;\s*row\.append\(label, field\)/);
+  assert.doesNotMatch(html, /label\.append\(field\)/);
+  assert.match(
+    html,
+    /\.notification-template-form \.form-row textarea \{ max-width: none; min-height: 200px; \}/,
+  );
 });

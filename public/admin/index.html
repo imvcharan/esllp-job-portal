@@ -383,6 +383,59 @@
     .form-row input, .form-row select { color: #344256; font-size: 12px; }
     .toast { font-size: 13px; }
     .modal .form-row label { font-size: 12px; }
+    .content { max-width: 1680px; padding: clamp(24px, 3vw, 42px) clamp(20px, 3vw, 42px) 56px; }
+    .view.active { display: flex; flex-direction: column; gap: 20px; align-items: stretch; }
+    .view.active > * { min-width: 0; }
+    .view.active > * + * { margin-top: 0 !important; }
+    .page-heading { align-items: center; gap: 24px; margin: 0; }
+    .page-heading p { max-width: 78ch; line-height: 1.55; }
+    .panel-title-row { align-items: flex-start; gap: 16px; padding: 20px 24px 15px; }
+    .panel-title-row > span { color: var(--muted-dark); font-size: 12px; line-height: 1.5; text-align: right; }
+    .panel > form:not(.table-toolbar) { padding: 0 24px 24px; }
+    .form-row { grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); align-items: start; gap: 18px; padding: 15px 0; }
+    .form-row > label { padding-top: 11px; line-height: 1.45; }
+    .form-row input:not([type="checkbox"]),
+    .form-row select,
+    .form-row textarea { width: 100%; max-width: 720px; min-height: 42px; padding: 9px 12px; border-color: #dce2e9; border-radius: 8px; color: #26364a; background: #fff; font-size: 14px; }
+    .form-row textarea { min-height: 116px; line-height: 1.55; resize: vertical; }
+    .form-row input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; margin: 0; accent-color: var(--teal); }
+    .form-row .toggle { width: 31px; height: 17px; min-height: 17px; flex: 0 0 31px; }
+    .form-row > small { grid-column: 2; margin-top: -8px; color: var(--muted-dark); font-size: 12px; line-height: 1.5; }
+    .form-row-toggle { grid-template-columns: minmax(240px, 360px) minmax(0, 1fr); align-items: center; }
+    .form-row-toggle .toggle-label { display: flex; min-height: 42px; align-items: center; gap: 10px; color: #344256; font-size: 13px; font-weight: 600; line-height: 1.4; }
+    .form-row-toggle > small { align-self: center; margin: 0; }
+    #notification-templates-list { display: grid; gap: 18px; }
+    .notification-template-form .form-row { grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); }
+    .notification-template-form .form-row textarea { max-width: none; min-height: 200px; }
+    .notification-template-form .form-row input { max-width: none; }
+    .notification-template-form .demo-note { margin: 8px 0; line-height: 1.5; }
+    .demo-note { align-items: flex-start; margin: 0; padding: 13px 16px; line-height: 1.55; }
+    .lower-grid, .analytics-grid { gap: 18px; }
+    .content .panel > p:not(.demo-note) { margin: 0; padding: 0 24px 16px; color: var(--muted-dark); font-size: 13px; line-height: 1.55; }
+    .managed-user-create-body .form-row { grid-template-columns: minmax(160px, 210px) minmax(0, 1fr); }
+    @media (max-width: 1024px) {
+      .content { padding: 28px 22px 44px; }
+      .panel > form:not(.table-toolbar) { padding-inline: 20px; }
+    }
+    @media (max-width: 700px) {
+      .view.active { gap: 16px; }
+      .page-heading { align-items: flex-start; flex-direction: column; gap: 13px; }
+      .panel-title-row { padding: 17px 18px 13px; }
+      .panel-title-row > span { text-align: left; }
+      .panel > form:not(.table-toolbar) { padding: 0 18px 20px; }
+      .form-row, .form-row-toggle, .notification-template-form .form-row,
+      .managed-user-create-body .form-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+      .form-row > label { padding-top: 0; }
+      .form-row > small, .form-row-toggle > small { grid-column: 1; margin: 0; }
+      .form-row-toggle .toggle-label { min-height: 34px; }
+      .notification-template-form .form-row textarea { min-height: 180px; }
+    }
+    @media (max-width: 560px) {
+      .content { padding: 22px 14px 36px; }
+      .panel-title-row { padding-inline: 15px; }
+      .panel > form:not(.table-toolbar) { padding-inline: 15px; }
+      .demo-note { padding: 12px 14px; }
+    }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
@@ -532,7 +585,7 @@
                 <div class="form-row"><label for="content-body">Body / answer</label><textarea id="content-body" name="body" required maxlength="50000" rows="9"></textarea></div>
                 <div class="form-row"><label for="content-seo-title">SEO title</label><input id="content-seo-title" name="seoTitle" maxlength="200"></div>
                 <div class="form-row"><label for="content-seo-description">SEO description</label><textarea id="content-seo-description" name="seoDescription" maxlength="300" rows="2"></textarea></div>
-                <label class="form-row"><span><input type="checkbox" name="isPublished"> Published and visible publicly</span></label>
+                <label class="form-row form-row-toggle"><span class="toggle-label"><input type="checkbox" name="isPublished"> Published and visible publicly</span></label>
                 <div class="form-row"><label for="content-publish-at">Publish at</label><input id="content-publish-at" name="publishAt" type="datetime-local" disabled><small>Choose a future local time to schedule publication. Leave blank to publish immediately.</small></div>
                 <p class="form-feedback" id="content-entry-feedback" role="status" aria-live="polite"></p>
                 <div class="modal-actions"><button class="button button-primary" type="submit">Save content</button></div>
@@ -574,7 +627,7 @@
               <div class="form-row"><label for="candidate-premium-product-name">Name</label><input id="candidate-premium-product-name" name="name" required minlength="2" maxlength="100"></div>
               <div class="form-row"><label for="candidate-premium-product-description">Description</label><input id="candidate-premium-product-description" name="description" required minlength="2" maxlength="500"></div>
               <div class="form-row"><label for="candidate-premium-product-price">Price (INR)</label><input id="candidate-premium-product-price" name="amountInr" type="number" min="1" max="1000000" step="0.01" required></div>
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="enabled" checked> Available for purchase</span></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="enabled" checked> Available for purchase</span></label>
               <div class="heading-actions"><button class="button button-primary" type="submit">Add service</button></div>
               <p class="form-feedback" id="candidate-premium-product-feedback" role="status" aria-live="polite"></p>
             </form>
@@ -769,10 +822,10 @@
           <article class="panel table-panel">
             <div class="panel-title-row"><h2>Registration and moderation</h2><span id="platform-configuration-updated">Loading settings…</span></div>
             <form id="platform-configuration-form">
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="candidateRegistrationEnabled"> Candidate registration</span><small>When off, new candidate accounts cannot be created. Existing users can still sign in.</small></label>
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="employerRegistrationEnabled"> Employer registration</span><small>When off, new employer accounts, including invited team accounts, cannot be created.</small></label>
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="employerApprovalRequired"> Require employer approval</span><small>When off, pending employer accounts receive workspace access. Rejected accounts remain blocked.</small></label>
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="jobApprovalRequired"> Require job approval</span><small>When off, valid employer job submissions publish immediately after quota and listing checks.</small></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="candidateRegistrationEnabled"> Candidate registration</span><small>When off, new candidate accounts cannot be created. Existing users can still sign in.</small></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="employerRegistrationEnabled"> Employer registration</span><small>When off, new employer accounts, including invited team accounts, cannot be created.</small></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="employerApprovalRequired"> Require employer approval</span><small>When off, pending employer accounts receive workspace access. Rejected accounts remain blocked.</small></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="jobApprovalRequired"> Require job approval</span><small>When off, valid employer job submissions publish immediately after quota and listing checks.</small></label>
               <div class="form-row"><label for="platform-configuration-reason">Reason for change</label><input id="platform-configuration-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are these platform controls changing?"></div>
               <p class="form-feedback" id="platform-configuration-feedback" role="status" aria-live="polite"></p>
               <div class="heading-actions"><button class="button button-primary" type="submit">Save controls</button><button class="button" id="platform-configuration-reset" type="button">Restore defaults</button></div>
@@ -829,14 +882,14 @@
             <div class="panel-title-row"><h2>Twilio credentials</h2><span>SMS: <span id="twilio-config-status">Loading settings…</span> · WhatsApp: <span id="twilio-whatsapp-status">Loading settings…</span></span></div>
             <p class="form-feedback" id="twilio-encryption-note" role="status" aria-live="polite" hidden></p>
             <form id="twilio-config-form">
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="enabled"> Enable SMS verification</span><small>Applies to new OTP delivery requests; existing verification records are unchanged.</small></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="enabled"> Enable SMS verification</span><small>Applies to new OTP delivery requests; existing verification records are unchanged.</small></label>
               <div class="form-row"><label for="twilio-account-sid">Twilio account SID</label><input id="twilio-account-sid" name="accountSid" type="text" maxlength="64" autocomplete="off"></div>
               <div class="form-row"><label for="twilio-auth-token">Twilio auth token</label><input id="twilio-auth-token" name="authToken" type="password" maxlength="255" autocomplete="new-password"><small id="twilio-auth-token-state"></small></div>
               <div class="form-row"><label for="twilio-from-number">Twilio sender number</label><input id="twilio-from-number" name="fromNumber" type="text" maxlength="40" autocomplete="off"></div>
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="whatsappEnabled"> Enable WhatsApp interview reminders</span><small>Delivery remains opt-in per candidate and requires an approved WhatsApp Content Template.</small></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="whatsappEnabled"> Enable WhatsApp interview reminders</span><small>Delivery remains opt-in per candidate and requires an approved WhatsApp Content Template.</small></label>
               <div class="form-row"><label for="twilio-whatsapp-from">WhatsApp sender</label><input id="twilio-whatsapp-from" name="whatsappFrom" type="text" maxlength="40" placeholder="whatsapp:+14155238886" autocomplete="off"></div>
               <div class="form-row"><label for="twilio-whatsapp-template-sid">Approved Twilio Content SID</label><input id="twilio-whatsapp-template-sid" name="whatsappTemplateSid" type="text" maxlength="64" placeholder="HX followed by 32 hexadecimal characters" autocomplete="off"><small>Template variables: {{1}} job title, {{2}} company, {{3}} interview time, {{4}} meeting link/location.</small></div>
-              <label class="form-row"><span><input class="toggle" type="checkbox" name="clearAuthToken"> Clear saved auth token</span><small>Clearing the database value may expose the environment-variable fallback.</small></label>
+              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="clearAuthToken"> Clear saved auth token</span><small>Clearing the database value may expose the environment-variable fallback.</small></label>
               <div class="form-row"><label for="twilio-config-reason">Reason for change</label><input id="twilio-config-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are SMS settings changing?"></div>
               <p class="form-feedback" id="twilio-config-feedback" role="status" aria-live="polite"></p>
               <div class="heading-actions"><button class="button button-primary" type="submit">Save messaging settings</button></div>
@@ -2870,7 +2923,6 @@
       templates.forEach((template) => {
         const panel = document.createElement("article");
         panel.className = "panel table-panel";
-        panel.style.marginBottom = "15px";
         const heading = document.createElement("div");
         heading.className = "panel-title-row";
         const title = document.createElement("h2");
@@ -2879,6 +2931,7 @@
         state.textContent = template.customized ? "Customized" : "Using defaults";
         heading.append(title, state);
         const form = document.createElement("form");
+        form.className = "notification-template-form";
         form.dataset.templateKey = template.key;
         const addField = (name, labelText, value, multiline, maxLength) => {
           const row = document.createElement("div");
@@ -2886,13 +2939,14 @@
           const label = document.createElement("label");
           label.textContent = labelText;
           const field = document.createElement(multiline ? "textarea" : "input");
+          field.id = `notification-template-${template.key}-${name}`;
           field.name = name;
           field.required = true;
           field.maxLength = maxLength;
           if (multiline) field.rows = 5;
           field.value = value;
-          label.append(field);
-          row.append(label);
+          label.htmlFor = field.id;
+          row.append(label, field);
           form.append(row);
         };
         const placeholders = document.createElement("p");
