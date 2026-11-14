@@ -42,6 +42,8 @@ import { AdminPlatformConfigurationController } from "./admin-platform-configura
 import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { AdminNotificationTemplatesController } from "./admin-notification-templates.controller";
+import { AdminTwilioConfigurationController } from "../providers/admin-twilio-configuration.controller";
+import { TwilioConfigurationModule } from "../providers/twilio-configuration.module";
 
 @Module({
   imports: [
@@ -76,6 +78,7 @@ import { AdminNotificationTemplatesController } from "./admin-notification-templ
     PaymentsModule,
     PlatformConfigurationModule,
     NotificationsModule,
+    TwilioConfigurationModule,
   ],
   controllers: [
     AdminUsersController,
@@ -87,6 +90,7 @@ import { AdminNotificationTemplatesController } from "./admin-notification-templ
     AdminEmailOutboxController,
     AdminPlatformConfigurationController,
     AdminNotificationTemplatesController,
+    AdminTwilioConfigurationController,
   ],
   providers: [
     AdminUsersService,
