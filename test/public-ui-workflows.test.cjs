@@ -117,7 +117,7 @@ test("public SPA routes use clean paths and restore navigation with browser hist
   assert.doesNotMatch(html, /window\.addEventListener\("hashchange"/);
 });
 
-test("login hides unconfigured Google auth and keeps the email-code option compact", () => {
+test("login uses one clear divider and aligned alternate sign-in buttons", () => {
   const html = readFileSync("public/index.html", "utf8");
 
   assert.match(html, /data-google-signin-option hidden/);
@@ -126,6 +126,11 @@ test("login hides unconfigured Google auth and keeps the email-code option compa
     /if \(!config\.googleClientId\) \{\s+if \(googleOption\) googleOption\.hidden = true;/,
   );
   assert.match(html, /class="button button-light auth-email-code" href="#email-otp"/);
+  assert.match(html, /Other ways to sign in/);
+  assert.doesNotMatch(html, /Or continue with Google|Or use a one-time code/);
+  assert.match(html, /\.auth-divider\s*\{[^}]*font-size:\s*12px/);
+  assert.match(html, /\.auth-google-option #google-sign-in\s*\{[^}]*max-width:\s*320px/);
+  assert.match(html, /\.auth-email-code\s*\{[^}]*max-width:\s*320px/);
   assert.doesNotMatch(
     html,
     /Google sign-in is unavailable until configured by the service/,
