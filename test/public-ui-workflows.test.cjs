@@ -142,6 +142,16 @@ test("login uses one clear divider and aligned alternate sign-in buttons", () =>
   assert.match(html, /\.auth-alternatives\s*\{/);
 });
 
+test("announcement banner skips the API request in file previews", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(
+    html,
+    /async function loadAnnouncementBanner\(\) \{\s+if \(window\.location\.protocol === "file:"\) return;/,
+  );
+  assert.match(html, /The published announcement could not be loaded\./);
+});
+
 test("the public contact route is linked and provides a support destination", () => {
   const html = readFileSync("public/index.html", "utf8");
   assert.match(html, /href="#contact">Contact<\/a>/);

@@ -6986,6 +6986,7 @@
       }
 
       async function loadAnnouncementBanner() {
+        if (window.location.protocol === "file:") return;
         const response = await fetch("/api/content?type=banner", {
           credentials: "same-origin",
           signal: AbortSignal.timeout(15000),
