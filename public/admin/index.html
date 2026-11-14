@@ -391,13 +391,11 @@
 <body>
   <a class="skip-link" href="#admin-main">Skip to main content</a>
   <div class="auth-gate" id="auth-gate">
-    <form class="auth-card" id="admin-login-form">
+    <form class="auth-card" id="admin-login-form" novalidate>
       <a class="auth-brand" href="/"><span class="brand-mark">e.</span> esllp <span style="color:#8994a3;font:500 10px 'DM Sans',sans-serif;letter-spacing:0">ADMIN</span></a>
       <h1>Welcome back</h1>
-      <p>Sign in with a staff, admin, or superadmin account to open your hiring workspace.</p>
-      <div class="form-row"><label for="admin-email">Email address</label><input id="admin-email" type="email" name="email" autocomplete="username" required maxlength="254" placeholder="you@company.com"></div>
-      <div class="form-row"><label for="admin-password">Password</label><input id="admin-password" type="password" name="password" autocomplete="current-password" required maxlength="128" placeholder="Your password"></div>
-      <button class="button button-primary auth-submit" type="submit">Sign in to admin <span aria-hidden="true">→</span></button>
+      <p>Use the shared sign-in flow to complete CAPTCHA and, for superadmins, authenticator MFA.</p>
+      <a class="button button-primary auth-submit" href="/#sign-in">Continue to secure sign in <span aria-hidden="true">→</span></a>
       <p class="auth-error" id="auth-error" role="alert"></p>
       <div class="auth-footnote">For first-time setup, use the one-time <a href="/setup-superadmin/">superadmin setup page</a>. Job, account, organization, application, and activity data load from protected APIs after sign-in.</div>
     </form>
@@ -410,6 +408,7 @@
         <a class="nav-link active" href="#overview" data-view="overview"><span class="nav-icon">▦</span><span class="nav-text">Overview</span></a>
         <a class="nav-link" href="#jobs" data-view="jobs"><span class="nav-icon">▤</span><span class="nav-text">Job listings</span></a>
         <a class="nav-link" href="#reports" data-view="reports"><span class="nav-icon">⚑</span><span class="nav-text">Reports</span></a>
+        <a class="nav-link" href="#content" data-view="content"><span class="nav-icon">▧</span><span class="nav-text">Website content</span></a>
         <a class="nav-link" href="#candidates" data-view="candidates"><span class="nav-icon">♙</span><span class="nav-text">Candidates</span></a>
         <a class="nav-link" href="#companies" data-view="companies"><span class="nav-icon">▣</span><span class="nav-text">Companies</span></a>
         <a class="nav-link" href="#analytics" data-view="analytics"><span class="nav-icon">⌁</span><span class="nav-text">Analytics</span></a>
@@ -420,13 +419,16 @@
         <a class="nav-link superadmin-only" href="#privacy" data-view="privacy" hidden><span class="nav-icon">⌑</span><span class="nav-text">Privacy requests</span></a>
         <a class="nav-link superadmin-only" href="#candidate-premium" data-view="candidate-premium" hidden><span class="nav-icon">₹</span><span class="nav-text">Candidate services</span></a>
         <a class="nav-link superadmin-only" href="#razorpay-config" data-view="razorpay-config" hidden><span class="nav-icon">◈</span><span class="nav-text">Razorpay settings</span></a>
+        <a class="nav-link superadmin-only" href="#twilio-config" data-view="twilio-config" hidden><span class="nav-icon">SMS</span><span class="nav-text">SMS settings</span></a>
+        <a class="nav-link superadmin-only" href="#platform-configuration" data-view="platform-configuration" hidden><span class="nav-icon">⚙</span><span class="nav-text">Platform controls</span></a>
+        <a class="nav-link superadmin-only" href="#notification-templates" data-view="notification-templates" hidden><span class="nav-icon">✉</span><span class="nav-text">Email templates</span></a>
         <a class="nav-link superadmin-only" href="#audit" data-view="audit" hidden><span class="nav-icon">◷</span><span class="nav-text">Audit log</span></a>
         <a class="nav-link admin-only" href="#activity" data-view="activity" hidden><span class="nav-icon">◷</span><span class="nav-text">Recent activity</span></a>
         <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Account security</span></a>
-        <a class="nav-link" href="mailto:hello@esllp.com?subject=esllp%20portal%20support"><span class="nav-icon">?</span><span class="nav-text">Help center</span></a>
+        <a class="nav-link" href="mailto:hello@esllp.in?subject=esllp%20portal%20support"><span class="nav-icon">?</span><span class="nav-text">Help center</span></a>
       </nav>
       <div class="sidebar-spacer"></div>
-      <div class="support-card"><strong>Need a hand?</strong><p>Our team is here to help you make hiring easier.</p><a href="mailto:hello@esllp.com?subject=esllp%20portal%20support">Contact support <span>↗</span></a></div>
+      <div class="support-card"><strong>Need a hand?</strong><p>Our team is here to help you make hiring easier.</p><a href="mailto:hello@esllp.in?subject=esllp%20portal%20support">Contact support <span>↗</span></a></div>
       <div class="profile-mini"><span class="profile-initials">AS</span><span><strong>Arjun Sharma</strong><small>Workspace admin</small></span><span class="profile-more">···</span></div>
     </aside>
 
@@ -474,7 +476,7 @@
               <div class="activity-list" id="overview-activity-list"><p>Loading live platform activity…</p></div>
             </article>
           </div>
-          <div class="demo-note" id="overview-data-note"><span>✦</span> Application attribution and time-to-hire are not tracked, so they are intentionally excluded. Counts shown here are from live records.</div>
+          <div class="demo-note" id="overview-data-note"><span>✦</span> Application source summaries use normalized campaign parameters only; older applications are unattributed. Time-to-hire uses employer-confirmed hire status.</div>
         </section>
 
         <section class="view" id="view-jobs" data-title="Job listings">
@@ -507,10 +509,42 @@
                 <option value="dismissed">Dismissed</option>
               </select>
             </div>
-            <div class="table-wrap"><table><thead><tr><th>Submitted</th><th>Reported item</th><th>Reason &amp; details</th><th>Status</th><th>Resolution note</th><th>Actions</th></tr></thead><tbody id="reports-table-body"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Submitted</th><th>Reported item</th><th>Reason &amp; details</th><th>Status</th><th>Internal resolution note</th><th>Message to reporter</th><th>Actions</th></tr></thead><tbody id="reports-table-body"></tbody></table></div>
             <div class="table-toolbar"><span id="reports-page-summary">Reports load here.</span><button class="button" id="reports-prev" type="button">← Previous</button><button class="button" id="reports-next" type="button">Next →</button></div>
           </article>
           <div class="demo-note" id="reports-data-note" hidden></div>
+        </section>
+
+        <section class="view" id="view-content" data-title="Website content">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Content management</div><h1>Website content</h1><p>Create public pages, FAQs, blog posts, and banners. Content is plain text; HTML is never rendered. Publish only content approved for public release.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-content>↻&nbsp; Refresh</button></div>
+          </div>
+          <div class="lower-grid">
+            <article class="panel">
+              <div class="panel-title-row"><h2 id="content-form-title">Create content</h2><button class="button" type="button" data-content-reset>＋&nbsp; New item</button></div>
+              <form id="content-entry-form">
+                <input type="hidden" name="id">
+                <div class="form-row"><label for="content-type">Content type</label><select class="select" id="content-type" name="type" required><option value="page">Public page</option><option value="faq">FAQ item</option><option value="blog">Blog post</option><option value="banner">Banner</option></select></div>
+                <div class="form-row"><label for="content-slug">URL slug</label><input id="content-slug" name="slug" required maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="about-us"><small>Public pages and blog posts can be opened at #content/your-slug.</small></div>
+                <div class="form-row"><label for="content-title">Title / question</label><input id="content-title" name="title" required maxlength="200"></div>
+                <div class="form-row"><label for="content-summary">Summary</label><textarea id="content-summary" name="summary" maxlength="600" rows="2"></textarea></div>
+                <div class="form-row"><label for="content-body">Body / answer</label><textarea id="content-body" name="body" required maxlength="50000" rows="9"></textarea></div>
+                <div class="form-row"><label for="content-seo-title">SEO title</label><input id="content-seo-title" name="seoTitle" maxlength="200"></div>
+                <div class="form-row"><label for="content-seo-description">SEO description</label><textarea id="content-seo-description" name="seoDescription" maxlength="300" rows="2"></textarea></div>
+                <label class="form-row"><span><input type="checkbox" name="isPublished"> Published and visible publicly</span></label>
+                <div class="form-row"><label for="content-publish-at">Publish at</label><input id="content-publish-at" name="publishAt" type="datetime-local" disabled><small>Choose a future local time to schedule publication. Leave blank to publish immediately.</small></div>
+                <p class="form-feedback" id="content-entry-feedback" role="status" aria-live="polite"></p>
+                <div class="modal-actions"><button class="button button-primary" type="submit">Save content</button></div>
+              </form>
+            </article>
+            <article class="panel table-panel">
+              <div class="panel-title-row"><h2>All content</h2></div>
+              <div class="table-wrap"><table><thead><tr><th>Title</th><th>Type</th><th>Slug</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody id="content-table-body"></tbody></table></div>
+              <p class="demo-note" id="content-data-note" hidden></p>
+            </article>
+          </div>
+          <article class="panel" id="content-revisions-panel" hidden></article>
         </section>
 
         <section class="view" id="view-privacy" data-title="Privacy requests">
@@ -532,8 +566,47 @@
           </div>
           <div class="demo-note">Default prices (₹499 resume review, ₹299 for a 30-day profile boost, and ₹1,499 career consultation) are illustrative launch values, not market-validated. Edit them before enabling live checkout. Applications and core job-seeking features remain free. Only paid resume-review and career-consultation requests require manual fulfillment; profile boosts activate automatically and preserve each candidate’s visibility/contact preferences.</div>
           <article class="panel table-panel">
-            <div class="panel-title-row"><h2>Service catalog</h2></div>
+            <div class="panel-title-row"><h2>Service catalog</h2><span>Disable a service to remove it from purchase options while retaining order history.</span></div>
             <div class="table-wrap"><table><thead><tr><th>Service</th><th>Description</th><th>Price (INR)</th><th>Boost days</th><th>Available</th><th>Action</th></tr></thead><tbody id="candidate-premium-products-body"></tbody></table></div>
+            <div class="panel-title-row"><h3>Add a candidate service</h3></div>
+            <form id="candidate-premium-product-form">
+              <div class="form-row"><label for="candidate-premium-product-key">Permanent service key</label><input id="candidate-premium-product-key" name="key" required pattern="[a-z0-9]+(-[a-z0-9]+)*" minlength="2" maxlength="40" placeholder="example-service"></div>
+              <div class="form-row"><label for="candidate-premium-product-name">Name</label><input id="candidate-premium-product-name" name="name" required minlength="2" maxlength="100"></div>
+              <div class="form-row"><label for="candidate-premium-product-description">Description</label><input id="candidate-premium-product-description" name="description" required minlength="2" maxlength="500"></div>
+              <div class="form-row"><label for="candidate-premium-product-price">Price (INR)</label><input id="candidate-premium-product-price" name="amountInr" type="number" min="1" max="1000000" step="0.01" required></div>
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="enabled" checked> Available for purchase</span></label>
+              <div class="heading-actions"><button class="button button-primary" type="submit">Add service</button></div>
+              <p class="form-feedback" id="candidate-premium-product-feedback" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Candidate-service collections</h2></div>
+            <p class="demo-note">Gross INR amounts recorded as paid for candidate services; employer subscription charges are reported separately below. Refunds/chargebacks, gateway fees, and taxes are not modeled.</p>
+            <div class="stats-grid">
+              <article class="stat-card"><div class="stat-top">Gross paid <span class="stat-icon">₹</span></div><div class="stat-value" id="candidate-premium-revenue-total">—</div><div class="stat-note">Verified paid orders with a payment timestamp</div></article>
+              <article class="stat-card"><div class="stat-top">Paid orders <span class="stat-icon">✓</span></div><div class="stat-value" id="candidate-premium-revenue-paid-count">—</div><div class="stat-note">Candidate services only</div></article>
+              <article class="stat-card"><div class="stat-top">Pending orders <span class="stat-icon">◷</span></div><div class="stat-value" id="candidate-premium-revenue-pending-count">—</div><div class="stat-note">Not included in gross paid</div></article>
+            </div>
+            <div class="panel-title-row"><h3>Paid by service</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Service</th><th>Paid orders</th><th>Gross paid (INR)</th></tr></thead><tbody id="candidate-premium-revenue-products-body"></tbody></table></div>
+            <div class="panel-title-row"><h3>Monthly gross paid · last 12 months</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Month (IST)</th><th>Paid orders</th><th>Gross paid (INR)</th></tr></thead><tbody id="candidate-premium-revenue-months-body"></tbody></table></div>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Employer subscription charges</h2></div>
+            <p class="demo-note">Gross captured charges from verified Razorpay subscription events, grouped by currency. Refunds/chargebacks, gateway fees, and taxes are not modeled. Only charges received after the transaction ledger migration are included; earlier subscription receipts are not backfilled.</p>
+            <div class="panel-title-row"><h3>Captured by plan and currency</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Plan</th><th>Currency</th><th>Captured charges</th><th>Gross amount</th></tr></thead><tbody id="employer-revenue-plans-body"></tbody></table></div>
+            <div class="panel-title-row"><h3>All-time totals</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Currency</th><th>Captured charges</th><th>Gross amount</th></tr></thead><tbody id="employer-revenue-totals-body"></tbody></table></div>
+            <div class="panel-title-row"><h3>Monthly gross charges · last 12 months</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Month (IST)</th><th>Currency</th><th>Captured charges</th><th>Gross amount</th></tr></thead><tbody id="employer-revenue-months-body"></tbody></table></div>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Payment reconciliation</h2><button class="button" type="button" data-export-payment-reconciliation>Export latest 500 CSV</button></div>
+            <p class="demo-note">Captured candidate-service and employer-subscription ledger entries, including gateway payment/reference IDs and invoice IDs where available. This is a local-ledger view, not a live gateway reconciliation; refunds, taxes and older employer charges are not included.</p>
+            <div class="table-wrap"><table><thead><tr><th>Paid at</th><th>Source</th><th>Gateway payment ID</th><th>Order / subscription ID</th><th>Invoice ID</th><th>Amount</th><th>Status</th></tr></thead><tbody id="payment-reconciliation-body"></tbody></table></div>
+            <div class="table-toolbar"><span id="payment-reconciliation-summary">Loading payment ledger…</span></div>
           </article>
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>Purchases &amp; fulfillment</h2></div>
@@ -665,12 +738,14 @@
 
         <section class="view" id="view-analytics" data-title="Analytics">
           <div class="page-heading"><div><div class="page-eyebrow">Insights & performance</div><h1>Analytics</h1><p>Live application, interview, and hiring activity counts.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-insights>↻&nbsp; Refresh</button></div></div>
-          <div class="stats-grid"><article class="stat-card"><div class="stat-top">Applications <span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-applications">—</div><div class="stat-note">All recorded applications</div></article><article class="stat-card"><div class="stat-top">Scheduled interviews <span class="stat-icon">◷</span></div><div class="stat-value" data-metric="scheduled-interviews">—</div><div class="stat-note">Interview records not cancelled</div></article><article class="stat-card"><div class="stat-top">Candidate accounts <span class="stat-icon">✓</span></div><div class="stat-value" data-metric="candidate-count">—</div><div class="stat-note">Registered candidate accounts</div></article><article class="stat-card"><div class="stat-top">Employer organizations <span class="stat-icon">▣</span></div><div class="stat-value" data-metric="organization-count">—</div><div class="stat-note">Registered organizations</div></article></div>
+          <div class="stats-grid"><article class="stat-card"><div class="stat-top">Applications <span class="stat-icon">♙</span></div><div class="stat-value" data-metric="total-applications">—</div><div class="stat-note">All recorded applications</div></article><article class="stat-card"><div class="stat-top">Scheduled interviews <span class="stat-icon">◷</span></div><div class="stat-value" data-metric="scheduled-interviews">—</div><div class="stat-note">Interview records not cancelled</div></article><article class="stat-card"><div class="stat-top">Candidate accounts <span class="stat-icon">✓</span></div><div class="stat-value" data-metric="candidate-count">—</div><div class="stat-note">Registered candidate accounts</div></article><article class="stat-card"><div class="stat-top">Employer organizations <span class="stat-icon">▣</span></div><div class="stat-value" data-metric="organization-count">—</div><div class="stat-note">Registered organizations</div></article><article class="stat-card"><div class="stat-top">Offer acceptance turnaround <span class="stat-icon">◷</span></div><div class="stat-value" id="offer-acceptance-days">—</div><div class="stat-note" id="offer-acceptance-summary">From application submission to accepted offer</div></article><article class="stat-card"><div class="stat-top">Employer-reported hires <span class="stat-icon">✓</span></div><div class="stat-value" id="hired-candidate-count">—</div><div class="stat-note">Candidate was marked hired after accepting an offer</div></article><article class="stat-card"><div class="stat-top">Application-to-hire turnaround <span class="stat-icon">◷</span></div><div class="stat-value" id="time-to-hire-days">—</div><div class="stat-note" id="time-to-hire-summary">Based on employer-confirmed hire status</div></article></div>
           <div class="report-grid" style="margin-top:15px">
-            <article class="panel"><div class="panel-head"><div><h2>Applications by week</h2><p>Last eight weeks from live application records</p></div></div><div class="bars" id="analytics-weekly-chart" role="img" aria-label="Weekly application counts"></div></article>
-            <article class="panel"><div class="panel-head"><div><h2>Application stages</h2><p>Current stage counts from live applications</p></div></div><div class="source-legend" id="analytics-stage-summary"></div></article>
+            <article class="panel" data-analytics-report="applications_by_week"><div class="panel-head"><div><h2 data-report-title>Applications by week</h2><p>Last eight weeks from live application records</p></div></div><div class="bars" id="analytics-weekly-chart" role="img" aria-label="Weekly application counts"></div></article>
+            <article class="panel" data-analytics-report="application_stages"><div class="panel-head"><div><h2 data-report-title>Application stages</h2><p>Current stage counts from live applications</p></div></div><div class="source-legend" id="analytics-stage-summary"></div></article>
+            <article class="panel" data-analytics-report="applications_by_source"><div class="panel-head"><div><h2 data-report-title>Applications by source</h2><p>Top 30 UTM groups; application count and employer-reported hire conversion</p></div></div><div class="source-legend" id="analytics-source-summary"></div></article>
+            <article class="panel" data-analytics-report="hiring_outcomes"><div class="panel-head"><div><h2 data-report-title>Hiring outcomes</h2><p>Offer acceptance and employer-reported hires</p></div></div><div class="source-legend" id="analytics-hiring-summary"></div></article>
           </div>
-          <div class="demo-note">Source attribution, hires, and time-to-hire are not currently tracked, so those metrics are not shown.</div>
+          <div class="demo-note">Only normalized UTM source, medium, and campaign values are stored; raw referrer URLs and personal data are not collected. Existing applications are shown as unattributed. Hires and time-to-hire are employer-reported, not independently verified.</div>
         </section>
 
         <section class="view" id="view-settings" data-title="Settings">
@@ -683,6 +758,99 @@
               <button class="button button-primary" type="submit">Change password</button>
             </form>
           </article>
+        </section>
+
+        <section class="view" id="view-platform-configuration" data-title="Platform controls">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Superadmin controls</div><h1>Platform controls</h1><p>Manage registration and moderation gates. Defaults preserve the current approval-first workflow.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-platform-configuration>↻&nbsp; Reload</button></div>
+          </div>
+          <div class="demo-note">Changes are saved to the database and audited. Disabling an approval requirement affects new access or publication requests; it does not retroactively approve pending employers or jobs. Rejected employers remain blocked. Restore defaults resets registration, approval, taxonomy, application-stage, and report settings.</div>
+          <article class="panel table-panel">
+            <div class="panel-title-row"><h2>Registration and moderation</h2><span id="platform-configuration-updated">Loading settings…</span></div>
+            <form id="platform-configuration-form">
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="candidateRegistrationEnabled"> Candidate registration</span><small>When off, new candidate accounts cannot be created. Existing users can still sign in.</small></label>
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="employerRegistrationEnabled"> Employer registration</span><small>When off, new employer accounts, including invited team accounts, cannot be created.</small></label>
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="employerApprovalRequired"> Require employer approval</span><small>When off, pending employer accounts receive workspace access. Rejected accounts remain blocked.</small></label>
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="jobApprovalRequired"> Require job approval</span><small>When off, valid employer job submissions publish immediately after quota and listing checks.</small></label>
+              <div class="form-row"><label for="platform-configuration-reason">Reason for change</label><input id="platform-configuration-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are these platform controls changing?"></div>
+              <p class="form-feedback" id="platform-configuration-feedback" role="status" aria-live="polite"></p>
+              <div class="heading-actions"><button class="button button-primary" type="submit">Save controls</button><button class="button" id="platform-configuration-reset" type="button">Restore defaults</button></div>
+            </form>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Job taxonomies and search suggestions</h2></div>
+            <p class="demo-note">Edit one option per line. Categories and industries are stored on new or edited jobs; employment and workplace values are validated across job posts and candidate preferences. Location values are suggestions only, so employers may still enter a new location.</p>
+            <form id="job-taxonomies-form">
+              <div class="form-row"><label for="job-taxonomy-categories">Job categories</label><textarea id="job-taxonomy-categories" name="jobCategories" rows="5" maxlength="12000"></textarea></div>
+              <div class="form-row"><label for="job-taxonomy-industries">Industries</label><textarea id="job-taxonomy-industries" name="industries" rows="4" maxlength="12000"></textarea></div>
+              <div class="form-row"><label for="job-taxonomy-locations">Location suggestions</label><textarea id="job-taxonomy-locations" name="locations" rows="4" maxlength="12000"></textarea></div>
+              <div class="form-row"><label for="job-taxonomy-employment">Employment types</label><textarea id="job-taxonomy-employment" name="employmentTypes" rows="3" maxlength="12000" required></textarea></div>
+              <div class="form-row"><label for="job-taxonomy-workplace">Work arrangements</label><textarea id="job-taxonomy-workplace" name="workplaceTypes" rows="3" maxlength="12000" required></textarea></div>
+              <div class="form-row"><label for="job-taxonomy-reason">Reason for change</label><input id="job-taxonomy-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are these options changing?"></div>
+              <div class="heading-actions"><button class="button button-primary" type="submit">Save taxonomies</button></div>
+              <p class="form-feedback" id="job-taxonomies-feedback" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Applicant tracking stages</h2></div>
+            <p class="demo-note">Edit one stage per line as <code>key|label|next-stage-key,next-stage-key</code>. Keys use lowercase letters, numbers, and underscores (maximum 20 characters). Keep the four built-in keys submitted, in_review, interview, and rejected. Add custom stages as needed; a custom stage cannot be removed while an application is currently in it. Rejected is terminal.</p>
+            <form id="application-stages-form">
+              <div class="form-row"><label for="application-stages-editor">Stages and allowed transitions</label><textarea id="application-stages-editor" name="applicationStages" rows="8" maxlength="6000" required></textarea></div>
+              <div class="form-row"><label for="application-stages-reason">Reason for change</label><input id="application-stages-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are these application stages changing?"></div>
+              <div class="heading-actions"><button class="button button-primary" type="submit">Save application stages</button></div>
+              <p class="form-feedback" id="application-stages-feedback" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Analytics report definitions</h2></div>
+            <p class="demo-note">Edit one supported report per line as <code>key|label|enabled</code>. Use enabled or disabled, and reorder lines to reorder reports. Remove a line to hide that report. Keys are fixed to metrics currently supported by the platform; custom SQL is not accepted.</p>
+            <form id="report-definitions-form">
+              <div class="form-row"><label for="report-definitions-editor">Reports</label><textarea id="report-definitions-editor" name="reportDefinitions" rows="5" maxlength="1600"></textarea></div>
+              <div class="form-row"><label for="report-definitions-reason">Reason for change</label><input id="report-definitions-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are these reports changing?"></div>
+              <div class="heading-actions"><button class="button button-primary" type="submit">Save report definitions</button></div>
+              <p class="form-feedback" id="report-definitions-feedback" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Other admin-managed configuration</h2></div>
+            <p>Pricing and employer entitlements are in Razorpay settings; candidate service prices and availability are in Candidate services. Public pages, FAQs, blog posts, announcements and SEO fields are managed in Website content.</p>
+            <div class="heading-actions"><a class="button" href="#razorpay-config" data-view-link="razorpay-config">Razorpay and employer plans</a><a class="button" href="#candidate-premium" data-view-link="candidate-premium">Candidate services</a><a class="button" href="#content" data-view-link="content">Website content</a></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-twilio-config" data-title="SMS settings">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Superadmin settings</div><h1>SMS delivery</h1><p>Configure Twilio for phone verification messages.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-twilio-config>↻&nbsp; Reload</button></div>
+          </div>
+          <div class="demo-note">The auth token is encrypted on the server and never returned to this page. Leave it blank to keep the saved value. Server environment variables remain the fallback when a database value is not set. SMS and WhatsApp reminders can be enabled independently; WhatsApp reminders require candidate opt-in and an approved Twilio Content Template.</div>
+          <article class="panel table-panel">
+            <div class="panel-title-row"><h2>Twilio credentials</h2><span>SMS: <span id="twilio-config-status">Loading settings…</span> · WhatsApp: <span id="twilio-whatsapp-status">Loading settings…</span></span></div>
+            <p class="form-feedback" id="twilio-encryption-note" role="status" aria-live="polite" hidden></p>
+            <form id="twilio-config-form">
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="enabled"> Enable SMS verification</span><small>Applies to new OTP delivery requests; existing verification records are unchanged.</small></label>
+              <div class="form-row"><label for="twilio-account-sid">Twilio account SID</label><input id="twilio-account-sid" name="accountSid" type="text" maxlength="64" autocomplete="off"></div>
+              <div class="form-row"><label for="twilio-auth-token">Twilio auth token</label><input id="twilio-auth-token" name="authToken" type="password" maxlength="255" autocomplete="new-password"><small id="twilio-auth-token-state"></small></div>
+              <div class="form-row"><label for="twilio-from-number">Twilio sender number</label><input id="twilio-from-number" name="fromNumber" type="text" maxlength="40" autocomplete="off"></div>
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="whatsappEnabled"> Enable WhatsApp interview reminders</span><small>Delivery remains opt-in per candidate and requires an approved WhatsApp Content Template.</small></label>
+              <div class="form-row"><label for="twilio-whatsapp-from">WhatsApp sender</label><input id="twilio-whatsapp-from" name="whatsappFrom" type="text" maxlength="40" placeholder="whatsapp:+14155238886" autocomplete="off"></div>
+              <div class="form-row"><label for="twilio-whatsapp-template-sid">Approved Twilio Content SID</label><input id="twilio-whatsapp-template-sid" name="whatsappTemplateSid" type="text" maxlength="64" placeholder="HX followed by 32 hexadecimal characters" autocomplete="off"><small>Template variables: {{1}} job title, {{2}} company, {{3}} interview time, {{4}} meeting link/location.</small></div>
+              <label class="form-row"><span><input class="toggle" type="checkbox" name="clearAuthToken"> Clear saved auth token</span><small>Clearing the database value may expose the environment-variable fallback.</small></label>
+              <div class="form-row"><label for="twilio-config-reason">Reason for change</label><input id="twilio-config-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are SMS settings changing?"></div>
+              <p class="form-feedback" id="twilio-config-feedback" role="status" aria-live="polite"></p>
+              <div class="heading-actions"><button class="button button-primary" type="submit">Save messaging settings</button></div>
+            </form>
+          </article>
+        </section>
+
+        <section class="view" id="view-notification-templates" data-title="Email templates">
+          <div class="page-heading">
+            <div><div class="page-eyebrow">Superadmin controls</div><h1>Email templates</h1><p>Customize notification subjects and plain-text content. Changes apply to new messages; already queued emails keep their existing content.</p></div>
+            <div class="heading-actions"><button class="button" type="button" data-refresh-notification-templates>↻&nbsp; Reload</button></div>
+          </div>
+          <div class="demo-note">Templates use only the listed placeholders. Values are inserted as plain text, and links are escaped before email delivery. Saves and resets require a reason and are added to the audit log.</div>
+          <div id="notification-templates-list"><article class="panel"><p>Loading email templates…</p></article></div>
         </section>
 
         <section class="view" id="view-activity" data-title="Recent activity">
@@ -719,7 +887,7 @@
         <section class="view" id="view-audit" data-title="Audit log">
           <div class="page-heading"><div><div class="page-eyebrow">Superadmin controls</div><h1>Audit log</h1><p>Search immutable records of security and business changes, including actor, timestamp, client, and approximate location where a local GeoIP database is configured.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-audit>↻&nbsp; Refresh</button><button class="button" type="button" data-export-audit>Export CSV</button></div></div>
           <form class="table-toolbar audit-filter-toolbar" id="audit-filter-form">
-            <input class="table-search" name="q" type="search" placeholder="Search actor, action, target, IP, or details" aria-label="Search audit events">
+            <input class="table-search" name="q" type="search" placeholder="Search actor, action, target, request ID, IP, or details" aria-label="Search audit events">
             <input class="table-search" name="action" type="search" placeholder="Exact action (optional)" aria-label="Filter by exact action">
             <input class="table-search" name="country" type="search" placeholder="Country (optional)" aria-label="Filter by country">
             <label>From <input name="from" type="date"></label><label>To <input name="to" type="date"></label>
@@ -740,9 +908,11 @@
       <div class="modal-head"><h2 id="modal-title">Create a job listing</h2><button class="modal-close" type="button" aria-label="Close dialog">×</button></div>
       <div class="form-row"><label for="new-job-title">Job title</label><input id="new-job-title" name="title" minlength="2" maxlength="160" required placeholder="e.g. Product Designer"></div>
       <div class="form-row"><label for="new-job-company">Company</label><input id="new-job-company" name="company" minlength="2" maxlength="120" required placeholder="Company name"></div>
-      <div class="form-row"><label for="new-job-location">Location</label><input id="new-job-location" name="location" minlength="2" maxlength="120" required placeholder="City or remote"></div>
-      <div class="form-row"><label for="new-job-type">Workplace</label><select id="new-job-type" name="workplaceType"><option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option></select></div>
-      <div class="form-row"><label for="new-job-employment-type">Employment type</label><select id="new-job-employment-type" name="employmentType"><option value="full-time">Full-time</option><option value="part-time">Part-time</option><option value="contract">Contract</option><option value="internship">Internship</option><option value="temporary">Temporary</option></select></div>
+      <div class="form-row"><label for="new-job-location">Location</label><input id="new-job-location" name="location" list="admin-job-location-options" minlength="2" maxlength="120" required placeholder="City or remote"><datalist id="admin-job-location-options"></datalist></div>
+      <div class="form-row"><label for="new-job-category">Job category</label><select id="new-job-category" name="category"><option value="">Select a category</option></select></div>
+      <div class="form-row"><label for="new-job-industry">Industry</label><select id="new-job-industry" name="industry"><option value="">Select an industry</option></select></div>
+      <div class="form-row"><label for="new-job-type">Workplace</label><select id="new-job-type" name="workplaceType"></select></div>
+      <div class="form-row"><label for="new-job-employment-type">Employment type</label><select id="new-job-employment-type" name="employmentType"></select></div>
       <div class="form-row"><label for="new-job-salary-min">Minimum salary</label><input id="new-job-salary-min" name="salaryMin" type="number" min="0" max="2000000000" step="1" placeholder="Optional"></div>
       <div class="form-row"><label for="new-job-salary-max">Maximum salary</label><input id="new-job-salary-max" name="salaryMax" type="number" min="0" max="2000000000" step="1" placeholder="Optional"></div>
       <div class="form-row"><label for="new-job-salary-currency">Salary currency</label><select id="new-job-salary-currency" name="salaryCurrency"><option value="INR">INR · Indian rupee</option><option value="USD">USD · US dollar</option><option value="GBP">GBP · British pound</option><option value="EUR">EUR · Euro</option><option value="AED">AED · UAE dirham</option><option value="CAD">CAD · Canadian dollar</option><option value="AUD">AUD · Australian dollar</option><option value="SGD">SGD · Singapore dollar</option></select></div>
@@ -750,6 +920,7 @@
       <div class="form-row"><label for="new-job-openings">Number of openings</label><input id="new-job-openings" name="numberOfOpenings" type="number" min="1" max="2000000000" step="1" value="1" required></div>
       <div class="form-row"><label for="new-job-deadline">Application deadline</label><input id="new-job-deadline" name="applicationDeadline" type="date"></div>
       <div class="form-row"><label for="new-job-experience">Experience</label><input id="new-job-experience" name="experience" maxlength="80" placeholder="e.g. 3–5 years"></div>
+      <div class="form-row"><label for="new-job-skills">Skills</label><input id="new-job-skills" name="skills" maxlength="2000" placeholder="JavaScript, SQL, communication"></div>
       <div class="form-row"><label for="new-job-description">Description</label><textarea id="new-job-description" name="description" maxlength="20000" rows="6" placeholder="Responsibilities, requirements, and benefits"></textarea></div>
       <div class="form-row"><label for="new-job-employer">Assign to employer (optional)</label><select id="new-job-employer" name="employerUserId"><option value="">No employer assigned</option></select></div>
       <p class="form-hint" id="employer-options-note">Only the assigned employer can access applicants for this job.</p>
@@ -789,7 +960,9 @@
     const authError = document.querySelector("#auth-error");
     let adminAccessToken = null;
     let currentAdminUser = null;
+    let adminPaymentReconciliationItems = [];
     let adminJobs = [];
+    let adminJobOptions = null;
     let adminEmployers = [];
     let adminUsers = [];
     let adminInsights = null;
@@ -804,6 +977,7 @@
     let reportsTotal = 0;
     let privacyRequestsPage = 1;
     let privacyRequestsTotal = 0;
+    let contentEntries = [];
     let authResolved = false;
     let toastTimer;
     navLinks.forEach((link) => {
@@ -971,7 +1145,11 @@
           editButton.className = "button";
           editButton.type = "button";
           editButton.textContent = "Edit";
-          editButton.addEventListener("click", () => openJobModal(job));
+          editButton.addEventListener("click", () => {
+            openJobModal(job).catch((error) =>
+              showToast(`Unable to load job options: ${error.message}`, "error"),
+            );
+          });
           const toggleButton = document.createElement("button");
           toggleButton.className = "button";
           toggleButton.type = "button";
@@ -1226,6 +1404,98 @@
       note.textContent = result.total ? "" : "No reports match this filter.";
     }
 
+    function escapeContentHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character]);
+    }
+
+    async function loadAdminContent() {
+      const entries = await authRequest("/api/admin/content");
+      if (!Array.isArray(entries)) throw new Error("The content API returned an unexpected response.");
+      contentEntries = entries;
+      document.querySelector("#content-table-body").innerHTML = entries.map((entry) => `
+        <tr>
+          <td>${escapeContentHtml(entry.title)}</td>
+          <td>${escapeContentHtml(entry.type)}</td>
+          <td>${escapeContentHtml(entry.slug)}</td>
+          <td>${entry.isPublished && entry.publishedAt && new Date(entry.publishedAt) > new Date()
+            ? `Scheduled · ${escapeContentHtml(formatDate(entry.publishedAt, { dateStyle: "medium", timeStyle: "short" }))}`
+            : entry.isPublished ? "Published" : "Draft"}</td>
+          <td>${escapeContentHtml(formatDate(entry.updatedAt))}</td>
+          <td><button class="button" type="button" data-content-edit="${entry.id}">Edit</button>
+            <button class="button" type="button" data-content-history="${entry.id}">History</button>
+            <button class="button" type="button" data-content-publish="${entry.id}">${entry.isPublished ? "Unpublish" : "Publish"}</button></td>
+        </tr>`).join("");
+      const note = document.querySelector("#content-data-note");
+      note.hidden = entries.length > 0;
+      note.textContent = entries.length ? "" : "No website content yet. Create a draft to get started.";
+    }
+
+    function resetContentForm() {
+      const form = document.querySelector("#content-entry-form");
+      form.reset();
+      form.elements.id.value = "";
+      form.elements.publishAt.disabled = true;
+      document.querySelector("#content-form-title").textContent = "Create content";
+      document.querySelector("#content-entry-feedback").textContent = "";
+      document.querySelector("#content-revisions-panel").hidden = true;
+    }
+
+    function editContentEntry(entry) {
+      const form = document.querySelector("#content-entry-form");
+      form.elements.id.value = String(entry.id);
+      form.elements.type.value = entry.type;
+      form.elements.slug.value = entry.slug;
+      form.elements.title.value = entry.title;
+      form.elements.summary.value = entry.summary || "";
+      form.elements.body.value = entry.body;
+      form.elements.seoTitle.value = entry.seoTitle || "";
+      form.elements.seoDescription.value = entry.seoDescription || "";
+      form.elements.isPublished.checked = entry.isPublished;
+      const publishAt = new Date(entry.publishedAt);
+      form.elements.publishAt.value = entry.isPublished &&
+        entry.publishedAt &&
+        publishAt > new Date()
+        ? new Date(publishAt.getTime() - publishAt.getTimezoneOffset() * 60_000)
+            .toISOString()
+            .slice(0, 16)
+        : "";
+      form.elements.publishAt.disabled = !entry.isPublished;
+      document.querySelector("#content-form-title").textContent = `Edit: ${entry.title}`;
+      document.querySelector("#content-entry-feedback").textContent = "";
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function loadContentRevisions(contentEntryId) {
+      const entry = contentEntries.find((item) => item.id === contentEntryId);
+      if (!entry) throw new Error("Content item was not found.");
+      const revisions = await authRequest(
+        `/api/admin/content/${encodeURIComponent(contentEntryId)}/revisions`,
+      );
+      if (!Array.isArray(revisions)) {
+        throw new Error("The content history API returned an unexpected response.");
+      }
+      const panel = document.querySelector("#content-revisions-panel");
+      panel.hidden = false;
+      panel.innerHTML = `
+        <div class="panel-title-row"><h2>Revision history · ${escapeContentHtml(entry.title)}</h2><button class="button" type="button" data-content-history-close>Close</button></div>
+        ${revisions.length ? revisions.map((revision) => `
+          <details class="workspace-action">
+            <summary>Version ${revision.version} · ${escapeContentHtml(formatDate(revision.createdAt, { dateStyle: "medium", timeStyle: "short" }))} · ${escapeContentHtml(revision.title)}</summary>
+            <p><strong>Slug:</strong> ${escapeContentHtml(revision.slug)} · <strong>Type:</strong> ${escapeContentHtml(revision.type)} · <strong>Status:</strong> ${revision.isPublished ? "Published" : "Draft"}</p>
+            ${revision.summary ? `<p>${escapeContentHtml(revision.summary)}</p>` : ""}
+            <pre>${escapeContentHtml(revision.body)}</pre>
+            <button class="button" type="button" data-content-restore="${revision.id}" data-content-id="${contentEntryId}">Restore this version</button>
+          </details>`).join("") : '<p>No saved revisions are available.</p>'}
+      `;
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     async function loadPrivacyRequests(page = privacyRequestsPage) {
       const result = await authRequest(`/api/admin/privacy-requests?page=${page}&limit=25`);
       if (!result || !Array.isArray(result.items) || typeof result.total !== "number") {
@@ -1294,7 +1564,7 @@
     function renderReports(reports) {
       const body = document.querySelector("#reports-table-body");
       if (!reports.length) {
-        body.innerHTML = '<tr><td colspan="6">No reports on this page.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7">No reports on this page.</td></tr>';
         return;
       }
       body.innerHTML = reports.map((report) => {
@@ -1311,6 +1581,9 @@
           <td>${report.status === "open" || report.status === "reviewing"
             ? `<input class="table-search" type="text" maxlength="1000" data-report-note="${report.id}" aria-label="Resolution note for report ${report.id}" placeholder="Optional note">`
             : escapeHtml(report.resolutionNote || "—")}</td>
+          <td>${report.status === "open" || report.status === "reviewing"
+            ? `<input class="table-search" type="text" maxlength="1000" data-report-message="${report.id}" aria-label="Message to reporter for report ${report.id}" placeholder="Optional status update">`
+            : escapeHtml(report.reporterMessage || "—")}</td>
           <td>${actions}</td>
         </tr>`;
       }).join("");
@@ -1323,7 +1596,8 @@
               method: "PATCH",
               body: JSON.stringify({
                 status: button.dataset.nextStatus,
-                resolutionNote: body.querySelector(`[data-report-note="${CSS.escape(id)}"]`)?.value.trim()
+                resolutionNote: body.querySelector(`[data-report-note="${CSS.escape(id)}"]`)?.value.trim(),
+                reporterMessage: body.querySelector(`[data-report-message="${CSS.escape(id)}"]`)?.value.trim()
               })
             });
             showToast("Report status updated.");
@@ -1384,6 +1658,17 @@
       }
     }
 
+    function promptAdminActionReason(action) {
+      const input = window.prompt(`Enter a reason for ${action} (required).`);
+      if (input === null) return null;
+      const reason = input.trim();
+      if (reason.length < 3 || reason.length > 500) {
+        showToast("Enter a reason between 3 and 500 characters.", "error");
+        return null;
+      }
+      return reason;
+    }
+
     function renderUsersTable(users) {
       const body = document.querySelector("#users-table-body");
       body.replaceChildren();
@@ -1411,11 +1696,16 @@
               role.value = user.role;
               return;
             }
+            const reason = promptAdminActionReason("changing this role");
+            if (!reason) {
+              role.value = user.role;
+              return;
+            }
             role.disabled = true;
             try {
               await authRequest(`/api/admin/users/${user.id}/role`, {
                 method: "PATCH",
-                body: JSON.stringify({ role: nextRole })
+                body: JSON.stringify({ role: nextRole, reason })
               });
             } catch (error) {
               role.value = user.role;
@@ -1485,11 +1775,13 @@
             approvalButton.addEventListener("click", async () => {
               const companyLabel = user.companyName ? ` for ${user.companyName}` : "";
               if (!window.confirm(`${text} ${user.displayName}${companyLabel}?`)) return;
+              const reason = promptAdminActionReason(`${text.toLowerCase()} this employer account`);
+              if (!reason) return;
               approvalButton.disabled = true;
               try {
                 await authRequest(`/api/admin/users/${user.id}/employer-approval`, {
                   method: "PATCH",
-                  body: JSON.stringify({ status: nextStatus })
+                  body: JSON.stringify({ status: nextStatus, reason })
                 });
               } catch (error) {
                 approvalButton.disabled = nextStatus === "approved" && !user.emailVerified;
@@ -1522,11 +1814,13 @@
         statusButton.addEventListener("click", async () => {
           const nextStatus = !user.isActive;
           if (!window.confirm(`${nextStatus ? "Activate" : "Deactivate"} ${user.displayName}'s account?`)) return;
+          const reason = promptAdminActionReason(`${nextStatus ? "activating" : "deactivating"} this account`);
+          if (!reason) return;
           statusButton.disabled = true;
           try {
             await authRequest(`/api/admin/users/${user.id}/status`, {
               method: "PATCH",
-              body: JSON.stringify({ isActive: nextStatus })
+              body: JSON.stringify({ isActive: nextStatus, reason })
             });
           } catch (error) {
             statusButton.disabled = false;
@@ -1558,11 +1852,16 @@
           : "Permanently delete only if there are no linked records. This cannot be undone.";
         deleteButton.addEventListener("click", async () => {
           if (!window.confirm(`Permanently delete ${user.displayName} (${user.email})? Accounts with linked applications, jobs, reports, profile data, or other history cannot be deleted. Deactivate the account to preserve its history.`)) return;
+          const reason = promptAdminActionReason("permanently deleting this account");
+          if (!reason) return;
           deleteButton.disabled = true;
           setRowFeedback(rowFeedback, "");
           setInlineFeedback("#users-action-feedback", "", "success");
           try {
-            await authRequest(`/api/admin/users/${user.id}`, { method: "DELETE" });
+            await authRequest(`/api/admin/users/${user.id}`, {
+              method: "DELETE",
+              body: JSON.stringify({ reason }),
+            });
           } catch (error) {
             const message = error instanceof Error ? error.message : "Unable to delete the account.";
             setRowFeedback(rowFeedback, message);
@@ -1816,7 +2115,13 @@
     }
 
     function renderInsights(data) {
-      if (!data || !data.metrics || !Array.isArray(data.applicationsByStatus) || !Array.isArray(data.weeklyApplications) || !Array.isArray(data.topJobs)) {
+      if (!data || !data.metrics || !Array.isArray(data.applicationsByStatus) || !Array.isArray(data.weeklyApplications) || !Array.isArray(data.topJobs) ||
+        !Array.isArray(data.applicationsBySource) ||
+        !Array.isArray(data.reportDefinitions) ||
+        !data.hiringMetrics || !Number.isFinite(data.hiringMetrics.acceptedOffers) ||
+        !Number.isFinite(data.hiringMetrics.averageDaysToAcceptance) ||
+        !Number.isFinite(data.hiringMetrics.hires) ||
+        !Number.isFinite(data.hiringMetrics.averageDaysToHire)) {
         throw new Error("The insights API returned an unexpected response.");
       }
       adminInsights = data;
@@ -1837,6 +2142,44 @@
       setText('[data-metric-note="total-users"]', "Live user accounts");
       setText('[data-metric-note="total-applications"]', "All recorded applications");
       setText('[data-metric-note="scheduled-interviews"]', "Current interview records");
+      document.querySelector("#offer-acceptance-days").textContent =
+        data.hiringMetrics.acceptedOffers
+          ? `${data.hiringMetrics.averageDaysToAcceptance.toFixed(1)} days`
+          : "—";
+      document.querySelector("#offer-acceptance-summary").textContent =
+        `Based on ${data.hiringMetrics.acceptedOffers} accepted offer${data.hiringMetrics.acceptedOffers === 1 ? "" : "s"}; not time-to-hire`;
+      document.querySelector("#hired-candidate-count").textContent =
+        String(data.hiringMetrics.hires);
+      document.querySelector("#time-to-hire-days").textContent =
+        data.hiringMetrics.hires
+          ? `${data.hiringMetrics.averageDaysToHire.toFixed(1)} days`
+          : "—";
+      document.querySelector("#time-to-hire-summary").textContent =
+        `Based on ${data.hiringMetrics.hires} employer-reported hire${data.hiringMetrics.hires === 1 ? "" : "s"}`;
+
+      const reportGrid = document.querySelector("#view-analytics .report-grid");
+      const configuredReports = new Map(
+        data.reportDefinitions.map((report) => [report.key, report]),
+      );
+      const reportPanels = [
+        ...document.querySelectorAll("[data-analytics-report]"),
+      ];
+      reportPanels.forEach((panel) => {
+        const definition = configuredReports.get(
+          panel.dataset.analyticsReport,
+        );
+        panel.hidden = !definition?.enabled;
+        panel.style.display = definition?.enabled ? "" : "none";
+      });
+      data.reportDefinitions.forEach((definition) => {
+        const panel = reportPanels.find(
+          (item) => item.dataset.analyticsReport === definition.key,
+        );
+        if (!panel) return;
+        const title = panel.querySelector("[data-report-title]");
+        if (title) title.textContent = definition.label;
+        reportGrid.append(panel);
+      });
 
       const stageContainers = [
         document.querySelector("#application-status-summary"),
@@ -1844,14 +2187,25 @@
       ].filter(Boolean);
       stageContainers.forEach((container) => {
         container.replaceChildren();
-        const statuses = ["submitted", "in_review", "interview", "offer", "rejected", "withdrawn"];
+        const statuses = [...new Set([
+          ...(data.applicationStages || []).map((stage) => stage.key),
+          "offer",
+          "offer_accepted",
+          "offer_declined",
+          "offer_expired",
+          "hired",
+          "withdrawal_requested",
+          "withdrawn",
+        ])];
         statuses.forEach((status) => {
           const row = data.applicationsByStatus.find((item) => item.status === status);
           if (!row) return;
           const line = document.createElement("div");
           line.className = "source-row";
           const label = document.createElement("span");
-          label.textContent = status.replaceAll("_", " ");
+          label.textContent =
+            data.applicationStages.find((stage) => stage.key === status)?.label ||
+            status.replaceAll("_", " ");
           const count = document.createElement("strong");
           count.textContent = String(row.count);
           line.append(label, count);
@@ -1863,6 +2217,46 @@
           empty.textContent = "No applications have been submitted yet.";
           container.append(empty);
         }
+      });
+
+      const sourceContainer = document.querySelector("#analytics-source-summary");
+      sourceContainer.replaceChildren();
+      data.applicationsBySource.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "source-row";
+        const label = document.createElement("span");
+        label.textContent = [
+          item.source,
+          item.medium,
+          item.campaign,
+        ].filter(Boolean).join(" / ");
+        const count = document.createElement("strong");
+        count.textContent = `${item.applicationCount} applications · ${item.hireCount} hires (${item.hireConversionRate}%)`;
+        row.append(label, count);
+        sourceContainer.append(row);
+      });
+      if (!sourceContainer.childElementCount) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent = "No application sources have been recorded yet.";
+        sourceContainer.append(empty);
+      }
+      const hiringContainer = document.querySelector(
+        "#analytics-hiring-summary",
+      );
+      hiringContainer.replaceChildren();
+      [
+        `Accepted offers: ${data.hiringMetrics.acceptedOffers}`,
+        `Employer-reported hires: ${data.hiringMetrics.hires}`,
+        `Average days to accepted offer: ${data.hiringMetrics.acceptedOffers ? data.hiringMetrics.averageDaysToAcceptance.toFixed(1) : "—"}`,
+        `Average days to employer-reported hire: ${data.hiringMetrics.hires ? data.hiringMetrics.averageDaysToHire.toFixed(1) : "—"}`,
+      ].forEach((value) => {
+        const row = document.createElement("div");
+        row.className = "source-row";
+        const label = document.createElement("span");
+        label.textContent = value;
+        row.append(label);
+        hiringContainer.append(row);
       });
 
       const renderWeekly = (container) => {
@@ -1937,21 +2331,221 @@
       note.textContent = companies.length ? "" : "No employer organizations are registered yet.";
     }
 
+    function formatRevenueAmount(value) {
+      const amount = String(value);
+      if (!/^\d+(?:\.\d{1,2})?$/.test(amount)) {
+        throw new Error("The revenue API returned an invalid INR amount.");
+      }
+      const [whole, fraction = ""] = amount.split(".");
+      const digits = whole.replace(/^0+(?=\d)/, "");
+      const formatted = digits.length > 3
+        ? `${digits.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ",")},${digits.slice(-3)}`
+        : digits;
+      return `₹${formatted}.${fraction.padEnd(2, "0").slice(0, 2)}`;
+    }
+
+    function formatEmployerAmount(value, currency) {
+      return currency === "INR"
+        ? formatRevenueAmount(value)
+        : `${currency} ${value}`;
+    }
+
     async function loadAdminCandidatePremium() {
-      const [products, orders] = await Promise.all([
+      const [products, orders, revenue, employerRevenue, reconciliation] = await Promise.all([
         authRequest("/api/admin/candidate-premium/products"),
         authRequest("/api/admin/candidate-premium/orders"),
+        authRequest("/api/admin/candidate-premium/revenue"),
+        authRequest("/api/admin/revenue/employer-subscriptions"),
+        authRequest("/api/admin/revenue/reconciliation"),
       ]);
-      if (!Array.isArray(products) || !Array.isArray(orders)) {
-        throw new Error("The candidate services API returned an unexpected response.");
+      if (!Array.isArray(products) || !Array.isArray(orders) ||
+        revenue?.currency !== "INR" || !revenue.totals ||
+        !/^\d+$/.test(revenue.totals.paidOrders) ||
+        !/^\d+$/.test(revenue.totals.pendingOrders) ||
+        !Array.isArray(revenue.byProduct) ||
+        !revenue.byProduct.every((product) =>
+          typeof product.productName === "string" &&
+          /^\d+$/.test(product.paidOrders)) ||
+        !Array.isArray(revenue.monthly) ||
+        !revenue.monthly.every((month) =>
+          /^\d{4}-\d{2}$/.test(month.month) && /^\d+$/.test(month.paidOrders)) ||
+        employerRevenue?.scope !== "employer_subscription_charges" ||
+        !Array.isArray(employerRevenue.totalsByCurrency) ||
+        !employerRevenue.totalsByCurrency.every((total) =>
+          /^[A-Z]{3}$/.test(total.currency) &&
+          /^\d+$/.test(total.paidOrders) &&
+          /^\d+(?:\.\d{1,2})?$/.test(total.grossAmount)) ||
+        !Array.isArray(employerRevenue.byPlan) ||
+        !employerRevenue.byPlan.every((plan) =>
+          (plan.planKey === null || typeof plan.planKey === "string") &&
+          /^[A-Z]{3}$/.test(plan.currency) &&
+          /^\d+$/.test(plan.paidOrders) &&
+          /^\d+(?:\.\d{1,2})?$/.test(plan.grossAmount)) ||
+        !Array.isArray(employerRevenue.monthly) ||
+        !employerRevenue.monthly.every((month) =>
+          /^[A-Z]{3}$/.test(month.currency) &&
+          /^\d{4}-\d{2}$/.test(month.month) &&
+          /^\d+$/.test(month.paidOrders) &&
+          /^\d+(?:\.\d{1,2})?$/.test(month.grossAmount)) ||
+        reconciliation?.limit !== 500 ||
+        !Array.isArray(reconciliation.items) ||
+        !reconciliation.items.every((item) =>
+          ["candidate_service", "employer_subscription"].includes(item.source) &&
+          (item.gatewayPaymentId === null || typeof item.gatewayPaymentId === "string") &&
+          typeof item.gatewayReferenceId === "string" &&
+          (item.invoiceId === null || typeof item.invoiceId === "string") &&
+          /^\d+\.\d{2}$/.test(item.amount) &&
+          /^[A-Z]{3}$/.test(item.currency) &&
+          ["captured", "missing_payment_id"].includes(item.status) &&
+          (item.paidAt === null || !Number.isNaN(Date.parse(item.paidAt))))) {
+        throw new Error("The revenue API returned an unexpected response.");
       }
+
+      adminPaymentReconciliationItems = reconciliation.items;
+      const reconciliationBody = document.querySelector("#payment-reconciliation-body");
+      reconciliationBody.replaceChildren();
+      reconciliation.items.forEach((item) => {
+        const row = document.createElement("tr");
+        const source = item.source === "candidate_service"
+          ? "Candidate service"
+          : "Employer subscription";
+        const paidAt = item.paidAt
+          ? formatDate(item.paidAt, { dateStyle: "medium", timeStyle: "short" })
+          : "Unknown";
+        [
+          paidAt,
+          source,
+          item.gatewayPaymentId || "Missing payment ID",
+          item.gatewayReferenceId,
+          item.invoiceId || "—",
+          formatEmployerAmount(item.amount, item.currency),
+          item.status === "captured" ? "Captured" : "Needs review",
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        reconciliationBody.append(row);
+      });
+      document.querySelector("#payment-reconciliation-summary").textContent =
+        `${reconciliation.items.length} latest captured ledger entries shown (up to ${reconciliation.limit}).`;
+
+      const employerPlansBody = document.querySelector("#employer-revenue-plans-body");
+      employerPlansBody.replaceChildren();
+      employerRevenue.byPlan.forEach((plan) => {
+        const row = document.createElement("tr");
+        [
+          plan.planKey || "Unknown / legacy",
+          plan.currency,
+          plan.paidOrders,
+          formatEmployerAmount(plan.grossAmount, plan.currency),
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        employerPlansBody.append(row);
+      });
+      if (!employerRevenue.byPlan.length) {
+        const row = document.createElement("tr");
+        const empty = document.createElement("td");
+        empty.colSpan = 4;
+        empty.textContent = "No employer subscription charges recorded yet.";
+        row.append(empty);
+        employerPlansBody.append(row);
+      }
+
+      const employerTotalsBody = document.querySelector("#employer-revenue-totals-body");
+      employerTotalsBody.replaceChildren();
+      employerRevenue.totalsByCurrency.forEach((total) => {
+        const row = document.createElement("tr");
+        [total.currency, total.paidOrders, formatEmployerAmount(total.grossAmount, total.currency)]
+          .forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.append(cell);
+          });
+        employerTotalsBody.append(row);
+      });
+      if (!employerRevenue.totalsByCurrency.length) {
+        const row = document.createElement("tr");
+        const empty = document.createElement("td");
+        empty.colSpan = 3;
+        empty.textContent = "No employer subscription charges recorded yet.";
+        row.append(empty);
+        employerTotalsBody.append(row);
+      }
+      const employerMonthsBody = document.querySelector("#employer-revenue-months-body");
+      employerMonthsBody.replaceChildren();
+      employerRevenue.monthly.forEach((month) => {
+        const row = document.createElement("tr");
+        [month.month, month.currency, month.paidOrders, formatEmployerAmount(month.grossAmount, month.currency)]
+          .forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.append(cell);
+          });
+        employerMonthsBody.append(row);
+      });
+      if (!employerRevenue.monthly.length) {
+        const row = document.createElement("tr");
+        const empty = document.createElement("td");
+        empty.colSpan = 4;
+        empty.textContent = "No employer subscription charges recorded in the last 12 months.";
+        row.append(empty);
+        employerMonthsBody.append(row);
+      }
+
+      document.querySelector("#candidate-premium-revenue-total").textContent =
+        formatRevenueAmount(revenue.totals.grossPaidInr);
+      document.querySelector("#candidate-premium-revenue-paid-count").textContent =
+        revenue.totals.paidOrders;
+      document.querySelector("#candidate-premium-revenue-pending-count").textContent =
+        revenue.totals.pendingOrders;
+      const revenueProductsBody = document.querySelector("#candidate-premium-revenue-products-body");
+      revenueProductsBody.replaceChildren();
+      revenue.byProduct.forEach((product) => {
+        const row = document.createElement("tr");
+        [product.productName, product.paidOrders, formatRevenueAmount(product.grossPaidInr)]
+          .forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.append(cell);
+          });
+        revenueProductsBody.append(row);
+      });
+      if (!revenue.byProduct.length) {
+        const row = document.createElement("tr");
+        const empty = document.createElement("td");
+        empty.colSpan = 3;
+        empty.textContent = "No paid candidate-service orders yet.";
+        row.append(empty);
+        revenueProductsBody.append(row);
+      }
+      const revenueMonthsBody = document.querySelector("#candidate-premium-revenue-months-body");
+      revenueMonthsBody.replaceChildren();
+      revenue.monthly.forEach((month) => {
+        const row = document.createElement("tr");
+        [month.month, month.paidOrders, formatRevenueAmount(month.grossPaidInr)]
+          .forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.append(cell);
+          });
+        revenueMonthsBody.append(row);
+      });
 
       const productsBody = document.querySelector("#candidate-premium-products-body");
       productsBody.replaceChildren();
       products.forEach((product) => {
         const row = document.createElement("tr");
         const name = document.createElement("td");
-        name.textContent = product.name;
+        const nameInput = document.createElement("input");
+        nameInput.type = "text";
+        nameInput.maxLength = 100;
+        nameInput.value = product.name;
+        nameInput.setAttribute("aria-label", `${product.name} name`);
+        name.append(nameInput);
         const descriptionCell = document.createElement("td");
         const description = document.createElement("input");
         description.type = "text";
@@ -1995,6 +2589,7 @@
             await authRequest(`/api/admin/candidate-premium/products/${encodeURIComponent(product.key)}`, {
               method: "PATCH",
               body: JSON.stringify({
+                name: nameInput.value.trim(),
                 amountInr: Number(price.value),
                 fulfillmentDays: Number(days.value),
                 enabled: enabled.checked,
@@ -2008,7 +2603,42 @@
             save.disabled = false;
           }
         });
-        actionCell.append(save);
+        const remove = document.createElement("button");
+        remove.className = "button";
+        remove.type = "button";
+        remove.textContent = product.enabled ? "Delete" : "Deleted";
+        remove.disabled = !product.enabled;
+        remove.title =
+          "Remove from purchases while preserving linked order history.";
+        remove.addEventListener("click", async () => {
+          if (
+            !window.confirm(
+              `Remove ${nameInput.value.trim()} from candidate purchases? Historical orders will be retained.`,
+            )
+          )
+            return;
+          const reason = window.prompt(
+            "Enter the reason for removing this service (required).",
+          );
+          if (reason === null) return;
+          if (reason.trim().length < 3) {
+            showToast("Enter a reason of at least three characters.", "error");
+            return;
+          }
+          remove.disabled = true;
+          try {
+            await authRequest(`/api/admin/candidate-premium/products/${encodeURIComponent(product.key)}`, {
+              method: "DELETE",
+              body: JSON.stringify({ reason: reason.trim() }),
+            });
+            await loadAdminCandidatePremium();
+            showToast("Service removed from purchases; historical orders were retained.", "success");
+          } catch (error) {
+            showToast(error instanceof Error ? error.message : "Unable to remove service.", "error");
+            remove.disabled = false;
+          }
+        });
+        actionCell.append(save, remove);
         row.append(name, descriptionCell, priceCell, daysCell, enabledCell, actionCell);
         productsBody.append(row);
       });
@@ -2162,6 +2792,227 @@
         `${location.origin}${configuration.candidateWebhookPath}`;
     }
 
+    async function loadPlatformConfiguration() {
+      const configuration = await authRequest("/api/admin/platform-configuration");
+      const form = document.querySelector("#platform-configuration-form");
+      form.elements.candidateRegistrationEnabled.checked =
+        configuration.candidateRegistrationEnabled;
+      form.elements.employerRegistrationEnabled.checked =
+        configuration.employerRegistrationEnabled;
+      form.elements.employerApprovalRequired.checked =
+        configuration.employerApprovalRequired;
+      form.elements.jobApprovalRequired.checked =
+        configuration.jobApprovalRequired;
+      const taxonomyForm = document.querySelector("#job-taxonomies-form");
+      for (const key of ["jobCategories", "industries", "locations", "employmentTypes", "workplaceTypes"]) {
+        taxonomyForm.elements[key].value = configuration[key].join("\n");
+      }
+      document.querySelector("#application-stages-editor").value =
+        configuration.applicationStages
+          .map((stage) => `${stage.key}|${stage.label}|${stage.transitions.join(",")}`)
+          .join("\n");
+      document.querySelector("#report-definitions-editor").value =
+        configuration.reportDefinitions
+          .map(
+            (report) =>
+              `${report.key}|${report.label}|${report.enabled ? "enabled" : "disabled"}`,
+          )
+          .join("\n");
+      document.querySelector("#platform-configuration-updated").textContent =
+        configuration.customized && configuration.updatedAt
+          ? `Last updated ${formatDate(configuration.updatedAt, { dateStyle: "medium", timeStyle: "short" })}`
+          : "Using system defaults";
+      return configuration;
+    }
+
+    async function loadTwilioConfiguration() {
+      const configuration = await authRequest("/api/admin/twilio-config");
+      const form = document.querySelector("#twilio-config-form");
+      form.elements.enabled.checked = configuration.enabled;
+      form.elements.accountSid.value = configuration.accountSid;
+      form.elements.fromNumber.value = configuration.fromNumber;
+      form.elements.whatsappEnabled.checked = configuration.whatsappEnabled;
+      form.elements.whatsappFrom.value = configuration.whatsappFrom;
+      form.elements.whatsappTemplateSid.value =
+        configuration.whatsappTemplateSid;
+      form.elements.authToken.value = "";
+      form.elements.clearAuthToken.checked = false;
+      form.elements.authToken.placeholder = configuration.authTokenConfigured
+        ? "Saved — enter a new value only to rotate"
+        : "Not configured";
+      document.querySelector("#twilio-auth-token-state").textContent =
+        configuration.authTokenConfigured
+          ? "Auth token is configured; its value is never shown."
+          : "Auth token is not configured.";
+      document.querySelector("#twilio-config-status").textContent =
+        configuration.ready
+          ? "Enabled and configured"
+          : configuration.enabled
+            ? "Enabled, but credentials are incomplete"
+            : "Disabled";
+      document.querySelector("#twilio-whatsapp-status").textContent =
+        configuration.whatsappReady
+          ? "Enabled and configured"
+          : configuration.whatsappEnabled
+            ? "Enabled, but sender/template/credentials are incomplete"
+            : "Disabled";
+      const encryptionNote = document.querySelector("#twilio-encryption-note");
+      encryptionNote.hidden = configuration.encryptionReady;
+      encryptionNote.textContent =
+        "Set TWILIO_CONFIG_ENCRYPTION_KEY on the server to a stable, random value of at least 32 characters before saving a Twilio auth token. Existing environment-provided credentials remain usable.";
+      return configuration;
+    }
+
+    async function loadNotificationTemplates() {
+      const templates = await authRequest("/api/admin/notification-templates");
+      const container = document.querySelector("#notification-templates-list");
+      container.replaceChildren();
+      templates.forEach((template) => {
+        const panel = document.createElement("article");
+        panel.className = "panel table-panel";
+        panel.style.marginBottom = "15px";
+        const heading = document.createElement("div");
+        heading.className = "panel-title-row";
+        const title = document.createElement("h2");
+        title.textContent = template.name;
+        const state = document.createElement("span");
+        state.textContent = template.customized ? "Customized" : "Using defaults";
+        heading.append(title, state);
+        const form = document.createElement("form");
+        form.dataset.templateKey = template.key;
+        const addField = (name, labelText, value, multiline, maxLength) => {
+          const row = document.createElement("div");
+          row.className = "form-row";
+          const label = document.createElement("label");
+          label.textContent = labelText;
+          const field = document.createElement(multiline ? "textarea" : "input");
+          field.name = name;
+          field.required = true;
+          field.maxLength = maxLength;
+          if (multiline) field.rows = 5;
+          field.value = value;
+          label.append(field);
+          row.append(label);
+          form.append(row);
+        };
+        const placeholders = document.createElement("p");
+        placeholders.className = "demo-note";
+        placeholders.textContent = `Available placeholders: ${template.placeholders.map((value) => `{{${value}}}`).join(", ") || "none"}`;
+        addField("subject", "Email subject", template.subject, false, 300);
+        addField("body", "Plain-text message", template.body, true, 10000);
+        addField("reason", "Reason for change", "", false, 500);
+        const feedback = document.createElement("p");
+        feedback.className = "form-feedback";
+        feedback.setAttribute("role", "status");
+        feedback.setAttribute("aria-live", "polite");
+        const actions = document.createElement("div");
+        actions.className = "heading-actions";
+        const save = document.createElement("button");
+        save.className = "button button-primary";
+        save.type = "submit";
+        save.textContent = "Save template";
+        const reset = document.createElement("button");
+        reset.className = "button";
+        reset.type = "button";
+        reset.dataset.resetTemplate = "";
+        reset.textContent = "Restore default";
+        actions.append(save, reset);
+        form.append(placeholders, feedback, actions);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (!form.reportValidity()) return;
+          const reason = String(form.elements.reason.value || "").trim();
+          if (reason.length < 3) {
+            form.elements.reason.focus();
+            feedback.textContent = "Enter a reason of at least three characters.";
+            feedback.dataset.state = "error";
+            return;
+          }
+          save.disabled = true;
+          feedback.textContent = "";
+          try {
+            const updated = await authRequest(`/api/admin/notification-templates/${encodeURIComponent(template.key)}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                subject: form.elements.subject.value,
+                body: form.elements.body.value,
+                reason,
+              }),
+            });
+            form.elements.reason.value = "";
+            state.textContent = updated.customized ? "Customized" : "Using defaults";
+            feedback.textContent = "Template saved and audited.";
+            feedback.dataset.state = "success";
+          } catch (error) {
+            feedback.textContent = error instanceof Error ? error.message : "Unable to save template.";
+            feedback.dataset.state = "error";
+            feedback.setAttribute("role", "alert");
+            feedback.setAttribute("aria-live", "assertive");
+          } finally {
+            save.disabled = false;
+          }
+        });
+        reset.addEventListener("click", async () => {
+          const reason = String(form.elements.reason.value || "").trim();
+          if (reason.length < 3) {
+            form.elements.reason.focus();
+            feedback.textContent = "Enter a reason of at least three characters before restoring defaults.";
+            feedback.dataset.state = "error";
+            return;
+          }
+          if (!window.confirm(`Restore the default ${template.name.toLowerCase()} email template?`)) return;
+          reset.disabled = true;
+          feedback.textContent = "";
+          try {
+            const restored = await authRequest(`/api/admin/notification-templates/${encodeURIComponent(template.key)}/reset`, {
+              method: "POST",
+              body: JSON.stringify({ reason }),
+            });
+            form.elements.subject.value = restored.subject;
+            form.elements.body.value = restored.body;
+            form.elements.reason.value = "";
+            state.textContent = "Using defaults";
+            feedback.textContent = "Default template restored and audited.";
+            feedback.dataset.state = "success";
+          } catch (error) {
+            feedback.textContent = error instanceof Error ? error.message : "Unable to restore the default template.";
+            feedback.dataset.state = "error";
+            feedback.setAttribute("role", "alert");
+            feedback.setAttribute("aria-live", "assertive");
+          } finally {
+            reset.disabled = false;
+          }
+        });
+        panel.append(heading, form);
+        container.append(panel);
+      });
+    }
+
+    async function loadAdminJobOptions() {
+      if (adminJobOptions) return adminJobOptions;
+      const response = await fetch("/api/jobs/options", { cache: "no-store" });
+      if (!response.ok)
+        throw new Error(`Job options service returned ${response.status}.`);
+      const options = await response.json();
+      const keys = ["categories", "industries", "locations", "employmentTypes", "workplaceTypes"];
+      if (!options || keys.some((key) => !Array.isArray(options[key]) || options[key].some((value) => typeof value !== "string")))
+        throw new Error("The job options service returned an unexpected response.");
+      adminJobOptions = options;
+      const fill = (selector, values, placeholder) => {
+        const select = document.querySelector(selector);
+        select.replaceChildren(new Option(placeholder, ""));
+        values.forEach((value) => select.add(new Option(value.replaceAll("-", " "), value)));
+      };
+      fill("#new-job-category", options.categories, "Select a category");
+      fill("#new-job-industry", options.industries, "Select an industry");
+      fill("#new-job-type", options.workplaceTypes, "Select workplace");
+      fill("#new-job-employment-type", options.employmentTypes, "Select employment type");
+      document.querySelector("#admin-job-location-options").replaceChildren(
+        ...options.locations.map((value) => new Option(value, value)),
+      );
+      return options;
+    }
+
     async function loadAdminActivity() {
       const activity = await authRequest("/api/admin/activity");
       if (!Array.isArray(activity)) throw new Error("The activity API returned an unexpected response.");
@@ -2254,6 +3105,7 @@
       if (!["staff", "admin", "superadmin"].includes(session.user?.role)) {
         authResolved = true;
         adminAccessToken = null;
+        authError.textContent = "This account does not have admin access. Sign in with a staff, admin, or superadmin account.";
         authRequest("/api/auth/logout", { method: "POST" }).catch(() => {});
         throw new Error("This account does not have admin access.");
       }
@@ -2292,28 +3144,9 @@
       await refreshOverviewData().catch((error) => showToast(`Dashboard data could not be refreshed: ${error.message}`));
     }
 
-    document.querySelector("#admin-login-form").addEventListener("submit", async (event) => {
+    document.querySelector("#admin-login-form").addEventListener("submit", (event) => {
       event.preventDefault();
-      authResolved = true;
-      const form = event.currentTarget;
-      const submit = form.querySelector('[type="submit"]');
-      const data = new FormData(form);
-      submit.disabled = true;
-      authError.textContent = "";
-      try {
-        const session = await authRequest("/api/auth/login", {
-          method: "POST",
-          body: JSON.stringify({
-            email: data.get("email"),
-            password: data.get("password")
-          })
-        });
-        await enterAdmin(session);
-      } catch (error) {
-        authError.textContent = error instanceof Error ? error.message : "Unable to sign in.";
-      } finally {
-        submit.disabled = false;
-      }
+      window.location.assign("/#sign-in");
     });
 
     document.querySelector("#force-password-form").addEventListener("submit", async (event) => {
@@ -2345,7 +3178,6 @@
         document.querySelector("#admin-login-form").reset();
         form.reset();
         authError.textContent = "Password changed. Sign in again with your new password.";
-        document.querySelector("#admin-email").focus();
       } catch (error) {
         document.querySelector("#force-password-error").textContent =
           error instanceof Error ? error.message : "Unable to change the password.";
@@ -2420,7 +3252,6 @@
       adminApp.classList.remove("authenticated");
       authGate.hidden = false;
       document.querySelector("#admin-login-form").reset();
-      document.querySelector("#admin-email").focus();
     });
 
     authRequest("/api/auth/refresh", { method: "POST" })
@@ -2474,7 +3305,7 @@
       }
       const view = document.querySelector(`#view-${name}`)
         ?? document.querySelector("#view-overview");
-      if ((name === "users" || name === "audit" || name === "privacy" || name === "candidate-premium" || name === "razorpay-config") && currentAdminUser?.role !== "superadmin") {
+      if ((name === "users" || name === "audit" || name === "privacy" || name === "candidate-premium" || name === "razorpay-config" || name === "twilio-config" || name === "platform-configuration" || name === "notification-templates") && currentAdminUser?.role !== "superadmin") {
         showToast("This page is available to superadmins only.");
         return;
       }
@@ -2491,6 +3322,9 @@
       }
       if (view.id === "view-reports" && adminAccessToken) {
         loadAdminReports(1).catch((error) => showToast(`Unable to load reports: ${error.message}`));
+      }
+      if (view.id === "view-content" && adminAccessToken) {
+        loadAdminContent().catch((error) => showToast(`Unable to load website content: ${error.message}`));
       }
       if (view.id === "view-privacy" && adminAccessToken) {
         loadPrivacyRequests(1).catch((error) => showToast(`Unable to load privacy requests: ${error.message}`));
@@ -2526,6 +3360,21 @@
       if (view.id === "view-razorpay-config" && adminAccessToken) {
         loadRazorpayConfiguration().catch((error) =>
           showToast(`Unable to load Razorpay settings: ${error.message}`, "error"),
+        );
+      }
+      if (view.id === "view-platform-configuration" && adminAccessToken) {
+        loadPlatformConfiguration().catch((error) =>
+          showToast(`Unable to load platform controls: ${error.message}`, "error"),
+        );
+      }
+      if (view.id === "view-twilio-config" && adminAccessToken) {
+        loadTwilioConfiguration().catch((error) =>
+          showToast(`Unable to load SMS settings: ${error.message}`, "error"),
+        );
+      }
+      if (view.id === "view-notification-templates" && adminAccessToken) {
+        loadNotificationTemplates().catch((error) =>
+          showToast(`Unable to load email templates: ${error.message}`, "error"),
         );
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2567,8 +3416,369 @@
     document.querySelector("[data-refresh-candidate-premium]").addEventListener("click", () => {
       loadAdminCandidatePremium().catch((error) => showToast(`Unable to load candidate services: ${error.message}`, "error"));
     });
+    document.querySelector("[data-export-payment-reconciliation]").addEventListener("click", () => {
+      downloadCsv(
+        "esllp-payment-reconciliation.csv",
+        ["Paid at", "Source", "Gateway payment ID", "Order / subscription ID", "Invoice ID", "Amount", "Currency", "Status"],
+        adminPaymentReconciliationItems.map((item) => [
+          item.paidAt || "",
+          item.source,
+          item.gatewayPaymentId || "",
+          item.gatewayReferenceId,
+          item.invoiceId || "",
+          item.amount,
+          item.currency,
+          item.status,
+        ]),
+      );
+    });
+    document.querySelector("#candidate-premium-product-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const submit = form.querySelector('[type="submit"]');
+      const feedback = document.querySelector("#candidate-premium-product-feedback");
+      submit.disabled = true;
+      feedback.textContent = "";
+      try {
+        await authRequest("/api/admin/candidate-premium/products", {
+          method: "POST",
+          body: JSON.stringify({
+            key: String(data.get("key") || "").trim(),
+            name: String(data.get("name") || "").trim(),
+            description: String(data.get("description") || "").trim(),
+            amountInr: Number(data.get("amountInr")),
+            enabled: form.elements.enabled.checked,
+          }),
+        });
+        form.reset();
+        await loadAdminCandidatePremium();
+        feedback.textContent = "Candidate service added.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to add candidate service.";
+        feedback.dataset.state = "error";
+        feedback.setAttribute("role", "alert");
+        feedback.setAttribute("aria-live", "assertive");
+      } finally {
+        submit.disabled = false;
+      }
+    });
     document.querySelector("[data-refresh-razorpay-config]").addEventListener("click", () => {
       loadRazorpayConfiguration().catch((error) => showToast(`Unable to load Razorpay settings: ${error.message}`, "error"));
+    });
+    document.querySelector("[data-refresh-platform-configuration]").addEventListener("click", () => {
+      loadPlatformConfiguration().catch((error) => showToast(`Unable to load platform controls: ${error.message}`, "error"));
+    });
+    document.querySelector("[data-refresh-twilio-config]").addEventListener("click", () => {
+      loadTwilioConfiguration().catch((error) => showToast(`Unable to load SMS settings: ${error.message}`, "error"));
+    });
+    document.querySelector("[data-refresh-notification-templates]").addEventListener("click", () => {
+      loadNotificationTemplates().catch((error) => showToast(`Unable to load email templates: ${error.message}`, "error"));
+    });
+    document.querySelector("#platform-configuration-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const reason = String(new FormData(form).get("reason") || "").trim();
+      if (reason.length < 3) {
+        showToast("Enter a reason of at least three characters.", "error");
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      const feedback = document.querySelector("#platform-configuration-feedback");
+      submit.disabled = true;
+      feedback.textContent = "";
+      try {
+        await authRequest("/api/admin/platform-configuration", {
+          method: "PUT",
+          body: JSON.stringify({
+            candidateRegistrationEnabled: form.elements.candidateRegistrationEnabled.checked,
+            employerRegistrationEnabled: form.elements.employerRegistrationEnabled.checked,
+            employerApprovalRequired: form.elements.employerApprovalRequired.checked,
+            jobApprovalRequired: form.elements.jobApprovalRequired.checked,
+            reason,
+          }),
+        });
+        form.elements.reason.value = "";
+        await loadPlatformConfiguration();
+        feedback.textContent = "Platform controls saved and audited.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to save platform controls.";
+        feedback.dataset.state = "error";
+        feedback.setAttribute("role", "alert");
+        feedback.setAttribute("aria-live", "assertive");
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    document.querySelector("#twilio-config-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const reason = String(form.elements.reason.value || "").trim();
+      const feedback = document.querySelector("#twilio-config-feedback");
+      if (reason.length < 3) {
+        feedback.textContent = "Enter a reason of at least three characters.";
+        feedback.dataset.state = "error";
+        return;
+      }
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      feedback.textContent = "";
+      try {
+        await authRequest("/api/admin/twilio-config", {
+          method: "PATCH",
+          body: JSON.stringify({
+            enabled: form.elements.enabled.checked,
+            accountSid: form.elements.accountSid.value,
+            authToken: form.elements.authToken.value,
+            clearAuthToken: form.elements.clearAuthToken.checked,
+            fromNumber: form.elements.fromNumber.value,
+            whatsappEnabled: form.elements.whatsappEnabled.checked,
+            whatsappFrom: form.elements.whatsappFrom.value,
+            whatsappTemplateSid: form.elements.whatsappTemplateSid.value,
+            reason,
+          }),
+        });
+        form.elements.reason.value = "";
+        await loadTwilioConfiguration();
+        feedback.textContent = "Messaging settings saved and audited.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to save SMS settings.";
+        feedback.dataset.state = "error";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    document.querySelector("#platform-configuration-reset").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const form = document.querySelector("#platform-configuration-form");
+      const reason = String(form.elements.reason.value || "").trim();
+      const feedback = document.querySelector("#platform-configuration-feedback");
+      if (reason.length < 3) {
+        showToast("Enter a reason of at least three characters before restoring defaults.", "error");
+        form.elements.reason.focus();
+        return;
+      }
+      if (!window.confirm("Restore all default registration, approval, taxonomy, and application-stage settings?")) return;
+      button.disabled = true;
+      feedback.textContent = "";
+      try {
+        await authRequest("/api/admin/platform-configuration/reset", {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        });
+        form.elements.reason.value = "";
+        await loadPlatformConfiguration();
+        adminJobOptions = null;
+        feedback.textContent = "All platform defaults restored and audited.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to restore platform defaults.";
+        feedback.dataset.state = "error";
+        feedback.setAttribute("role", "alert");
+        feedback.setAttribute("aria-live", "assertive");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document.querySelector("#job-taxonomies-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const splitOptions = (value) => [...new Set(String(value).split(/\r?\n/).map((item) => item.trim()).filter(Boolean))];
+      const payload = Object.fromEntries(
+        ["jobCategories", "industries", "locations", "employmentTypes", "workplaceTypes"].map((key) => [
+          key,
+          splitOptions(form.elements[key].value),
+        ]),
+      );
+      if (!payload.employmentTypes.length || !payload.workplaceTypes.length) {
+        showToast("Keep at least one employment type and work arrangement.", "error");
+        return;
+      }
+      const reason = String(form.elements.reason.value || "").trim();
+      if (reason.length < 3) {
+        showToast("Enter a reason of at least three characters.", "error");
+        return;
+      }
+      const button = form.querySelector('[type="submit"]');
+      const feedback = document.querySelector("#job-taxonomies-feedback");
+      button.disabled = true;
+      feedback.textContent = "";
+      try {
+        const current = await authRequest("/api/admin/platform-configuration");
+        await authRequest("/api/admin/platform-configuration", {
+          method: "PUT",
+          body: JSON.stringify({
+            candidateRegistrationEnabled: current.candidateRegistrationEnabled,
+            employerRegistrationEnabled: current.employerRegistrationEnabled,
+            employerApprovalRequired: current.employerApprovalRequired,
+            jobApprovalRequired: current.jobApprovalRequired,
+            ...payload,
+            reason,
+          }),
+        });
+        form.elements.reason.value = "";
+        await loadPlatformConfiguration();
+        adminJobOptions = null;
+        feedback.textContent = "Job taxonomies saved and audited.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to save job taxonomies.";
+        feedback.dataset.state = "error";
+        feedback.setAttribute("role", "alert");
+        feedback.setAttribute("aria-live", "assertive");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document.querySelector("#application-stages-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const feedback = document.querySelector("#application-stages-feedback");
+      const reason = String(form.elements.reason.value || "").trim();
+      const rows = String(form.elements.applicationStages.value)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      let applicationStages;
+      try {
+        applicationStages = rows.map((line, index) => {
+          const columns = line.split("|");
+          if (columns.length !== 3) {
+            throw new Error(`Line ${index + 1} must have three pipe-separated fields.`);
+          }
+          return {
+            key: columns[0].trim(),
+            label: columns[1].trim(),
+            transitions: columns[2]
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean),
+          };
+        });
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Invalid stage definition.";
+        feedback.dataset.state = "error";
+        return;
+      }
+      if (reason.length < 3) {
+        feedback.textContent = "Enter a reason of at least three characters.";
+        feedback.dataset.state = "error";
+        return;
+      }
+      const button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      feedback.textContent = "";
+      try {
+        const current = await authRequest("/api/admin/platform-configuration");
+        await authRequest("/api/admin/platform-configuration", {
+          method: "PUT",
+          body: JSON.stringify({
+            candidateRegistrationEnabled: current.candidateRegistrationEnabled,
+            employerRegistrationEnabled: current.employerRegistrationEnabled,
+            employerApprovalRequired: current.employerApprovalRequired,
+            jobApprovalRequired: current.jobApprovalRequired,
+            applicationStages,
+            reason,
+          }),
+        });
+        form.elements.reason.value = "";
+        await loadPlatformConfiguration();
+        feedback.textContent = "Application stages saved and audited.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to save application stages.";
+        feedback.dataset.state = "error";
+        feedback.setAttribute("role", "alert");
+        feedback.setAttribute("aria-live", "assertive");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document.querySelector("#report-definitions-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const feedback = document.querySelector("#report-definitions-feedback");
+      const reason = String(form.elements.reason.value || "").trim();
+      const allowedKeys = new Set([
+        "applications_by_week",
+        "application_stages",
+        "applications_by_source",
+        "hiring_outcomes",
+      ]);
+      const rows = String(form.elements.reportDefinitions.value)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      let reportDefinitions;
+      try {
+        const seen = new Set();
+        reportDefinitions = rows.map((line, index) => {
+          const columns = line.split("|");
+          const key = columns[0]?.trim();
+          const label = columns[1]?.trim();
+          const enabled = columns[2]?.trim().toLowerCase();
+          if (columns.length !== 3 || !allowedKeys.has(key)) {
+            throw new Error(`Line ${index + 1} must use a supported report key and three pipe-separated fields.`);
+          }
+          if (seen.has(key)) {
+            throw new Error(`Line ${index + 1} duplicates report key ${key}.`);
+          }
+          if (!label || label.length > 80) {
+            throw new Error(`Line ${index + 1} needs a label of 1–80 characters.`);
+          }
+          if (enabled !== "enabled" && enabled !== "disabled") {
+            throw new Error(`Line ${index + 1} must use enabled or disabled.`);
+          }
+          seen.add(key);
+          return { key, label, enabled: enabled === "enabled" };
+        });
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Invalid report definition.";
+        feedback.dataset.state = "error";
+        return;
+      }
+      if (reason.length < 3) {
+        feedback.textContent = "Enter a reason of at least three characters.";
+        feedback.dataset.state = "error";
+        return;
+      }
+      const button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      feedback.textContent = "";
+      try {
+        const current = await authRequest("/api/admin/platform-configuration");
+        await authRequest("/api/admin/platform-configuration", {
+          method: "PUT",
+          body: JSON.stringify({
+            candidateRegistrationEnabled: current.candidateRegistrationEnabled,
+            employerRegistrationEnabled: current.employerRegistrationEnabled,
+            employerApprovalRequired: current.employerApprovalRequired,
+            jobApprovalRequired: current.jobApprovalRequired,
+            reportDefinitions,
+            reason,
+          }),
+        });
+        form.elements.reason.value = "";
+        await loadPlatformConfiguration();
+        feedback.textContent = "Report definitions saved and audited.";
+        feedback.dataset.state = "success";
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to save report definitions.";
+        feedback.dataset.state = "error";
+        feedback.setAttribute("role", "alert");
+        feedback.setAttribute("aria-live", "assertive");
+      } finally {
+        button.disabled = false;
+      }
     });
     document.querySelector("#razorpay-config-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -2643,6 +3853,111 @@
     });
     document.querySelector("[data-refresh-privacy]").addEventListener("click", () => {
       loadPrivacyRequests().catch((error) => showToast(`Unable to load privacy requests: ${error.message}`));
+    });
+    document.querySelector("[data-refresh-content]").addEventListener("click", () => {
+      loadAdminContent().catch((error) => showToast(`Unable to load website content: ${error.message}`));
+    });
+    document.querySelector("[data-content-reset]").addEventListener("click", resetContentForm);
+    document.querySelector("#content-entry-form").elements.isPublished.addEventListener("change", (event) => {
+      const publishAt = document.querySelector("#content-entry-form").elements.publishAt;
+      publishAt.disabled = !event.currentTarget.checked;
+      if (publishAt.disabled) publishAt.value = "";
+    });
+    document.querySelector("#content-entry-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const id = String(data.get("id") || "");
+      const payload = {
+        type: String(data.get("type")),
+        slug: String(data.get("slug")).trim(),
+        title: String(data.get("title")).trim(),
+        summary: String(data.get("summary") || "").trim() || null,
+        body: String(data.get("body")).trim(),
+        seoTitle: String(data.get("seoTitle") || "").trim() || null,
+        seoDescription: String(data.get("seoDescription") || "").trim() || null,
+        isPublished: data.get("isPublished") === "on",
+        publishAt: data.get("isPublished") === "on" && data.get("publishAt")
+          ? new Date(String(data.get("publishAt"))).toISOString()
+          : null,
+      };
+      const submit = form.querySelector('[type="submit"]');
+      const feedback = document.querySelector("#content-entry-feedback");
+      submit.disabled = true;
+      feedback.textContent = "";
+      try {
+        await authRequest(id ? `/api/admin/content/${id}` : "/api/admin/content", {
+          method: id ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        });
+        resetContentForm();
+        feedback.textContent = "Content saved.";
+        await loadAdminContent();
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to save content.";
+        feedback.setAttribute("role", "alert");
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    document.querySelector("#content-table-body").addEventListener("click", async (event) => {
+      const historyButton = event.target.closest("[data-content-history]");
+      if (historyButton) {
+        try {
+          await loadContentRevisions(Number(historyButton.dataset.contentHistory));
+        } catch (error) {
+          showToast(`Unable to load content history: ${error.message}`, "error");
+        }
+        return;
+      }
+      const editButton = event.target.closest("[data-content-edit]");
+      if (editButton) {
+        const entry = contentEntries.find((item) => item.id === Number(editButton.dataset.contentEdit));
+        if (entry) editContentEntry(entry);
+        return;
+      }
+      const publishButton = event.target.closest("[data-content-publish]");
+      if (!publishButton) return;
+      const entry = contentEntries.find((item) => item.id === Number(publishButton.dataset.contentPublish));
+      if (!entry) return;
+      publishButton.disabled = true;
+      try {
+        await authRequest(`/api/admin/content/${entry.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ isPublished: !entry.isPublished }),
+        });
+        await loadAdminContent();
+      } catch (error) {
+        showToast(`Unable to update content publication: ${error.message}`, "error");
+      } finally {
+        publishButton.disabled = false;
+      }
+    });
+    document.querySelector("#content-revisions-panel").addEventListener("click", async (event) => {
+      if (event.target.closest("[data-content-history-close]")) {
+        event.currentTarget.hidden = true;
+        return;
+      }
+      const restoreButton = event.target.closest("[data-content-restore]");
+      if (!restoreButton) return;
+      const contentId = Number(restoreButton.dataset.contentId);
+      const revisionId = Number(restoreButton.dataset.contentRestore);
+      if (!window.confirm("Restore this revision? The current content will remain in history as a new revision.")) return;
+      restoreButton.disabled = true;
+      try {
+        await authRequest(
+          `/api/admin/content/${encodeURIComponent(contentId)}/revisions/${encodeURIComponent(revisionId)}/restore`,
+          { method: "POST" },
+        );
+        await loadAdminContent();
+        await loadContentRevisions(contentId);
+        showToast("Content revision restored.", "success");
+      } catch (error) {
+        showToast(`Unable to restore content revision: ${error.message}`, "error");
+      } finally {
+        if (restoreButton.isConnected) restoreButton.disabled = false;
+      }
     });
     document.querySelector("#reports-status-filter").addEventListener("change", () => {
       loadAdminReports(1).catch((error) => showToast(`Unable to load reports: ${error.message}`));
@@ -2755,7 +4070,8 @@
       }
     });
 
-    function openJobModal(job = null) {
+    async function openJobModal(job = null) {
+      await loadAdminJobOptions();
       const form = document.querySelector("#create-job-form");
       editingJobId = job?.id ?? null;
       form.reset();
@@ -2766,6 +4082,12 @@
         form.elements.title.value = job.title;
         form.elements.company.value = job.company;
         form.elements.location.value = job.location;
+        if (job.category && ![...form.elements.category.options].some((option) => option.value === job.category))
+          form.elements.category.add(new Option(`${job.category} · inactive`, job.category));
+        if (job.industry && ![...form.elements.industry.options].some((option) => option.value === job.industry))
+          form.elements.industry.add(new Option(`${job.industry} · inactive`, job.industry));
+        form.elements.category.value = job.category || "";
+        form.elements.industry.value = job.industry || "";
         form.elements.workplaceType.value = job.workplaceType || "onsite";
         form.elements.employmentType.value = job.employmentType || "full-time";
         form.elements.salaryMin.value = job.salaryMin ?? "";
@@ -2775,6 +4097,7 @@
         form.elements.numberOfOpenings.value = job.numberOfOpenings ?? 1;
         form.elements.applicationDeadline.value = job.applicationDeadline || "";
         form.elements.experience.value = job.experience || "";
+        form.elements.skills.value = (job.skills || []).join(", ");
         form.elements.description.value = job.description || "";
         const employerSelect = form.elements.employerUserId;
         if (job.employerUserId && ![...employerSelect.options].some((option) => option.value === String(job.employerUserId))) {
@@ -2786,7 +4109,9 @@
       document.querySelector("#new-job-title").focus();
     }
 
-    document.querySelectorAll("[data-modal-open]").forEach((button) => button.addEventListener("click", () => openJobModal()));
+    document.querySelectorAll("[data-modal-open]").forEach((button) => button.addEventListener("click", () => {
+      openJobModal().catch((error) => showToast(`Unable to load job options: ${error.message}`, "error"));
+    }));
     document.querySelectorAll(".modal-close, .modal-cancel").forEach((button) => button.addEventListener("click", () => jobModal.classList.remove("open")));
     jobModal.addEventListener("click", (event) => {
       if (event.target === jobModal) jobModal.classList.remove("open");
@@ -2807,6 +4132,7 @@
         }
         payload.numberOfOpenings = Number(payload.numberOfOpenings);
         payload.applicationDeadline = String(payload.applicationDeadline || "").trim() || null;
+        payload.skills = String(payload.skills || "").split(",").map((skill) => skill.trim()).filter(Boolean);
         const employerValue = String(payload.employerUserId || "").trim();
         if (!editingJobId || Number(employerValue || 0) !== adminJobs.find((job) => job.id === editingJobId)?.employerUserId) {
           payload.employerUserId = employerValue ? Number(employerValue) : null;
@@ -2868,7 +4194,6 @@
         authGate.hidden = false;
         document.querySelector("#admin-login-form").reset();
         authError.textContent = "Password changed. Sign in again with your new password.";
-        document.querySelector("#admin-email").focus();
       } catch (error) {
         showToast(error instanceof Error ? error.message : "Unable to change the password.");
       } finally {

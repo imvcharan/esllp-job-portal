@@ -9,6 +9,10 @@ import { InjectDataSource } from "@nestjs/typeorm";
 import nodemailer, { Transporter } from "nodemailer";
 import { randomUUID } from "node:crypto";
 import { DataSource } from "typeorm";
+import {
+  NotificationEmailTemplateKey,
+  NotificationTemplatesService,
+} from "../notifications/notification-templates.service";
 
 @Injectable()
 export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
@@ -20,7 +24,10 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
   private processing = false;
   private lastFailedNotificationRetentionSweepAt = 0;
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly templates: NotificationTemplatesService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.dataSource.query(`
@@ -52,25 +59,18 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
 
   async sendAccountLink(
     email: string,
-    subject: string,
     action: "verify your email" | "reset your password",
     link: string,
   ): Promise<void> {
-    await this.send(
-      email,
-      subject,
-      `Use this link to ${action}. It expires shortly and can only be used once:\n\n${link}\n\nIf you did not request this, you can ignore this email.`,
-      `<p>Use the link below to ${action}. It expires shortly and can only be used once.</p><p><a href="${this.escapeAttribute(link)}">Continue</a></p><p>If you did not request this, you can ignore this email.</p>`,
-    );
+    const key =
+      action === "verify your email" ? "account_verification" : "password_reset";
+    const template = await this.templates.render(key, { link });
+    await this.send(email, template.subject, template.body, this.textToHtml(template.body));
   }
 
   async sendLoginCode(email: string, code: string): Promise<void> {
-    await this.send(
-      email,
-      "Your esllp sign-in code",
-      `Your one-time sign-in code is ${code}. It expires in 10 minutes. If you did not request this code, you can ignore this email.`,
-      `<p>Your one-time sign-in code is <strong>${code}</strong>.</p><p>It expires in 10 minutes. If you did not request this code, you can ignore this email.</p>`,
-    );
+    const template = await this.templates.render("login_code", { code });
+    await this.send(email, template.subject, template.body, this.textToHtml(template.body));
   }
 
   async sendNotification(
@@ -78,7 +78,14 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
     subject: string,
     message: string,
     deduplicationKey: string = randomUUID(),
+    templateKey?: NotificationEmailTemplateKey,
+    templateValues: Record<string, string> = {},
   ): Promise<"queued"> {
+    if (templateKey) {
+      const template = await this.templates.render(templateKey, templateValues);
+      subject = template.subject;
+      message = template.body;
+    }
     if (!email.trim() || !subject.trim() || !message.trim())
       throw new ServiceUnavailableException(
         "Notification email requires a recipient, subject, and message.",
@@ -325,17 +332,14 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private escapeAttribute(value: string): string {
-    return value.replace(
-      /[&<>"']/g,
-      (character) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;",
-          "'": "&#39;",
-        })[character]!,
+  private textToHtml(value: string): string {
+    const linked = this.escapeHtml(value).replace(
+      /(https:\/\/[^\s<]+)/g,
+      '<a href="$1">$1</a>',
     );
+    return linked
+      .split(/\n{2,}/)
+      .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
+      .join("");
   }
 }

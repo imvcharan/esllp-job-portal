@@ -48,6 +48,8 @@ import { CandidateFileScanService } from "./candidate-file-scan.service";
 import { CandidateApplicationDocument } from "./candidate-application-document.entity";
 import { PublicUserProfileController } from "./public-user-profile.controller";
 import { EmployerOrganization } from "../employers/organization.entity";
+import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
+import { CandidateQuickApplyPreference } from "./candidate-quick-apply-preference.entity";
 
 @Module({
   imports: [
@@ -56,6 +58,7 @@ import { EmployerOrganization } from "../employers/organization.entity";
       CandidateSavedJob,
       CandidateApplication,
       CandidateApplicationDocument,
+      CandidateQuickApplyPreference,
       CandidateApplicationStatus,
       CandidateApplicationOffer,
       CandidateApplicationMessage,
@@ -74,6 +77,7 @@ import { EmployerOrganization } from "../employers/organization.entity";
     AuthModule,
     AuditModule,
     PaymentsModule,
+    PlatformConfigurationModule,
   ],
   controllers: [
     CandidateProfileController,

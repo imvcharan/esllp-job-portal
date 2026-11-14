@@ -43,6 +43,31 @@ test("notification outbox enqueue uses a stable deduplication key", async () => 
   assert.equal(service.queries[0].parameters[0], "application-status:42:91");
 });
 
+test("notification outbox stores the rendered admin email template", async () => {
+  const service = createService();
+  service.templates = {
+    render: async (key, values) => ({
+      subject: `${key}: ${values.jobTitle}`,
+      body: `Hello ${values.company}`,
+    }),
+  };
+  await service.sendNotification(
+    "candidate@example.test",
+    "Fallback subject",
+    "Fallback message",
+    "application-status:43:92",
+    "application_status",
+    { jobTitle: "Engineer", company: "Example" },
+  );
+
+  assert.deepEqual(service.queries[0].parameters, [
+    "application-status:43:92",
+    "candidate@example.test",
+    "application_status: Engineer",
+    "Hello Example",
+  ]);
+});
+
 test("outbox worker clears delivery content after successful email delivery", async () => {
   const service = createService();
   service.claimed = [

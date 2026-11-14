@@ -21,6 +21,18 @@ export type JobSalaryCurrency = (typeof JOB_SALARY_CURRENCIES)[number];
 export type JobSalaryPeriod = (typeof JOB_SALARY_PERIODS)[number];
 
 export const MIN_JOB_DESCRIPTION_LENGTH = 100;
+export const MAX_JOB_SKILLS = 30;
+
+export function normalizeJobSkills(skills: string[] | null | undefined): string[] {
+  const uniqueSkills = new Map<string, string>();
+  for (const value of skills ?? []) {
+    const skill = value.trim();
+    if (skill && !uniqueSkills.has(skill.toLowerCase())) {
+      uniqueSkills.set(skill.toLowerCase(), skill);
+    }
+  }
+  return [...uniqueSkills.values()];
+}
 
 export function jobPublicationError(job: {
   title?: string | null;

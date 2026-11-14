@@ -13,6 +13,16 @@ import { EmployerOrganization } from "../employers/organization.entity";
 import { EmployerOrganizationMember } from "../employers/organization-member.entity";
 import { AuditModule } from "../audit/audit.module";
 import { SmsDeliveryService } from "./sms-delivery.service";
+import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
+import { NotificationsModule } from "../notifications/notifications.module";
+import { TwilioConfigurationModule } from "../providers/twilio-configuration.module";
+import { WhatsAppDeliveryService } from "../providers/whatsapp-delivery.service";
+import { CaptchaVerificationService } from "./captcha-verification.service";
+import {
+  SuperadminMfa,
+  SuperadminMfaRecoveryCode,
+} from "./superadmin-mfa.entity";
+import { SuperadminMfaService } from "./superadmin-mfa.service";
 
 const localDevelopmentSecret =
   "local-development-only-secret-change-before-deploying-2026";
@@ -33,14 +43,22 @@ const localDevelopmentSecret =
       AuthToken,
       EmployerOrganization,
       EmployerOrganizationMember,
+      SuperadminMfa,
+      SuperadminMfaRecoveryCode,
     ]),
     AuditModule,
+    PlatformConfigurationModule,
+    NotificationsModule,
+    TwilioConfigurationModule,
   ],
   controllers: [AuthController],
   providers: [
     AuthService,
     EmailDeliveryService,
     SmsDeliveryService,
+    WhatsAppDeliveryService,
+    CaptchaVerificationService,
+    SuperadminMfaService,
     JwtAuthGuard,
     RolesGuard,
   ],
@@ -51,6 +69,7 @@ const localDevelopmentSecret =
     TypeOrmModule,
     EmailDeliveryService,
     SmsDeliveryService,
+    WhatsAppDeliveryService,
   ],
 })
 export class AuthModule {}

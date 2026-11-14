@@ -36,6 +36,8 @@ import {
 } from "../employers/organization-member.entity";
 import { AuditService } from "../audit/audit.service";
 import { SmsDeliveryService } from "./sms-delivery.service";
+import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
+import { SuperadminMfaService } from "./superadmin-mfa.service";
 
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -57,18 +59,34 @@ export class AuthService {
     private readonly emailDelivery: EmailDeliveryService,
     private readonly smsDelivery: SmsDeliveryService,
     private readonly auditService: AuditService,
+    private readonly platformConfiguration: PlatformConfigurationService,
+    private readonly superadminMfa: SuperadminMfaService,
   ) {}
 
-  async registerCandidate(
-    dto: RegisterDto,
-  ): Promise<{
+  async publicConfiguration() {
+    const configuration = await this.platformConfiguration.get();
+    return {
+      googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || null,
+      candidateRegistrationEnabled: configuration.candidateRegistrationEnabled,
+      employerRegistrationEnabled: configuration.employerRegistrationEnabled,
+      employerApprovalRequired: configuration.employerApprovalRequired,
+      jobCategories: configuration.jobCategories,
+      industries: configuration.industries,
+      locations: configuration.locations,
+      employmentTypes: configuration.employmentTypes,
+      workplaceTypes: configuration.workplaceTypes,
+    };
+  }
+
+  async registerCandidate(dto: RegisterDto): Promise<{
     id: number;
     email: string;
     phoneNumber: string;
     message: string;
   }> {
+    await this.platformConfiguration.assertRegistrationEnabled("candidate");
     const email = this.normalizeEmail(dto.email);
-    this.smsDelivery.assertConfigured();
+    await this.smsDelivery.assertConfigured();
     const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber);
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
       throw new BadRequestException(
@@ -114,9 +132,11 @@ export class AuthService {
       targetId: saved.id,
       details: { role: saved.role },
     });
+    let emailLinkSent = true;
     try {
       await this.sendVerification(saved);
     } catch (error) {
+      emailLinkSent = false;
       this.logger.error(
         `Candidate registration verification email failed for user ${saved.id}: ${
           error instanceof Error ? error.message : "unknown delivery error"
@@ -127,9 +147,14 @@ export class AuthService {
       id: saved.id,
       email: saved.email,
       phoneNumber,
-      message: phoneCodeSent
-        ? "Account created. Verify your email using the link we sent and enter the SMS code before signing in."
-        : "Account created. Verify your email using the link we sent. The SMS could not be sent; use the resend code option before signing in.",
+      message:
+        emailLinkSent && phoneCodeSent
+          ? "Account created. Verify your email using the link we sent and enter the SMS code before signing in."
+          : !emailLinkSent && !phoneCodeSent
+            ? "Account created, but we could not send the verification email or SMS code. Use the email and SMS resend options on this page before signing in."
+            : !emailLinkSent
+              ? "Account created and the SMS code was sent, but the verification email could not be sent. Use the resend email verification option before signing in."
+              : "Account created. Verify your email using the link we sent. The SMS could not be sent; use the resend code option before signing in.",
     };
   }
 
@@ -233,16 +258,15 @@ export class AuthService {
     return { email };
   }
 
-  async registerEmployer(
-    dto: RegisterEmployerDto,
-  ): Promise<{
+  async registerEmployer(dto: RegisterEmployerDto): Promise<{
     id: number;
     email: string;
     phoneNumber: string;
     message: string;
   }> {
+    await this.platformConfiguration.assertRegistrationEnabled("employer");
     const email = this.normalizeEmail(dto.email);
-    this.smsDelivery.assertConfigured();
+    await this.smsDelivery.assertConfigured();
     const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber);
     const companyName = dto.companyName?.trim();
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
@@ -360,9 +384,11 @@ export class AuthService {
         invited: registration.invited,
       },
     });
+    let emailLinkSent = true;
     try {
       await this.sendVerification(saved);
     } catch (error) {
+      emailLinkSent = false;
       this.logger.error(
         `Employer registration verification email failed for user ${saved.id}: ${
           error instanceof Error ? error.message : "unknown delivery error"
@@ -373,19 +399,28 @@ export class AuthService {
       id: saved.id,
       email: saved.email,
       phoneNumber,
-      message: phoneCodeSent
-        ? registration.invited
-          ? "Company invitation recorded. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
-          : "Employer registration received. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
-        : "Account created. Verify your email, then request a new SMS code before signing in.",
+      message:
+        emailLinkSent && phoneCodeSent
+          ? registration.invited
+            ? "Company invitation recorded. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
+            : "Employer registration received. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
+          : !emailLinkSent && !phoneCodeSent
+            ? "Employer account created, but we could not send the verification email or SMS code. Use the email and SMS resend options on this page before signing in; publishing also requires administrator approval."
+            : !emailLinkSent
+              ? "Employer account created, but the verification email could not be sent. Use the resend email verification option before signing in; publishing also requires administrator approval."
+              : "Account created. Verify your email, then request a new SMS code before signing in; publishing also requires administrator approval.",
     };
   }
 
-  async login(dto: LoginDto): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    user: AuthenticatedUser;
-  }> {
+  async login(dto: LoginDto): Promise<
+    | {
+        accessToken: string;
+        refreshToken: string;
+        user: AuthenticatedUser;
+      }
+    | { mfaRequired: true }
+    | { mfaSetupRequired: true; setupToken: string }
+  > {
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
       await this.recordLoginFailure(null, "invalid_credentials");
       throw new UnauthorizedException("Email or password is incorrect");
@@ -430,13 +465,39 @@ export class AuthService {
           : "This employer account is unavailable. Contact esllp support for assistance.",
       );
     }
-    const session = await this.createSession(user);
+    let mfaVerified = false;
+    if (user.role === UserRole.SUPERADMIN) {
+      if (await this.superadminMfa.isEnabled(user.id)) {
+        if (!dto.mfaCode) return { mfaRequired: true };
+        mfaVerified = await this.superadminMfa.verifyLogin(
+          user.id,
+          dto.mfaCode,
+        );
+        if (!mfaVerified) {
+          await this.recordLoginFailure(user.id, "mfa_failed");
+          throw new UnauthorizedException(
+            "The authenticator or recovery code is incorrect.",
+          );
+        }
+      } else {
+        const setupToken = await this.jwtService.signAsync(
+          { sub: user.id, scope: "superadmin_mfa_setup" },
+          { expiresIn: "10m" },
+        );
+        return { mfaSetupRequired: true, setupToken };
+      }
+    }
+
+    const session = await this.createSession(user, mfaVerified);
     await this.auditService.record({
       actorUserId: user.id,
       action: "auth.login",
       targetType: "user",
       targetId: user.id,
-      details: { role: user.role },
+      details: {
+        role: user.role,
+        method: mfaVerified ? "password_mfa" : "password",
+      },
     });
     return session;
   }
@@ -547,6 +608,11 @@ export class AuthService {
           "This Google account is not linked to an available candidate account.",
         );
       }
+      if (user.phoneE164 && !user.phoneVerified) {
+        throw new UnauthorizedException(
+          "Verify your mobile number before signing in. Request a new SMS code from the registration verification page.",
+        );
+      }
     } else {
       user = await this.usersRepository.findOneBy({ email });
       if (user && !user.isActive) {
@@ -560,6 +626,11 @@ export class AuthService {
       if (user && user.googleSubject && user.googleSubject !== payload.sub) {
         throw new UnauthorizedException(
           "This candidate account is linked to a different Google account.",
+        );
+      }
+      if (user?.phoneE164 && !user.phoneVerified) {
+        throw new UnauthorizedException(
+          "Verify your mobile number before signing in. Request a new SMS code from the registration verification page.",
         );
       }
       if (!user) {
@@ -718,7 +789,7 @@ export class AuthService {
     userId: number,
     phoneInput: string,
   ): Promise<{ message: string }> {
-    this.smsDelivery.assertConfigured();
+    await this.smsDelivery.assertConfigured();
     const phoneNumber = this.normalizePhoneNumber(phoneInput);
     const existing = await this.usersRepository.findOneBy({
       phoneE164: phoneNumber,
@@ -764,14 +835,40 @@ export class AuthService {
         "Mobile number or verification code is incorrect or expired.",
       );
     }
-    await this.usersRepository.update(
-      { id: user.id },
-      {
-        phoneE164: phoneNumber,
-        pendingPhoneE164: null,
-        phoneVerified: true,
-      },
-    );
+    await this.dataSource.transaction(async (manager) => {
+      await manager.getRepository(User).update(
+        { id: user.id },
+        {
+          phoneE164: phoneNumber,
+          pendingPhoneE164: null,
+          phoneVerified: true,
+        },
+      );
+      await manager.query(
+        `UPDATE candidate_profiles
+         SET whatsapp_interview_reminders = false,
+             whatsapp_interview_reminders_consented_at = NULL
+         WHERE user_id = $1`,
+        [user.id],
+      );
+      await manager.query(
+        `UPDATE whatsapp_notification_outbox
+         SET status = 'cancelled', to_number = NULL,
+             template_variables = NULL, updated_at = now()
+         WHERE user_id = $1 AND status IN ('queued', 'sending')`,
+        [user.id],
+      );
+      await this.auditService.record(
+        {
+          actorUserId: user.id,
+          action: "candidate.whatsapp_interview_reminders_consent_changed",
+          targetType: "user",
+          targetId: user.id,
+          details: { optedIn: false, reason: "verified_phone_changed" },
+        },
+        manager,
+      );
+    });
     await this.auditService.record({
       actorUserId: user.id,
       action: "auth.phone_number_changed",
@@ -944,6 +1041,7 @@ export class AuthService {
       !session ||
       session.expiresAt.getTime() <= Date.now() ||
       !session.user.isActive ||
+      (session.user.role === UserRole.SUPERADMIN && !session.mfaVerified) ||
       (session.user.role === UserRole.EMPLOYER &&
         ![
           EmployerApprovalStatus.PENDING,
@@ -964,7 +1062,65 @@ export class AuthService {
         "The refresh session has already been used",
       );
     }
-    return this.createSession(session.user);
+    return this.createSession(session.user, session.mfaVerified);
+  }
+
+  async startSuperadminMfaSetup(setupToken: string) {
+    const user = await this.superadminMfaSetupUser(setupToken);
+    return this.superadminMfa.startEnrollment(user.id, user.email);
+  }
+
+  async confirmSuperadminMfaSetup(setupToken: string, code: string) {
+    const user = await this.superadminMfaSetupUser(setupToken);
+    const recoveryCodes = await this.superadminMfa.confirmEnrollment(
+      user.id,
+      code,
+    );
+    await this.sessionsRepository.update(
+      { userId: user.id, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
+    const session = await this.createSession(user, true);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.superadmin_mfa_enabled",
+      targetType: "user",
+      targetId: user.id,
+    });
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.login",
+      targetType: "user",
+      targetId: user.id,
+      details: { role: user.role, method: "mfa_setup" },
+    });
+    return { ...session, recoveryCodes };
+  }
+
+  private async superadminMfaSetupUser(setupToken: string) {
+    let payload: { sub: number; scope?: string };
+    try {
+      payload = await this.jwtService.verifyAsync(setupToken);
+    } catch {
+      throw new UnauthorizedException(
+        "The MFA setup session is invalid or expired. Sign in again.",
+      );
+    }
+    if (
+      payload.scope !== "superadmin_mfa_setup" ||
+      !Number.isSafeInteger(payload.sub)
+    )
+      throw new UnauthorizedException("A valid MFA setup session is required.");
+    const user = await this.usersRepository.findOneBy({
+      id: payload.sub,
+      role: UserRole.SUPERADMIN,
+      isActive: true,
+    });
+    if (!user)
+      throw new UnauthorizedException(
+        "This superadmin account is unavailable.",
+      );
+    return user;
   }
 
   async logout(token: string | undefined): Promise<void> {
@@ -998,7 +1154,10 @@ export class AuthService {
     return this.toSafeUser(user);
   }
 
-  private async createSession(user: User): Promise<{
+  private async createSession(
+    user: User,
+    mfaVerified = false,
+  ): Promise<{
     accessToken: string;
     refreshToken: string;
     user: AuthenticatedUser;
@@ -1010,11 +1169,17 @@ export class AuthService {
         userId: user.id,
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
         revokedAt: null,
+        mfaVerified: user.role === UserRole.SUPERADMIN && mfaVerified,
       }),
     );
     const accessToken = await this.jwtService.signAsync(
-      { sub: user.id },
-      { expiresIn: ACCESS_TOKEN_TTL },
+      {
+        sub: user.id,
+        mfa: user.role === UserRole.SUPERADMIN && mfaVerified,
+      },
+      {
+        expiresIn: ACCESS_TOKEN_TTL,
+      },
     );
     return { accessToken, refreshToken, user: this.toSafeUser(user) };
   }
@@ -1079,7 +1244,6 @@ export class AuthService {
     const token = await this.issueEmailToken(user, "email_verification");
     await this.emailDelivery.sendAccountLink(
       user.email,
-      "Verify your esllp email",
       "verify your email",
       this.buildAccountLink("verify-email", token, user.email),
     );
@@ -1108,7 +1272,6 @@ export class AuthService {
     if (purpose === "password_reset") {
       await this.emailDelivery.sendAccountLink(
         user.email,
-        "Reset your esllp password",
         "reset your password",
         this.buildAccountLink("reset-password", token),
       );

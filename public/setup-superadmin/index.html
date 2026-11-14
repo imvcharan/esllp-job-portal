@@ -23,6 +23,7 @@
     .notice.error { color: #a52626; }
     .notice.success { color: #176b45; }
     .hint { margin: 0; font-size: 13px; }
+    #captcha-widget { min-height: 78px; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -42,6 +43,7 @@
         <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
       </label>
       <p class="hint">Use at least 8 characters. Passwords over 72 UTF-8 bytes are not accepted.</p>
+      <div id="captcha-widget"></div>
       <button id="submit-button" type="submit">Create superadmin</button>
     </form>
     <p id="login-link" hidden><a class="button" href="/admin/">Continue to admin sign in</a></p>
@@ -51,6 +53,43 @@
     const setupForm = document.querySelector("#setup-form");
     const loginLink = document.querySelector("#login-link");
     const submitButton = document.querySelector("#submit-button");
+    const captchaWidget = document.querySelector("#captcha-widget");
+    let captchaSiteKey = "";
+    let captchaWidgetId = null;
+
+    async function configureCaptcha() {
+      const response = await fetch("/api/auth/config", {
+        cache: "no-store",
+        credentials: "same-origin"
+      });
+      const payload = await responsePayload(response);
+      captchaSiteKey = typeof payload.captchaSiteKey === "string" ? payload.captchaSiteKey : "";
+      if (payload.captchaRequired === true && !captchaSiteKey) {
+        throw new Error("CAPTCHA is not configured for this deployment.");
+      }
+      if (!captchaSiteKey) return;
+
+      await new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[src^="https://www.google.com/recaptcha/api.js"]');
+        if (window.grecaptcha && typeof window.grecaptcha.render === "function") {
+          resolve();
+          return;
+        }
+        if (existing) {
+          existing.addEventListener("load", resolve, { once: true });
+          existing.addEventListener("error", reject, { once: true });
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://www.google.com/recaptcha/api.js?render=explicit";
+        script.async = true;
+        script.defer = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+      captchaWidgetId = window.grecaptcha.render(captchaWidget, { sitekey: captchaSiteKey });
+    }
 
     async function responsePayload(response) {
       const payload = await response.json().catch(() => ({}));
@@ -76,6 +115,13 @@
         }
         statusMessage.textContent = "Setup is available. Enter the superadmin name, email, and password configured for this deployment.";
         setupForm.hidden = false;
+        try {
+          await configureCaptcha();
+        } catch {
+          statusMessage.className = "notice error";
+          statusMessage.textContent = "CAPTCHA could not be loaded. Check your connection and reload this page.";
+          setupForm.hidden = true;
+        }
       } catch (error) {
         statusMessage.classList.add("error");
         statusMessage.textContent = error instanceof Error
@@ -96,6 +142,15 @@
         return;
       }
 
+      const captchaToken = captchaWidgetId === null
+        ? ""
+        : window.grecaptcha.getResponse(captchaWidgetId);
+      if (captchaSiteKey && !captchaToken) {
+        statusMessage.className = "notice error";
+        statusMessage.textContent = "Complete the CAPTCHA before creating the superadmin account.";
+        return;
+      }
+
       submitButton.disabled = true;
       statusMessage.className = "notice";
       statusMessage.textContent = "Creating the first superadmin…";
@@ -107,7 +162,8 @@
           body: JSON.stringify({
             email: String(formData.get("email") || "").trim(),
             displayName: String(formData.get("displayName") || "").trim(),
-            password
+            password,
+            captchaToken
           })
         });
         const payload = await responsePayload(response);
@@ -120,6 +176,7 @@
         statusMessage.textContent = error instanceof Error
           ? error.message
           : "Superadmin setup failed. Please try again.";
+        if (captchaWidgetId !== null) window.grecaptcha.reset(captchaWidgetId);
         submitButton.disabled = false;
       }
     });

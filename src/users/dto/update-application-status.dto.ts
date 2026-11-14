@@ -1,7 +1,13 @@
-import { IsIn, IsOptional, IsString, MaxLength } from "class-validator";
+import {
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from "class-validator";
 
 export class UpdateApplicationStatusDto {
-  @IsIn(["in_review", "interview", "rejected"])
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{0,19}$/)
   status!: string;
 
   @IsOptional()

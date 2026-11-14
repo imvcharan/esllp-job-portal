@@ -49,6 +49,11 @@ export class JwtAuthGuard implements CanActivate {
     if (!user) {
       throw new UnauthorizedException("This account is unavailable");
     }
+    if (user.role === UserRole.SUPERADMIN && payload.mfa !== true) {
+      throw new ForbiddenException(
+        "Complete authenticator MFA setup before using the superadmin workspace.",
+      );
+    }
     const allowsForcedPasswordChange =
       this.reflector.getAllAndOverride<boolean>(ALLOW_FORCED_PASSWORD_CHANGE, [
         context.getHandler(),

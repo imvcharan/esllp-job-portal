@@ -29,6 +29,8 @@ function createService(overrides = {}) {
         photoPath: "private/photos/2.webp",
         resumePath: "private/resumes/2.pdf",
         resumeFileName: "resume.pdf",
+        whatsappInterviewReminders: true,
+        whatsappInterviewRemindersConsentedAt: new Date("2026-01-03T00:00:00Z"),
       }),
     },
     applications: {
@@ -154,6 +156,11 @@ test("candidate export includes their records without exposing storage object pa
   assert.equal(result.profile.hasPhoto, true);
   assert.equal(result.profile.hasResume, true);
   assert.equal(result.profile.resumeFileName, "resume.pdf");
+  assert.equal(result.profile.whatsappInterviewReminders, true);
+  assert.equal(
+    result.profile.whatsappInterviewRemindersConsentedAt.toISOString(),
+    "2026-01-03T00:00:00.000Z",
+  );
   assert.equal("photoPath" in result.profile, false);
   assert.equal("resumePath" in result.profile, false);
   assert.equal("resumePath" in result.applications[0], false);

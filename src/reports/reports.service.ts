@@ -57,6 +57,7 @@ export class ReportsService {
           details: dto.details?.trim() || null,
           status: ReportStatus.OPEN,
           resolutionNote: null,
+          reporterMessage: null,
           reporterUserId: user.id,
           resolvedByUserId: null,
         }),
@@ -85,6 +86,24 @@ export class ReportsService {
       ipAddress,
     });
     return { id: report.id, status: report.status };
+  }
+
+  async listMine(reporterUserId: number) {
+    const reports = await this.reportsRepository.find({
+      select: {
+        id: true,
+        targetType: true,
+        targetId: true,
+        status: true,
+        reporterMessage: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      where: { reporterUserId },
+      order: { createdAt: "DESC", id: "DESC" },
+      take: 100,
+    });
+    return reports;
   }
 
   async list(page = 1, limit = 25, status?: ReportStatus) {
@@ -174,6 +193,9 @@ export class ReportsService {
 
     report.status = dto.status;
     report.resolutionNote = dto.resolutionNote?.trim() || null;
+    if (dto.reporterMessage !== undefined) {
+      report.reporterMessage = dto.reporterMessage.trim() || null;
+    }
     report.resolvedByUserId =
       dto.status === ReportStatus.ACTIONED ||
       dto.status === ReportStatus.DISMISSED

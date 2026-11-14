@@ -116,13 +116,14 @@ function createService({
 test("permanently deletes an unlinked account and retains an audit event", async () => {
   const { service, audits, removedIds } = createService();
 
-  const result = await service.remove(8, 3, "127.0.0.1");
+  const result = await service.remove(8, 3, "Account cleanup", "127.0.0.1");
 
   assert.deepEqual(result, { success: true });
   assert.deepEqual(removedIds, [8]);
   assert.equal(audits[0].action, "user.permanently_deleted");
   assert.equal(audits[0].targetId, 8);
   assert.equal(audits[0].details.email, "new-admin@example.com");
+  assert.equal(audits[0].details.reason, "Account cleanup");
 });
 
 test("blocks permanent deletion when business records are linked", async () => {
@@ -141,12 +142,12 @@ test("blocks permanent deletion when business records are linked", async () => {
       },
     });
 
-    await assert.rejects(service.remove(8, 3), ConflictException);
+    await assert.rejects(service.remove(8, 3, "Candidate request"), ConflictException);
     assert.deepEqual(removedIds, []);
     assert.deepEqual(audits, []);
   });
 
-  await assert.rejects(service.remove(8, 3), ConflictException);
+  await assert.rejects(service.remove(8, 3, "Candidate request"), ConflictException);
   assert.deepEqual(removedIds, []);
   assert.deepEqual(audits, []);
 });
@@ -154,7 +155,7 @@ test("blocks permanent deletion when business records are linked", async () => {
 test("prevents deleting the signed-in account", async () => {
   const { service, removedIds } = createService();
 
-  await assert.rejects(service.remove(8, 8), BadRequestException);
+  await assert.rejects(service.remove(8, 8, "Own account"), BadRequestException);
   assert.deepEqual(removedIds, []);
 });
 
@@ -168,14 +169,14 @@ test("prevents deleting the last active superadmin", async () => {
     },
     activeSuperadmins: 1,
   });
-  await assert.rejects(service.remove(8, 3), BadRequestException);
+  await assert.rejects(service.remove(8, 3, "Remove superadmin"), BadRequestException);
   assert.deepEqual(removedIds, []);
 });
 
 test("reports a missing account without creating an audit event", async () => {
   const { service, audits, removedIds } = createService({ missingUser: true });
 
-  await assert.rejects(service.remove(404, 3), NotFoundException);
+  await assert.rejects(service.remove(404, 3, "Invalid account"), NotFoundException);
   assert.deepEqual(removedIds, []);
   assert.deepEqual(audits, []);
 });
@@ -195,7 +196,7 @@ test("purges candidate files from external storage before account deletion", asy
     resumeVersions: [{ storagePath: "8/resume/version.pdf" }],
   });
 
-  await service.remove(8, 3);
+  await service.remove(8, 3, "Candidate requested deletion");
 
   assert.deepEqual(removedFiles.sort(), [
     "8/application/other.docx",
@@ -217,7 +218,10 @@ test("does not delete a candidate account when external file purging fails", asy
     storageError: new Error("storage unavailable"),
   });
 
-  await assert.rejects(service.remove(8, 3), /storage unavailable/);
+  await assert.rejects(
+    service.remove(8, 3, "Candidate requested deletion"),
+    /storage unavailable/,
+  );
   assert.deepEqual(removedIds, []);
   assert.deepEqual(audits, []);
 });

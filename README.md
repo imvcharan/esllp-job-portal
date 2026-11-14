@@ -71,6 +71,11 @@ npm run start:dev
 
 Open `http://localhost:3000` for the homepage or `http://localhost:3000/admin/` for the admin dashboard preview. The API is available at `http://localhost:3000/api/jobs`.
 
+During non-production runs, interactive API documentation is available at
+`http://localhost:3000/api/docs`, with the generated OpenAPI JSON at
+`http://localhost:3000/api/openapi.json`. These documentation routes are disabled
+when `NODE_ENV=production`.
+
 Run the current build and unit tests before opening a pull request:
 
 ```powershell
@@ -117,6 +122,21 @@ activated automatically without overriding candidate visibility/contact
 settings, while resume-review and career-consultation requests require manual
 fulfillment tracking by a superadmin. Configure the existing server-side
 `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` before enabling live checkout.
+
+The candidate workspace includes a four-step guided setup. Each step saves
+profile fields and the current onboarding position through
+`PUT /api/candidate/profile`; returning candidates resume from that saved position.
+Skipping the optional experience/education step is supported, and profile
+visibility remains private by default. Migration
+`1729000000034-CandidateOnboardingProgress` adds the bounded progress field.
+
+Approved employer job managers can bulk import up to 50 jobs at a time from the
+Hiring workspace's CSV template. Imports are validated by the API, saved
+transactionally as private drafts, and audit logged; each job must still be
+reviewed and explicitly published. Supported CSV columns are `title`,
+`location`, `workplaceType`, `employmentType`, `salaryMin`, `salaryMax`,
+`salaryCurrency`, `salaryPeriod`, `applicationDeadline`, `numberOfOpenings`,
+`experience`, and `description`.
 
 To enable geographic labels, obtain and license a MaxMind GeoLite2 City database, store its `.mmdb` file outside the repository, and set `GEOIP_DATABASE_PATH` to that local file path. The database itself is ignored by Git. Set `TRUST_PROXY_HOPS` to the exact number of trusted reverse proxies before the app when deployed behind a proxy so request IPs are resolved correctly; leave it at `0` for direct connections. Without a local database, audit events still keep the request IP and client user agent, while location is shown as unavailable.
 
@@ -171,8 +191,8 @@ Authentication routes:
 - `GET /u/:username` — opt-in candidate profile page; employer usernames redirect to their company page
 - `POST /api/auth/change-password` — change the signed-in user's password and revoke refresh sessions
 - `GET /api/auth/me` — current user (bearer token required)
-- `GET /api/candidate/profile` — read the authenticated candidate's profile
-- `PUT /api/candidate/profile` — create/update the authenticated candidate's profile
+- `GET /api/candidate/profile` — read the authenticated candidate's profile and saved onboarding position
+- `PUT /api/candidate/profile` — create/update the authenticated candidate's profile and onboarding position (steps 1–5)
 - `GET /api/candidate/profile/resume-versions` and `POST /api/candidate/profile/resume-versions/:id/restore` — list private resume versions and restore one as current
 - `GET /api/candidate/recommendations` — return explainable job matches based on profile and salary preferences
 - `GET /api/candidate/interviews` — list the candidate's interview schedule and joining details
@@ -188,6 +208,7 @@ Authentication routes:
 - `PATCH|DELETE /api/candidate/saved-searches/:id` — update an owned saved search/alert preference or remove it
 - `GET /api/candidate/applications?page=1&limit=20` — paginated applications as `{ items, total, page, limit }`
 - `GET /api/candidate/applications/:jobId` — read that candidate's application as `{ application: ... }`, or `{ application: null }`
+- `POST /api/candidate/applications/:jobId/quick-apply-preference` and `POST /api/candidate/applications/:jobId/quick-apply` — save explicit per-job resume/profile-sharing choices and submit with them only when the role has no questions or requested documents
 - `GET /api/candidate/applications/:jobId/documents` and `POST /api/candidate/applications/:jobId/documents/:documentId` — list or securely upload a job-requested PDF/DOCX before applying; uploads are scanned and private
 - `POST /api/candidate/applications/:jobId` — submit an application with optional note, resume inclusion, profile-sharing choices, and validated answers to employer-defined questions; safe to retry
 - `POST /api/candidate/applications/records/:applicationId/withdraw` — request withdrawal at any active stage; the employer must confirm before the application is withdrawn
@@ -200,10 +221,37 @@ verification and a phone OTP before password sign-in. Phone numbers use
 international E.164 format, are unique per account, and verification codes
 expire after ten minutes with a five-attempt limit. Configure SMTP and the
 server-only `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
-`TWILIO_FROM_NUMBER` variables before accepting registrations. Phone changes
-are staged and do not replace the existing verified number until the new
-number is confirmed. Google sign-in can link existing accounts; new accounts
-must register with email and phone so both contact methods are verified.
+`TWILIO_FROM_NUMBER` variables before accepting registrations, or configure
+Twilio from the superadmin SMS settings at `/admin/#twilio-config`.
+Database-stored auth tokens are encrypted with
+`TWILIO_CONFIG_ENCRYPTION_KEY`; set a stable random value of at least 32
+characters before saving a token. Environment credentials remain the fallback
+when database values are not set. Phone changes are staged and do not replace
+the existing verified number until the new number is confirmed. Google
+sign-in can link existing accounts; new accounts must register with email and
+phone so both contact methods are verified.
+
+WhatsApp interview reminders are disabled by default. Candidates must opt in
+from profile settings and have a verified phone; changing the verified phone
+revokes that consent. A superadmin must enable WhatsApp reminders in
+`/admin/#twilio-config`, configure a WhatsApp-enabled sender and approved
+Twilio Content Template, and verify provider delivery. The template must use
+variables `{{1}}` job title, `{{2}}` company, `{{3}}` interview time, and
+`{{4}}` meeting link/location. Delivery uses the WhatsApp outbox with bounded
+retries and clears recipient/content data after terminal delivery.
+
+Public account actions use the Google reCAPTCHA v2 checkbox when configured.
+Set `RECAPTCHA_SITE_KEY` and the server-only `RECAPTCHA_SECRET_KEY` together,
+and set `RECAPTCHA_ALLOWED_HOSTNAMES` to the exact production hostnames. In
+production, CAPTCHA-protected actions fail closed if the keys are not set;
+local development can run without them. The public and admin sign-in entry
+points share one flow so CAPTCHA and superadmin MFA are applied consistently.
+Superadmins must enroll an authenticator at first sign-in and save the
+one-time recovery codes offline. Set `MFA_CONFIG_ENCRYPTION_KEY` to a stable,
+random server-only value of at least 32 characters before enabling enrollment;
+changing it later makes stored authenticator secrets unreadable. Keep these
+keys in deployment secrets, not in source control.
+
 Candidate usernames are unique and editable; public candidate pages are
 opt-in, and employers' username links redirect to their public company page.
 The public profile excludes contact details, resumes, and application data.
@@ -294,6 +342,10 @@ Employer routes (bearer token required; organization-scoped routes accept
 - `GET /companies/:slug` and `/companies/id/:id` — public company profile with current public jobs and an explicitly sourced employer-account approval status
 - `PATCH /api/admin/jobs/:id/moderation` — staff/admin/superadmin approval, rejection, or pause with a required reason and audit record
 - `GET /api/admin/email-outbox` and `POST /api/admin/email-outbox/:id/retry` — review failed notification delivery metadata and manually retry a failed email (admin/superadmin)
+- `GET /api/admin/notification-templates`, `PUT /api/admin/notification-templates/:key`, and `POST /api/admin/notification-templates/:key/reset` — superadmin-managed, reason-required, audited email templates for account access, applications, job alerts, interviews, and team invitations
+- `GET|PUT /api/admin/platform-configuration` and `POST /api/admin/platform-configuration/reset` — superadmin-managed registration, approval, job taxonomy, and search suggestion defaults
+- `GET /api/admin/revenue/employer-subscriptions` — superadmin-only employer subscription collection totals by currency, plan, and month
+- `GET /api/admin/revenue/reconciliation` — superadmin-only latest-500 captured candidate-service and employer-subscription ledger entries, including Razorpay references and invoice IDs where recorded; this is not a live gateway reconciliation
 
 ### Razorpay configuration
 
@@ -350,8 +402,9 @@ Use HTTPS in production. The refresh cookie is marked Secure when `NODE_ENV=prod
 
 Useful API routes:
 
+- `GET /api/jobs/options` — public configured job categories, industries, employment/workplace types, and location suggestions
 - `GET /api/jobs?page=1&limit=20` — paginated active jobs as `{ items, total, page, limit, companies }`
-- `GET /api/jobs?q=designer&location=Bengaluru&page=1&limit=20` — search active jobs; workplace, employment type, experience, company, salary, freshness, and sorting filters are supported as query parameters
+- `GET /api/jobs?q=designer&location=Bengaluru&page=1&limit=20` — search active jobs; category, industry, workplace, employment type, experience, company, salary, freshness, and sorting filters are supported as query parameters
 - `GET /api/jobs/:id` — get an active job
 - `GET|PUT /api/candidate/profile` — read or update the signed-in candidate's private profile
 - `POST|DELETE /api/candidate/profile/photo` — upload a cropped photo or remove it
@@ -363,11 +416,32 @@ Useful API routes:
 - `GET /api/candidate/account/export` — download the signed-in candidate's JSON data export
 - `GET|POST /api/candidate/account/deletion-request` — view or submit a candidate deletion request for superadmin review; no data is deleted
 - `POST /api/reports` — submit a job, company, or user report as a signed-in candidate/employer
+- `GET /api/reports/mine` — list the signed-in reporter's report statuses and moderator-visible updates
 - `GET /api/admin/reports` and `PATCH /api/admin/reports/:id` — staff/admin/superadmin report queue and moderation actions
+- `GET /api/content?type=faq|blog|banner` and `GET /api/content/:slug` — published public content only; bodies are plain text
+- `GET|POST /api/admin/content`, `PATCH /api/admin/content/:id`, `GET /api/admin/content/:id/revisions`, and `POST /api/admin/content/:id/revisions/:revisionId/restore` — staff/admin/superadmin content editing, scheduled publication, revision history, restore, and audit history
+- `GET /pages/:slug` — server-rendered canonical metadata and escaped plain-text content for published pages, blog posts, and announcements
+- `GET /jobs/categories/:slug` and `GET /jobs/locations/:slug` — taxonomy-driven, server-rendered job discovery pages with canonical metadata; matching pages are included in `/sitemap.xml`
 - `GET /api/admin/privacy-requests` and `PATCH /api/admin/privacy-requests/:id` — superadmin-only candidate deletion-request review queue
 - `GET /api/admin/candidate-premium/products`, `PATCH /api/admin/candidate-premium/products/:key`, `GET /api/admin/candidate-premium/orders`, and `PATCH /api/admin/candidate-premium/orders/:id/fulfillment` — superadmin-only candidate service pricing and fulfillment controls
 
-The public homepage fetches published jobs from `/api/jobs` and includes URL-addressable search results and job detail views. Search, filters, sorting, and pagination are applied by the API, and clients receive bounded result pages. If an unfiltered request succeeds but the database has no published jobs, clearly labeled sample listings are shown as read-only previews. API errors are surfaced rather than silently presented as live data. Signed-in candidates save published jobs and searches to their account; guest and preview saves remain browser-local and are offered for sync at sign-in. Candidates choose whether to attach a resume or share a profile when applying, track the full status history, request withdrawal at any active stage, and may reapply after the employer confirms withdrawal while the job remains open. They can review and respond to employer-entered offer summaries before expiry and message the hiring team with text-only messages. Interview scheduling and cancellation appear in the candidate notification center. Employers review organization-owned job applications; status changes are audited in the application timeline and emailed when the candidate has enabled status notifications. Public share pages at `/share/jobs/:id` provide canonical metadata and `JobPosting` structured data; `/sitemap.xml` lists active job share pages and `/robots.txt` references the sitemap. Set `PUBLIC_APP_URL` to the site's canonical absolute HTTP(S) origin for these endpoints and matching-job email links.
+The public homepage fetches published jobs from `/api/jobs` and includes URL-addressable search results and job detail views. Search, filters, sorting, and pagination are applied by the API, and clients receive bounded result pages. If an unfiltered request succeeds but the database has no published jobs, clearly labeled sample listings are shown as read-only previews. API errors are surfaced rather than silently presented as live data. Signed-in candidates save published jobs and searches to their account; guest and preview saves remain browser-local and are offered for sync at sign-in. Candidates choose whether to attach a resume or share a profile when applying, track the full status history, request withdrawal at any active stage, and may reapply after the employer confirms withdrawal while the job remains open. They can review and respond to employer-entered offer summaries before expiry and message the hiring team with text-only messages. Interview scheduling and cancellation appear in the candidate notification center. Employers review organization-owned job applications; status changes are audited in the application timeline and emailed when the candidate has enabled status notifications. Public share pages at `/share/jobs/:id` provide canonical metadata and `JobPosting` structured data. Category and location pages use the configured taxonomies and display matching published jobs; `/sitemap.xml` includes these pages when matching jobs exist, and `/robots.txt` references the sitemap. Set `PUBLIC_APP_URL` to the site's canonical absolute HTTP(S) origin for these endpoints and matching-job email links.
+
+The admin Website content page manages public pages, FAQs, blog entries, and
+announcements. New items are drafts until explicitly published. Public page and
+blog links use `#content/:slug` in the SPA and `/pages/:slug` for a server-rendered
+shareable page; FAQ and blog collections use `#faqs` and `#blog`. Published
+pages and blog entries are included in `/sitemap.xml`. Content bodies are plain
+text and are escaped in both web renderers; rich text, media uploads, and legal
+review workflows are not included yet. Staff, admins, and
+superadmins can schedule publication using the content editor's local time;
+scheduled items remain hidden from public APIs, canonical pages, and the sitemap
+until that time. Each create, edit, publish, and restore saves an immutable
+content snapshot; editors can inspect the recent 100 revisions and restore one
+without erasing newer history. Migrations
+`1729000000033-CreateContentEntries` and
+`1729000000035-CreateContentEntryRevisions` create the content and revision
+tables on application startup.
 
 ## Production build
 
@@ -386,6 +460,8 @@ Candidate photo and resume uploads require Supabase Storage in addition to the P
 2. Set the bucket file-size limit to at least 8 MB and allow only `image/webp`, `application/pdf`, and `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
 3. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the server's environment. Use a newly generated, server-only service-role secret; never put it in `public/`, a browser variable, or committed files. `SUPABASE_CANDIDATE_BUCKET` is optional and defaults to `candidate-private`.
 4. Configure a reachable ClamAV `clamd` TCP service using `CLAMAV_HOST` and optional `CLAMAV_PORT` (default `3310`). Keep the scanner on a private network accessible only to the API. Production uploads fail closed if the scanner is missing or unavailable; detected files are rejected before storage. Photos are decoded, normalized and resized by the API; PDF/DOCX resumes are limited to 8 MB and parsed with bounded extraction. Stored files use owner-scoped object paths in the private bucket, with a retained version history. The API returns signed links that expire after five minutes. Scanned PDFs without selectable text need OCR and are rejected.
+
+The candidate profile response can include section-based resume suggestions for skills, experience, and education. These heuristics only prefill the candidate's editable form; nothing changes on the server until the candidate reviews and saves. They are not AI-generated and may miss or misread resume content.
 
 The profile/photo and profile/resume upload and delete endpoints require an authenticated candidate account. A resume is **not** automatically attached to an application; candidates choose whether to include it for each submission. Employer application access is restricted to assigned jobs. Recruiter-directory resume access is a separate candidate opt-in, requires the candidate to remain discoverable, spends one admin-configured monthly organization credit per candidate, and is audited; each resulting signed link expires after five minutes. Replacing/removing a resume does not invalidate an older resume already attached to an application. Avoid configuring a public bucket or sharing the service-role key.
 

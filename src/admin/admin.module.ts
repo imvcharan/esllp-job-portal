@@ -37,6 +37,11 @@ import { EmailNotificationOutbox } from "../notifications/email-notification-out
 import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
 import { CandidateResumeVersion } from "../users/candidate-resume-version.entity";
 import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
+import { EmployerSubscriptionPayment } from "../employers/employer-subscription-payment.entity";
+import { AdminPlatformConfigurationController } from "./admin-platform-configuration.controller";
+import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
+import { NotificationsModule } from "../notifications/notifications.module";
+import { AdminNotificationTemplatesController } from "./admin-notification-templates.controller";
 
 @Module({
   imports: [
@@ -64,10 +69,13 @@ import { CandidateFileStorageService } from "../users/candidate-file-storage.ser
       EmailNotificationOutbox,
       CandidateApplicationDocument,
       CandidateResumeVersion,
+      EmployerSubscriptionPayment,
     ]),
     AuditModule,
     AuthModule,
     PaymentsModule,
+    PlatformConfigurationModule,
+    NotificationsModule,
   ],
   controllers: [
     AdminUsersController,
@@ -77,6 +85,8 @@ import { CandidateFileStorageService } from "../users/candidate-file-storage.ser
     AdminCandidatePremiumController,
     AdminRazorpayConfigurationController,
     AdminEmailOutboxController,
+    AdminPlatformConfigurationController,
+    AdminNotificationTemplatesController,
   ],
   providers: [
     AdminUsersService,

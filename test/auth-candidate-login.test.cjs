@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { AuthService } = require("../dist/auth/auth.service.js");
 const {
+  User,
   UserRole,
   EmployerApprovalStatus,
 } = require("../dist/users/user.entity.js");
@@ -13,6 +14,7 @@ function createService(user) {
   const sentSmsCodes = [];
   const sessions = [];
   const updates = [];
+  const rawQueries = [];
   const repositories = {
     users: {
       findOneBy: async () => user,
@@ -50,7 +52,11 @@ function createService(user) {
     { signAsync: async () => "access-token" },
     {
       transaction: async (callback) =>
-        callback({ getRepository: () => repositories.tokens }),
+        callback({
+          getRepository: (entity) =>
+            entity === User ? repositories.users : repositories.tokens,
+          query: async (...args) => rawQueries.push(args),
+        }),
     },
     repositories.users,
     repositories.sessions,
@@ -62,7 +68,15 @@ function createService(user) {
     },
     { record: async (entry) => audits.push(entry) },
   );
-  return { service, sentCodes, sentSmsCodes, sessions, audits, updates };
+  return {
+    service,
+    sentCodes,
+    sentSmsCodes,
+    sessions,
+    audits,
+    updates,
+    rawQueries,
+  };
 }
 
 const candidate = {
@@ -119,6 +133,47 @@ test("email OTP is invalidated after five incorrect attempts", async () => {
   );
 });
 
+test("Google sign-in cannot bypass required phone verification", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: true,
+    phoneE164: "+919876543210",
+    phoneVerified: false,
+    googleSubject: null,
+  };
+  const { service, sessions } = createService(account);
+  service.usersRepository.findOneBy = async (criteria) =>
+    criteria.googleSubject ? null : account;
+  service.googleClient = {
+    verifyIdToken: async () => ({
+      getPayload: () => ({
+        sub: "google-subject",
+        email: account.email,
+        email_verified: true,
+      }),
+    }),
+  };
+  service.recordLoginFailure = async () => undefined;
+  const previousClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  process.env.GOOGLE_OAUTH_CLIENT_ID = "test-client-id";
+
+  try {
+    await assert.rejects(
+      service.googleSignIn("valid-id-token"),
+      /Verify your mobile number/,
+    );
+    assert.equal(account.googleSubject, null);
+    assert.equal(sessions.length, 0);
+  } finally {
+    if (previousClientId === undefined) {
+      delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    } else {
+      process.env.GOOGLE_OAUTH_CLIENT_ID = previousClientId;
+    }
+  }
+});
+
 test("registration phone OTP verifies the number before sign-in", async () => {
   const account = {
     ...candidate,
@@ -142,6 +197,32 @@ test("registration phone OTP verifies the number before sign-in", async () => {
   assert.equal(audits[0].action, "auth.phone_verified");
 });
 
+test("candidate registration reports when verification email delivery fails", async () => {
+  const { service } = createService(null);
+  service.platformConfiguration = {
+    assertRegistrationEnabled: async () => undefined,
+  };
+  service.usersRepository.create = (values) => values;
+  service.usersRepository.findOneBy = async () => null;
+  service.usersRepository.save = async (account) => ({ id: 22, ...account });
+  service.issueOtp = async () => undefined;
+  service.sendVerification = async () => {
+    throw new Error("mail provider unavailable");
+  };
+  service.logger = { error: () => undefined };
+
+  const result = await service.registerCandidate({
+    email: "new-candidate@example.test",
+    password: "correct-horse-battery",
+    displayName: "New Candidate",
+    phoneNumber: "+919876543210",
+  });
+
+  assert.match(result.message, /SMS code was sent/);
+  assert.match(result.message, /verification email could not be sent/);
+  assert.doesNotMatch(result.message, /link we sent/);
+});
+
 test("phone number changes take effect only after the new number is verified", async () => {
   const account = {
     ...candidate,
@@ -149,7 +230,7 @@ test("phone number changes take effect only after the new number is verified", a
     pendingPhoneE164: null,
     phoneVerified: true,
   };
-  const { service, sentSmsCodes, updates } = createService(account);
+  const { service, sentSmsCodes, updates, rawQueries } = createService(account);
 
   await service.requestPhoneChange(account.id, "+919812345678");
   assert.equal(account.phoneE164, "+919876543210");
@@ -159,6 +240,14 @@ test("phone number changes take effect only after the new number is verified", a
   assert.equal(updates.at(-1).phoneE164, "+919812345678");
   assert.equal(updates.at(-1).pendingPhoneE164, null);
   assert.equal(updates.at(-1).phoneVerified, true);
+  assert.ok(
+    rawQueries.some(([sql]) =>
+      sql.includes("SET whatsapp_interview_reminders = false"),
+    ),
+  );
+  assert.ok(
+    rawQueries.some(([sql]) => sql.includes("whatsapp_notification_outbox")),
+  );
 });
 
 test("username updates normalize case and reject usernames owned by another user", async () => {

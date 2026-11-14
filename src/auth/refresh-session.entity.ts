@@ -28,6 +28,9 @@ export class RefreshSession {
   @Column({ name: "revoked_at", type: "timestamptz", nullable: true })
   revokedAt!: Date | null;
 
+  @Column({ name: "mfa_verified", type: "boolean", default: false })
+  mfaVerified!: boolean;
+
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
 }

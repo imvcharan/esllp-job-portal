@@ -28,6 +28,10 @@ import { SubmitCandidateApplicationDto } from "./dto/submit-candidate-applicatio
 import { CreateCandidateApplicationMessageDto } from "./dto/create-candidate-application-message.dto";
 import { RespondToCandidateApplicationOfferDto } from "./dto/respond-to-candidate-application-offer.dto";
 import { CandidateFileScanService } from "./candidate-file-scan.service";
+import {
+  QuickApplyDto,
+  SaveQuickApplyPreferenceDto,
+} from "./dto/quick-apply.dto";
 
 @Controller("candidate/applications")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -55,6 +59,27 @@ export class CandidateApplicationsController {
     @Param("jobId", ParseIntPipe) jobId: number,
   ) {
     return this.applicationsService.getForJob(user, jobId);
+  }
+
+  @Post(":jobId/quick-apply-preference")
+  @Header("Cache-Control", "private, no-store")
+  saveQuickApplyPreference(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("jobId", ParseIntPipe) jobId: number,
+    @Body() dto: SaveQuickApplyPreferenceDto,
+  ) {
+    return this.applicationsService.saveQuickApplyPreference(user, jobId, dto);
+  }
+
+  @Post(":jobId/quick-apply")
+  @Header("Cache-Control", "private, no-store")
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  quickApply(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("jobId", ParseIntPipe) jobId: number,
+    @Body() dto: QuickApplyDto,
+  ) {
+    return this.applicationsService.quickApply(user, jobId, dto);
   }
 
   @Get(":jobId/documents")

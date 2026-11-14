@@ -33,6 +33,7 @@ import { CandidateProfile } from "../users/candidate-profile.entity";
 import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
 import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
 import { Job } from "../jobs/job.entity";
+import { normalizeJobSkills } from "../jobs/job.constants";
 import { CandidateApplicationsService } from "../users/candidate-applications.service";
 import {
   CreateEmployerJobDto,
@@ -59,6 +60,7 @@ import { EmployerOrganization } from "./organization.entity";
 import { UserNotification } from "./user-notification.entity";
 import { JobsService } from "../jobs/jobs.service";
 import { RazorpayConfigurationService } from "../payments/razorpay-configuration.service";
+import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
 import { EmployerSavedSearch } from "./employer-saved-search.entity";
 import { EmployerApplicationScorecard } from "./employer-application-scorecard.entity";
 import { EmployerApplicationScorecardDto } from "./dto/employer-application-scorecard.dto";
@@ -154,6 +156,7 @@ export class EmployersService {
     private readonly auditService: AuditService,
     private readonly jobsService: JobsService,
     private readonly razorpayConfiguration: RazorpayConfigurationService,
+    private readonly platformConfiguration: PlatformConfigurationService,
   ) {}
 
   async listOrganizations(user: AuthenticatedUser) {
@@ -200,6 +203,14 @@ export class EmployersService {
   ) {
     const context = await this.getContext(user.id, organizationId);
     this.requireRole(context.membership, TEAM_MANAGERS);
+    if (
+      dto.industry !== undefined &&
+      dto.industry?.trim() !== context.organization.industry
+    )
+      await this.platformConfiguration.assertTaxonomyValue(
+        "industries",
+        dto.industry,
+      );
     if (dto.name !== undefined) {
       context.organization.name = dto.name.trim();
       context.organization.slug = `${this.slugify(dto.name)}-${context.organization.id}`;
@@ -235,12 +246,18 @@ export class EmployersService {
       organizationId,
       true,
     );
+    const employerApprovalRequired = (
+      await this.platformConfiguration.get()
+    ).employerApprovalRequired;
     const jobs = await this.jobs
       .createQueryBuilder("job")
       .where("job.organizationId = :organizationId", {
         organizationId: organization.id,
       })
       .getMany();
+    const canViewHiringPipeline = APPLICATION_MANAGERS.includes(
+      membership.role,
+    );
     const jobIds = jobs.map((job) => job.id);
     const pipelineStage = `CASE
         WHEN application.status = 'offer' AND EXISTS (
@@ -253,7 +270,7 @@ export class EmployersService {
         ) THEN 'offer_expired'
         ELSE application.status
       END`;
-    const stageCounts = jobIds.length
+    const stageCounts = canViewHiringPipeline && jobIds.length
       ? await this.applications
           .createQueryBuilder("application")
           .select(pipelineStage, "status")
@@ -263,8 +280,10 @@ export class EmployersService {
           .getRawMany<{ status: string; count: string }>()
       : [];
     const recentApplications =
+      canViewHiringPipeline &&
       jobIds.length &&
-      user.employerApprovalStatus === EmployerApprovalStatus.APPROVED
+      (user.employerApprovalStatus === EmployerApprovalStatus.APPROVED ||
+        !employerApprovalRequired)
         ? await this.applications
             .createQueryBuilder("application")
             .innerJoinAndSelect("application.job", "job")
@@ -323,7 +342,8 @@ export class EmployersService {
         jobsRemaining: Math.max(0, limits.activeJobs - activeJobs),
       },
       recentApplications:
-        user.employerApprovalStatus === EmployerApprovalStatus.APPROVED
+        user.employerApprovalStatus === EmployerApprovalStatus.APPROVED ||
+        !employerApprovalRequired
           ? recentApplications.map((application) => ({
               id: application.id,
               status: expiredOfferApplicationIds.has(application.id)
@@ -386,35 +406,14 @@ export class EmployersService {
   ) {
     const context = await this.getContext(user.id, organizationId);
     this.requireRole(context.membership, JOB_MANAGERS);
-    this.validateSalary(dto.salaryMin, dto.salaryMax);
+    await this.assertEmployerJobTaxonomies({
+      category: dto.category,
+      industry: dto.industry,
+      employmentType: dto.employmentType ?? "full-time",
+      workplaceType: dto.workplaceType ?? "onsite",
+    });
     const job = await this.jobs.save(
-      this.jobs.create({
-        ...dto,
-        title: dto.title.trim(),
-        company: context.organization.name,
-        location: dto.location.trim(),
-        workplaceType: dto.workplaceType ?? "onsite",
-        employmentType: dto.employmentType ?? "full-time",
-        salaryMin: dto.salaryMin ?? null,
-        salaryMax: dto.salaryMax ?? null,
-        salaryCurrency: dto.salaryCurrency ?? "INR",
-        salaryPeriod: dto.salaryPeriod ?? "year",
-        applicationDeadline: dto.applicationDeadline ?? null,
-        numberOfOpenings: dto.numberOfOpenings ?? 1,
-        experience: dto.experience?.trim() || null,
-        description: dto.description?.trim() || null,
-        applicationQuestions: this.normalizeApplicationQuestions(
-          dto.applicationQuestions ?? [],
-        ),
-        requiredDocuments: this.normalizeRequiredDocuments(
-          dto.requiredDocuments ?? [],
-        ),
-        moderationStatus: "draft",
-        moderationNote: null,
-        isActive: false,
-        employerUserId: user.id,
-        organizationId: context.organization.id,
-      }),
+      this.createJobDraft(this.jobs, user, context, dto),
     );
     await this.auditService.record({
       actorUserId: user.id,
@@ -426,6 +425,116 @@ export class EmployersService {
     return job;
   }
 
+  async bulkCreateJobs(
+    user: AuthenticatedUser,
+    jobDtos: CreateEmployerJobDto[],
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, JOB_MANAGERS);
+    await Promise.all(
+      jobDtos.map((dto) =>
+        this.assertEmployerJobTaxonomies({
+          category: dto.category,
+          industry: dto.industry,
+          employmentType: dto.employmentType ?? "full-time",
+          workplaceType: dto.workplaceType ?? "onsite",
+        }),
+      ),
+    );
+    const items = await this.dataSource.transaction(async (manager) => {
+      const jobs = manager.getRepository(Job);
+      const created: Job[] = [];
+      for (const dto of jobDtos) {
+        const job = await jobs.save(
+          this.createJobDraft(jobs, user, context, dto),
+        );
+        await this.auditService.record(
+          {
+            actorUserId: user.id,
+            action: "employer.job_created",
+            targetType: "job",
+            targetId: job.id,
+            details: {
+              organizationId: context.organization.id,
+              title: job.title,
+              source: "bulk_import",
+            },
+          },
+          manager,
+        );
+        created.push(job);
+      }
+      return created;
+    });
+    return { items, total: items.length };
+  }
+
+  private createJobDraft(
+    jobs: Repository<Job>,
+    user: AuthenticatedUser,
+    context: EmployerContext,
+    dto: CreateEmployerJobDto,
+  ) {
+    this.validateSalary(dto.salaryMin, dto.salaryMax);
+    return jobs.create({
+      ...dto,
+      title: dto.title.trim(),
+      company: context.organization.name,
+      location: dto.location.trim(),
+      category: dto.category?.trim() || null,
+      industry: dto.industry?.trim() || null,
+      skills: normalizeJobSkills(dto.skills),
+      workplaceType: dto.workplaceType?.trim() || "onsite",
+      employmentType: dto.employmentType?.trim() || "full-time",
+      salaryMin: dto.salaryMin ?? null,
+      salaryMax: dto.salaryMax ?? null,
+      salaryCurrency: dto.salaryCurrency ?? "INR",
+      salaryPeriod: dto.salaryPeriod ?? "year",
+      applicationDeadline: dto.applicationDeadline ?? null,
+      numberOfOpenings: dto.numberOfOpenings ?? 1,
+      experience: dto.experience?.trim() || null,
+      description: dto.description?.trim() || null,
+      applicationQuestions: this.normalizeApplicationQuestions(
+        dto.applicationQuestions ?? [],
+      ),
+      requiredDocuments: this.normalizeRequiredDocuments(
+        dto.requiredDocuments ?? [],
+      ),
+      moderationStatus: "draft",
+      moderationNote: null,
+      isActive: false,
+      employerUserId: user.id,
+      organizationId: context.organization.id,
+    });
+  }
+
+  private async assertEmployerJobTaxonomies(values: {
+    category?: string | null;
+    industry?: string | null;
+    employmentType?: string | null;
+    workplaceType?: string | null;
+  }) {
+    await Promise.all([
+      this.platformConfiguration.assertTaxonomyValue(
+        "jobCategories",
+        values.category,
+      ),
+      this.platformConfiguration.assertTaxonomyValue(
+        "industries",
+        values.industry,
+      ),
+      this.platformConfiguration.assertTaxonomyValue(
+        "employmentTypes",
+        values.employmentType,
+      ),
+      this.platformConfiguration.assertTaxonomyValue(
+        "workplaceTypes",
+        values.workplaceType,
+      ),
+    ]);
+  }
+
   async updateJob(
     user: AuthenticatedUser,
     jobId: number,
@@ -435,12 +544,62 @@ export class EmployersService {
     const context = await this.getContext(user.id, organizationId);
     this.requireRole(context.membership, JOB_MANAGERS);
     const job = await this.findOrganizationJob(jobId, context.organization.id);
+    if (dto.workplaceType !== undefined && !dto.workplaceType.trim())
+      throw new BadRequestException("Choose a workplace type.");
+    if (dto.employmentType !== undefined && !dto.employmentType.trim())
+      throw new BadRequestException("Choose an employment type.");
+    await Promise.all([
+      ...(dto.category !== undefined && dto.category !== job.category
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "jobCategories",
+              dto.category,
+            ),
+          ]
+        : []),
+      ...(dto.industry !== undefined && dto.industry !== job.industry
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "industries",
+              dto.industry,
+            ),
+          ]
+        : []),
+      ...(dto.employmentType !== undefined &&
+      dto.employmentType !== job.employmentType
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "employmentTypes",
+              dto.employmentType,
+            ),
+          ]
+        : []),
+      ...(dto.workplaceType !== undefined &&
+      dto.workplaceType !== job.workplaceType
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "workplaceTypes",
+              dto.workplaceType,
+            ),
+          ]
+        : []),
+    ]);
     this.validateSalary(
       dto.salaryMin === undefined ? job.salaryMin : dto.salaryMin,
       dto.salaryMax === undefined ? job.salaryMax : dto.salaryMax,
     );
     if (dto.title !== undefined) job.title = dto.title.trim();
     if (dto.location !== undefined) job.location = dto.location.trim();
+    if (dto.category !== undefined)
+      job.category = dto.category?.trim() || null;
+    if (dto.industry !== undefined)
+      job.industry = dto.industry?.trim() || null;
+    if (dto.skills !== undefined)
+      job.skills = normalizeJobSkills(dto.skills);
+    if (dto.workplaceType !== undefined)
+      job.workplaceType = dto.workplaceType.trim();
+    if (dto.employmentType !== undefined)
+      job.employmentType = dto.employmentType.trim();
     if (dto.workplaceType !== undefined) job.workplaceType = dto.workplaceType;
     if (dto.employmentType !== undefined)
       job.employmentType = dto.employmentType;
@@ -491,6 +650,7 @@ export class EmployersService {
     jobId: number,
     organizationId?: number,
   ) {
+    const { jobApprovalRequired } = await this.platformConfiguration.get();
     const context = await this.getContext(user.id, organizationId);
     this.requireRole(context.membership, JOB_MANAGERS);
     const { job, published } = await this.dataSource.transaction(
@@ -521,7 +681,9 @@ export class EmployersService {
             "A job with a past application deadline cannot be published.",
           );
         }
-        if (job.moderationStatus === "approved") {
+        if (!jobApprovalRequired || job.moderationStatus === "approved") {
+          job.moderationStatus = "approved";
+          job.moderationNote = null;
           await this.assertJobQuota(organization, jobs);
           job.isActive = true;
         } else {
@@ -576,12 +738,15 @@ export class EmployersService {
     organizationId?: number,
   ) {
     const { organization } = await this.getContext(user.id, organizationId);
+    const applicationStages = (await this.platformConfiguration.get())
+      .applicationStages;
     const page = Math.max(1, query.page ?? 1);
     const limit = Math.min(100, Math.max(1, query.limit ?? 25));
     const builder = this.applications
       .createQueryBuilder("application")
       .innerJoinAndSelect("application.job", "job")
       .innerJoinAndSelect("application.user", "candidate")
+      .leftJoinAndSelect("application.assignedTo", "assignee")
       .where("job.organizationId = :organizationId", {
         organizationId: organization.id,
       })
@@ -723,6 +888,8 @@ export class EmployersService {
     return {
       items: items.map((application, index) => ({
         id: application.id,
+        assigneeUserId: application.assignedToUserId,
+        assigneeName: application.assignedTo?.displayName ?? null,
         status: (() => {
           const offer = offers.find(
             (item) => item.applicationId === application.id,
@@ -819,6 +986,7 @@ export class EmployersService {
       total,
       page,
       limit,
+      applicationStages,
     };
   }
 
@@ -1205,6 +1373,70 @@ export class EmployersService {
     return result;
   }
 
+  async assignApplication(
+    user: AuthenticatedUser,
+    applicationId: number,
+    assigneeUserId: number | null,
+    organizationId?: number,
+  ) {
+    const context = await this.getContext(user.id, organizationId);
+    this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const application = await this.applications
+      .createQueryBuilder("application")
+      .innerJoinAndSelect("application.job", "job")
+      .leftJoinAndSelect("application.assignedTo", "assignee")
+      .where("application.id = :applicationId", { applicationId })
+      .andWhere("job.organizationId = :organizationId", {
+        organizationId: context.organization.id,
+      })
+      .getOne();
+    if (!application) {
+      throw new NotFoundException("Application was not found");
+    }
+
+    let assigneeName: string | null = null;
+    if (assigneeUserId !== null) {
+      const membership = await this.members.findOne({
+        where: {
+          organizationId: context.organization.id,
+          userId: assigneeUserId,
+          status: "active",
+        },
+        relations: { user: true },
+      });
+      if (
+        !membership ||
+        !APPLICATION_MANAGERS.includes(membership.role) ||
+        !membership.user?.isActive
+      ) {
+        throw new BadRequestException(
+          "Choose an active hiring-team member in this company.",
+        );
+      }
+      assigneeName = membership.user.displayName;
+    }
+
+    const previousAssigneeUserId = application.assignedToUserId;
+    application.assignedToUserId = assigneeUserId;
+    await this.applications.save(application);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "employer.application_assigned",
+      targetType: "application",
+      targetId: application.id,
+      details: {
+        organizationId: context.organization.id,
+        previousAssigneeUserId,
+        assigneeUserId,
+      },
+    });
+    return {
+      applicationId: application.id,
+      assigneeUserId,
+      assigneeName,
+    };
+  }
+
   async createApplicationOffer(
     user: AuthenticatedUser,
     applicationId: number,
@@ -1213,6 +1445,8 @@ export class EmployersService {
   ) {
     const context = await this.getContext(user.id, organizationId);
     this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const applicationStages = (await this.platformConfiguration.get())
+      .applicationStages;
     const termsSummary = dto.termsSummary.trim();
     if (!termsSummary) {
       throw new BadRequestException("Enter the offer details before sending.");
@@ -1238,7 +1472,12 @@ export class EmployersService {
       if (!application)
         throw new NotFoundException("Application was not found.");
       if (
-        !["submitted", "in_review", "interview"].includes(application.status)
+        !applicationStages.some(
+          (stage) =>
+            stage.key === application.status &&
+            (stage.key === "interview" ||
+              stage.transitions.includes("interview")),
+        )
       ) {
         throw new BadRequestException(
           "An offer can only be made to an application that is being considered.",
@@ -1560,6 +1799,8 @@ export class EmployersService {
   ) {
     const context = await this.getContext(user.id, organizationId);
     this.requireRole(context.membership, APPLICATION_MANAGERS);
+    const applicationStages = (await this.platformConfiguration.get())
+      .applicationStages;
     const startsAt = new Date(dto.startsAt);
     if (
       !Number.isFinite(startsAt.getTime()) ||
@@ -1582,8 +1823,13 @@ export class EmployersService {
           .getOne();
         if (!application)
           throw new NotFoundException("Application was not found.");
+        const currentStage = applicationStages.find(
+          (stage) => stage.key === application.status,
+        );
         if (
-          !["submitted", "in_review", "interview"].includes(application.status)
+          !currentStage ||
+          (application.status !== "interview" &&
+            !currentStage.transitions.includes("interview"))
         )
           throw new BadRequestException(
             `An interview cannot be scheduled for an application in the ${application.status} stage.`,
@@ -1625,6 +1871,14 @@ export class EmployersService {
           `Interview invitation: ${application.job.title}`,
           `The hiring team at ${context.organization.name} scheduled an interview for ${application.job.title} on ${startsAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}.${interview.meetingUrl ? ` Join here: ${interview.meetingUrl}` : ""}${interview.location ? ` Location: ${interview.location}` : ""}`,
           `interview-scheduled:${interview.id}`,
+          "interview_scheduled",
+          {
+            organizationName: context.organization.name,
+            jobTitle: application.job.title,
+            startsAt: startsAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+            meetingUrl: interview.meetingUrl ? ` Join here: ${interview.meetingUrl}` : "",
+            location: interview.location ? ` Location: ${interview.location}` : "",
+          },
         );
         notificationStatus = "queued";
       } catch (error) {
@@ -1688,6 +1942,11 @@ export class EmployersService {
           `Interview cancelled: ${application.job.title}`,
           `The interview for ${application.job.title} at ${context.organization.name} has been cancelled. Contact the hiring team if you need more information.`,
           `interview-cancelled:${interview.id}`,
+          "interview_cancelled",
+          {
+            jobTitle: application.job.title,
+            company: context.organization.name,
+          },
         );
         notificationStatus = "queued";
       } catch (error) {
@@ -1746,6 +2005,7 @@ export class EmployersService {
       .then((rows) =>
         rows.map((member) => ({
           id: member.id,
+          userId: member.userId,
           email: member.email,
           displayName: member.user?.displayName ?? null,
           role: member.role,
@@ -1789,6 +2049,9 @@ export class EmployersService {
       throw new ServiceUnavailableException(
         "PUBLIC_APP_URL is required to send company invitations.",
       );
+    const employerApprovalRequired = (
+      await this.platformConfiguration.get()
+    ).employerApprovalRequired;
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const tokenHash = this.hashToken(token);
@@ -1848,17 +2111,24 @@ export class EmployersService {
       return members.save(member);
     });
     const invitationUrl = this.teamInvitationUrl(appUrl, token, existingUser);
+    const invitationMessage = this.teamInvitationMessage(
+      context.organization.name,
+      dto.role,
+      existingUser,
+      invitationUrl,
+      employerApprovalRequired,
+    );
     try {
       await this.emailDelivery.sendNotification(
         email,
         `Invitation to join ${context.organization.name} on esllp`,
-        this.teamInvitationMessage(
-          context.organization.name,
-          dto.role,
-          existingUser,
-          invitationUrl,
-        ),
+        invitationMessage,
         `team-invitation:${member.id}:${tokenHash}`,
+        "team_invitation",
+        {
+          organizationName: context.organization.name,
+          invitationMessage,
+        },
       );
     } catch (error) {
       await this.members.update(
@@ -1897,6 +2167,9 @@ export class EmployersService {
       throw new ServiceUnavailableException(
         "PUBLIC_APP_URL is required to send company invitations.",
       );
+    const employerApprovalRequired = (
+      await this.platformConfiguration.get()
+    ).employerApprovalRequired;
     const current = await this.members.findOneBy({
       id: memberId,
       organizationId: context.organization.id,
@@ -1945,17 +2218,24 @@ export class EmployersService {
       };
     });
     const invitationUrl = this.teamInvitationUrl(appUrl, token, existingUser);
+    const invitationMessage = this.teamInvitationMessage(
+      context.organization.name,
+      updated.member.role,
+      existingUser,
+      invitationUrl,
+      employerApprovalRequired,
+    );
     try {
       await this.emailDelivery.sendNotification(
         updated.member.email,
         `Invitation to join ${context.organization.name} on esllp`,
-        this.teamInvitationMessage(
-          context.organization.name,
-          updated.member.role,
-          existingUser,
-          invitationUrl,
-        ),
+        invitationMessage,
         `team-invitation:${updated.member.id}:${tokenHash}`,
+        "team_invitation",
+        {
+          organizationName: context.organization.name,
+          invitationMessage,
+        },
       );
     } catch (error) {
       await this.members.update(
@@ -2001,13 +2281,17 @@ export class EmployersService {
     role: OrganizationMemberRole | InviteTeamMemberDto["role"],
     existingUser: User | null,
     invitationUrl: string,
+    employerApprovalRequired: boolean,
   ) {
     const roleName = role.replace(/_/g, " ");
     const nextStep = existingUser
-      ? existingUser.employerApprovalStatus === EmployerApprovalStatus.APPROVED
+      ? existingUser.employerApprovalStatus === EmployerApprovalStatus.APPROVED ||
+        !employerApprovalRequired
         ? "Sign in with this email address and accept the invitation."
         : "Sign in with this email address to view a read-only workspace preview. The invitation becomes available after an administrator approves your employer account."
-      : "Register as an employer using this link and the invited email address. Verify your email to view a read-only workspace preview while waiting for administrator approval.";
+      : employerApprovalRequired
+        ? "Register as an employer using this link and the invited email address. Verify your email to view a read-only workspace preview while waiting for administrator approval."
+        : "Register as an employer using this link and the invited email address, then verify your email to access the company workspace.";
     return `You have been invited to join ${organizationName} as a ${roleName}. ${nextStep} This invitation expires in 30 days: ${invitationUrl}`;
   }
 
@@ -2483,13 +2767,75 @@ export class EmployersService {
           { razorpaySubscriptionId: subscriptionId },
         ],
       });
-      if (!organization) return { received: true, ignored: true };
+      if (!organization) {
+        if (body.event === "subscription.charged") {
+          this.logger.error(
+            `Received subscription charge for an unlinked subscription (${subscriptionId}).`,
+          );
+          throw new ServiceUnavailableException(
+            "The employer subscription charge could not be linked to an organization.",
+          );
+        }
+        return { received: true, ignored: true };
+      }
 
       const pending =
         organization.pendingRazorpaySubscriptionId === subscriptionId;
       const planKey = pending
         ? organization.pendingPlanKey
         : organization.planKey;
+      if (body.event === "subscription.charged") {
+        const paymentPayload = asJsonObject(payload?.payment);
+        const payment = asJsonObject(paymentPayload?.entity);
+        const createdAt = payment?.created_at;
+        const paidAt =
+          typeof createdAt === "number" &&
+          Number.isSafeInteger(createdAt) &&
+          createdAt > 0 &&
+          createdAt <= 8_640_000_000_000
+            ? new Date(createdAt * 1000)
+            : null;
+        if (
+          !payment ||
+          typeof payment.id !== "string" ||
+          !payment.id.trim() ||
+          payment.id.length > 100 ||
+          payment.status !== "captured" ||
+          typeof payment.amount !== "number" ||
+          !Number.isSafeInteger(payment.amount) ||
+          payment.amount < 1 ||
+          typeof payment.currency !== "string" ||
+          !/^[A-Z]{3}$/i.test(payment.currency) ||
+          !paidAt ||
+          Number.isNaN(paidAt.getTime())
+        )
+          throw new BadRequestException(
+            "The Razorpay subscription charge is missing valid captured payment details.",
+          );
+        const invoiceId =
+          typeof payment.invoice_id === "string" &&
+          payment.invoice_id.length <= 100
+            ? payment.invoice_id
+            : null;
+        await manager.query(
+          `INSERT INTO employer_subscription_payments (
+             organization_id, subscription_id, razorpay_payment_id,
+             invoice_id, plan_key, amount_paise, currency, paid_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (razorpay_payment_id) DO NOTHING`,
+          [
+            organization.id,
+            subscriptionId,
+            payment.id,
+            invoiceId,
+            planKey,
+            String(payment.amount),
+            payment.currency.toUpperCase(),
+            paidAt,
+          ],
+        );
+      }
       let reconcileJobs = false;
       switch (body.event) {
         case "subscription.activated":
@@ -2570,13 +2916,19 @@ export class EmployersService {
       role: UserRole.EMPLOYER,
       isActive: true,
     });
+    if (!user || user.employerApprovalStatus === EmployerApprovalStatus.REJECTED)
+      throw new ForbiddenException(
+        "An active employer account with the required approval is required.",
+      );
+    if (user.employerApprovalStatus === EmployerApprovalStatus.APPROVED) return;
+    if (user.employerApprovalStatus !== EmployerApprovalStatus.PENDING) {
+      throw new ForbiddenException(
+        "An active employer account with the required approval is required.",
+      );
+    }
     if (
-      !user ||
-      (user.employerApprovalStatus !== EmployerApprovalStatus.APPROVED &&
-        !(
-          allowPending &&
-          user.employerApprovalStatus === EmployerApprovalStatus.PENDING
-        ))
+      !allowPending &&
+      (await this.platformConfiguration.get()).employerApprovalRequired
     )
       throw new ForbiddenException(
         "An active employer account with the required approval is required.",

@@ -1,6 +1,7 @@
 import { PartialType } from "@nestjs/mapped-types";
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -19,6 +20,7 @@ import { Type } from "class-transformer";
 import {
   JOB_SALARY_CURRENCIES,
   JOB_SALARY_PERIODS,
+  MAX_JOB_SKILLS,
 } from "../../jobs/job.constants";
 
 export class JobApplicationQuestionDto {
@@ -62,13 +64,34 @@ export class CreateEmployerJobDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(["onsite", "hybrid", "remote"])
+  @MinLength(1)
+  @MaxLength(120)
   workplaceType?: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(["full-time", "part-time", "contract", "internship", "temporary"])
+  @MinLength(1)
+  @MaxLength(120)
   employmentType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  category?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  industry?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_JOB_SKILLS)
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(60, { each: true })
+  @Matches(/\S/, { each: true })
+  skills?: string[];
 
   @IsOptional()
   @IsInt()
@@ -129,3 +152,12 @@ export class CreateEmployerJobDto {
 }
 
 export class UpdateEmployerJobDto extends PartialType(CreateEmployerJobDto) {}
+
+export class BulkCreateEmployerJobsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CreateEmployerJobDto)
+  jobs!: CreateEmployerJobDto[];
+}

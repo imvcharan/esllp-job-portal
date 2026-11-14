@@ -20,10 +20,15 @@ import {
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
 import { CandidateSavedSearchesService } from "../users/candidate-saved-searches.service";
-import { currentJobDeadlineDate, jobPublicationError } from "./job.constants";
+import {
+  currentJobDeadlineDate,
+  jobPublicationError,
+  normalizeJobSkills,
+} from "./job.constants";
 import { CandidateApplication } from "../users/candidate-application.entity";
 import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
 import { Report, ReportTargetType } from "../reports/report.entity";
+import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
 
 @Injectable()
 export class JobsService {
@@ -41,7 +46,12 @@ export class JobsService {
     private readonly auditService: AuditService,
     private readonly emailDelivery: EmailDeliveryService,
     private readonly savedSearchesService: CandidateSavedSearchesService,
+    private readonly platformConfiguration: PlatformConfigurationService,
   ) {}
+
+  jobOptions() {
+    return this.platformConfiguration.jobOptions();
+  }
 
   async findAll(filters: {
     query?: string;
@@ -52,11 +62,14 @@ export class JobsService {
     employmentType?: string;
     experience?: string;
     company?: string;
+    category?: string;
+    industry?: string;
     minimumSalary?: number;
     salaryCurrency?: string;
     salaryPeriod?: string;
     freshnessDays?: number;
     sort?: string;
+    skill?: string;
   }) {
     const page = Math.min(1_000_000, Math.max(1, filters.page ?? 1));
     const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
@@ -76,7 +89,15 @@ export class JobsService {
           where
             .where("job.title ILIKE :query", { query: `%${query}%` })
             .orWhere("job.company ILIKE :query", { query: `%${query}%` })
-            .orWhere("job.description ILIKE :query", { query: `%${query}%` });
+            .orWhere("job.description ILIKE :query", { query: `%${query}%` })
+            .orWhere(
+              `EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements_text(job.skills) AS job_skill(skill)
+                WHERE job_skill.skill ILIKE :query
+              )`,
+              { query: `%${query}%` },
+            );
         }),
       );
     }
@@ -86,6 +107,26 @@ export class JobsService {
       queryBuilder.andWhere("job.location ILIKE :location", {
         location: `%${location}%`,
       });
+    }
+
+    if (filters.skill !== undefined && typeof filters.skill !== "string") {
+      throw new BadRequestException("Skill filters must be text.");
+    }
+    const skill = filters.skill?.trim();
+    if (skill) {
+      if (skill.length > 60) {
+        throw new BadRequestException(
+          "Skill filters must be 60 characters or fewer.",
+        );
+      }
+      queryBuilder.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements_text(job.skills) AS job_skill(skill)
+          WHERE job_skill.skill ILIKE :skill
+        )`,
+        { skill: `%${skill.replace(/[\\%_]/g, "\\$&")}%` },
+      );
     }
 
     if (filters.workplaceType) {
@@ -101,6 +142,16 @@ export class JobsService {
     if (filters.company) {
       queryBuilder.andWhere("job.company = :company", {
         company: filters.company,
+      });
+    }
+    if (filters.category) {
+      queryBuilder.andWhere("job.category = :category", {
+        category: filters.category,
+      });
+    }
+    if (filters.industry) {
+      queryBuilder.andWhere("job.industry = :industry", {
+        industry: filters.industry,
       });
     }
     if (filters.minimumSalary && filters.minimumSalary > 0) {
@@ -196,6 +247,23 @@ export class JobsService {
   ): Promise<
     Job & { notificationDelivery?: { queued: number; failed: number } }
   > {
+    const workplaceType = dto.workplaceType?.trim() || "onsite";
+    const employmentType = dto.employmentType?.trim() || "full-time";
+    await Promise.all([
+      this.platformConfiguration.assertTaxonomyValue(
+        "jobCategories",
+        dto.category,
+      ),
+      this.platformConfiguration.assertTaxonomyValue("industries", dto.industry),
+      this.platformConfiguration.assertTaxonomyValue(
+        "employmentTypes",
+        employmentType,
+      ),
+      this.platformConfiguration.assertTaxonomyValue(
+        "workplaceTypes",
+        workplaceType,
+      ),
+    ]);
     this.assertDeadlineAllowsPublishing(dto.isActive, dto.applicationDeadline);
     if (dto.isActive) {
       const readinessError = jobPublicationError(dto);
@@ -217,8 +285,11 @@ export class JobsService {
         title: dto.title.trim(),
         company: dto.company.trim(),
         location: dto.location.trim(),
-        workplaceType: dto.workplaceType ?? "onsite",
-        employmentType: dto.employmentType ?? "full-time",
+        category: dto.category?.trim() || null,
+        industry: dto.industry?.trim() || null,
+        skills: normalizeJobSkills(dto.skills),
+        workplaceType,
+        employmentType,
         salaryMin,
         salaryMax,
         salaryCurrency: dto.salaryCurrency ?? "INR",
@@ -262,6 +333,52 @@ export class JobsService {
     if (!job) {
       return null;
     }
+    if (
+      dto.workplaceType !== undefined &&
+      !dto.workplaceType.trim()
+    )
+      throw new BadRequestException("Choose a workplace type.");
+    if (
+      dto.employmentType !== undefined &&
+      !dto.employmentType.trim()
+    )
+      throw new BadRequestException("Choose an employment type.");
+    await Promise.all([
+      ...(dto.category !== undefined && dto.category !== job.category
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "jobCategories",
+              dto.category,
+            ),
+          ]
+        : []),
+      ...(dto.industry !== undefined && dto.industry !== job.industry
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "industries",
+              dto.industry,
+            ),
+          ]
+        : []),
+      ...(dto.employmentType !== undefined &&
+      dto.employmentType !== job.employmentType
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "employmentTypes",
+              dto.employmentType,
+            ),
+          ]
+        : []),
+      ...(dto.workplaceType !== undefined &&
+      dto.workplaceType !== job.workplaceType
+        ? [
+            this.platformConfiguration.assertTaxonomyValue(
+              "workplaceTypes",
+              dto.workplaceType,
+            ),
+          ]
+        : []),
+    ]);
     if (dto.employerUserId !== undefined) {
       job.organizationId = await this.getEmployerOrganizationId(
         dto.employerUserId,
@@ -298,11 +415,18 @@ export class JobsService {
     }
 
     Object.assign(job, dto);
+    if (dto.skills !== undefined) {
+      job.skills = normalizeJobSkills(dto.skills);
+    }
     if (dto.isActive !== undefined)
       job.moderationStatus = dto.isActive ? "approved" : "closed";
     if (dto.title !== undefined) job.title = dto.title.trim();
     if (dto.company !== undefined) job.company = dto.company.trim();
     if (dto.location !== undefined) job.location = dto.location.trim();
+    if (dto.category !== undefined)
+      job.category = dto.category?.trim() || null;
+    if (dto.industry !== undefined)
+      job.industry = dto.industry?.trim() || null;
     if (dto.experience !== undefined)
       job.experience = dto.experience?.trim() || null;
     if (dto.description !== undefined)
@@ -583,6 +707,16 @@ export class JobsService {
             `New job matching your preferences: ${job.title}`,
             `${job.title} at ${job.company} in ${job.location} matches your saved job preferences${matchingSearches.has(recipient.id) ? ` (${matchingSearches.get(recipient.id)?.join(", ")})` : ""}.${jobUrl ? ` View this listing: ${jobUrl}` : ""}`,
             `job-alert:${job.id}:${recipient.id}:${job.createdAt.toISOString()}`,
+            "job_alert",
+            {
+              jobTitle: job.title,
+              company: job.company,
+              location: job.location,
+              savedSearchNames: matchingSearches.has(recipient.id)
+                ? ` (${matchingSearches.get(recipient.id)?.join(", ")})`
+                : "",
+              jobUrl: jobUrl ? ` View this listing: ${jobUrl}` : "",
+            },
           ),
         ),
       );

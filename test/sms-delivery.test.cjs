@@ -3,6 +3,10 @@ const { test } = require("node:test");
 const { ServiceUnavailableException } = require("@nestjs/common");
 const { SmsDeliveryService } = require("../dist/auth/sms-delivery.service.js");
 
+function deliveryWith(credentials) {
+  return new SmsDeliveryService({ credentials });
+}
+
 const credentials = [
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
@@ -35,11 +39,10 @@ test("SMS delivery fails explicitly when Twilio is not configured", async () => 
       TWILIO_FROM_NUMBER: undefined,
     },
     async () => {
-      const delivery = new SmsDeliveryService();
-      assert.throws(
-        () => delivery.assertConfigured(),
-        ServiceUnavailableException,
-      );
+      const delivery = deliveryWith(async () => {
+        throw new ServiceUnavailableException("Not configured");
+      });
+      await assert.rejects(delivery.assertConfigured(), ServiceUnavailableException);
       await assert.rejects(
         delivery.sendVerificationCode("+919876543210", "123456"),
         ServiceUnavailableException,
@@ -63,7 +66,11 @@ test("SMS delivery posts the OTP only to Twilio over the server-side API", async
         return { ok: true, status: 201 };
       };
       try {
-        await new SmsDeliveryService().sendVerificationCode(
+        await deliveryWith(async () => ({
+          accountSid: "AC123456789",
+          authToken: "test-secret",
+          fromNumber: "+15551234567",
+        })).sendVerificationCode(
           "+919876543210",
           "123456",
         );
@@ -97,7 +104,11 @@ test("SMS delivery reports provider failures without leaking provider response b
       });
       try {
         await assert.rejects(
-          new SmsDeliveryService().sendVerificationCode(
+          deliveryWith(async () => ({
+            accountSid: "AC123456789",
+            authToken: "test-secret",
+            fromNumber: "+15551234567",
+          })).sendVerificationCode(
             "+919876543210",
             "123456",
           ),

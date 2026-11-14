@@ -14,6 +14,7 @@ function createService(report = null) {
     findOneBy: async () => report,
     save: async (value) => Object.assign(value, { id: value.id || 11 }),
     findAndCount: async () => [[], 0],
+    find: async () => [],
   };
   const service = new ReportsService(
     repository,
@@ -75,11 +76,51 @@ test("moderators must start review before recording a report action", async () =
   await service.update(9, { status: ReportStatus.REVIEWING }, { id: 3 });
   const updated = await service.update(
     9,
-    { status: ReportStatus.ACTIONED, resolutionNote: "Listing corrected." },
+    {
+      status: ReportStatus.ACTIONED,
+      resolutionNote: "Internal: listing corrected.",
+      reporterMessage: "  Thank you. The listing has been reviewed.  ",
+    },
     { id: 3 },
   );
   assert.equal(updated.status, ReportStatus.ACTIONED);
-  assert.equal(updated.resolutionNote, "Listing corrected.");
+  assert.equal(updated.resolutionNote, "Internal: listing corrected.");
+  assert.equal(
+    updated.reporterMessage,
+    "Thank you. The listing has been reviewed.",
+  );
+});
+
+test("reporters can read only their own public status updates", async () => {
+  const calls = [];
+  const service = new ReportsService(
+    {
+      find: async (options) => {
+        calls.push(options);
+        return [
+          {
+            id: 12,
+            targetType: ReportTargetType.COMPANY,
+            targetId: 4,
+            status: ReportStatus.REVIEWING,
+            reporterMessage: "We are reviewing your report.",
+          },
+        ];
+      },
+    },
+    {},
+    {},
+    {},
+    {},
+  );
+
+  const result = await service.listMine(7);
+
+  assert.equal(result[0].reporterMessage, "We are reviewing your report.");
+  assert.deepEqual(calls[0].where, { reporterUserId: 7 });
+  assert.equal(calls[0].take, 100);
+  assert.equal("resolutionNote" in calls[0].select, false);
+  assert.equal("details" in calls[0].select, false);
 });
 
 test("moderation queue enriches reports with target labels and bounds pagination", async () => {

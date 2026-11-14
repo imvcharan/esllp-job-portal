@@ -15,6 +15,8 @@ import { PublicJobPagesController } from "./public-job-pages.controller";
 import { CandidateApplication } from "../users/candidate-application.entity";
 import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
 import { Report } from "../reports/report.entity";
+import { ContentEntry } from "../content/content-entry.entity";
+import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
 
 @Module({
   imports: [
@@ -27,9 +29,11 @@ import { Report } from "../reports/report.entity";
       CandidateApplication,
       CandidateSavedJob,
       Report,
+      ContentEntry,
     ]),
     AuthModule,
     AuditModule,
+    PlatformConfigurationModule,
   ],
   controllers: [JobsController, AdminJobsController, PublicJobPagesController],
   providers: [JobsService, CandidateSavedSearchesService],

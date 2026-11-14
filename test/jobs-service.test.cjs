@@ -60,7 +60,19 @@ function createService() {
       return builder;
     },
   };
-  const service = new JobsService(jobsRepository, {}, {}, {}, {}, {}, {});
+  const service = new JobsService(
+    jobsRepository,
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {
+      assertTaxonomyValue: async () => {},
+      jobOptions: async () => ({}),
+    },
+  );
   return { service, builders, job };
 }
 
@@ -88,6 +100,16 @@ test("public search applies bounded pagination and returns live company options"
   );
 });
 
+test("public skill filtering rejects unsupported or oversized input", async () => {
+  const { service } = createService();
+
+  await assert.rejects(
+    service.findAll({ skill: "x".repeat(61) }),
+    /60 characters or fewer/,
+  );
+  await assert.rejects(service.findAll({ skill: ["React"] }), /must be text/);
+});
+
 test("public search enforces publication eligibility and combines search filters", async () => {
   const { service, builders } = createService();
 
@@ -96,12 +118,15 @@ test("public search enforces publication eligibility and combines search filters
     location: " Bengaluru ",
     workplaceType: "remote",
     employmentType: "full-time",
+    category: "Engineering",
+    industry: "Technology",
     company: "Example",
     minimumSalary: 50000,
     salaryCurrency: "INR",
     salaryPeriod: "year",
     freshnessDays: 30,
     sort: "salary",
+    skill: " React ",
     page: 2,
     limit: 10,
   });
@@ -127,6 +152,22 @@ test("public search enforces publication eligibility and combines search filters
 
   const calls = builders[0].calls;
   const serializedCalls = JSON.stringify(calls);
+  assert.ok(
+    calls.some(
+      ([method, expression, parameters]) =>
+        method === "andWhere" &&
+        expression === "job.category = :category" &&
+        parameters.category === "Engineering",
+    ),
+  );
+  assert.ok(
+    calls.some(
+      ([method, expression, parameters]) =>
+        method === "andWhere" &&
+        expression === "job.industry = :industry" &&
+        parameters.industry === "Technology",
+    ),
+  );
   assert.equal(result.page, 2);
   assert.equal(result.limit, 10);
   assert.match(serializedCalls, /job\.isActive/);
@@ -136,6 +177,15 @@ test("public search enforces publication eligibility and combines search filters
   assert.match(serializedCalls, /full-time/);
   assert.match(serializedCalls, /minimumSalary/);
   assert.match(serializedCalls, /freshnessDays/);
+  assert.ok(
+    calls.some(
+      ([method, expression, parameters]) =>
+        method === "andWhere" &&
+        typeof expression === "string" &&
+        expression.includes("jsonb_array_elements_text(job.skills)") &&
+        parameters.skill === "%React%",
+    ),
+  );
   assert.ok(
     calls.some(
       ([method, field]) =>
@@ -162,5 +212,14 @@ test("public search enforces publication eligibility and combines search filters
     ["where", "job.title ILIKE :query", { query: "%engineer%" }],
     ["orWhere", "job.company ILIKE :query", { query: "%engineer%" }],
     ["orWhere", "job.description ILIKE :query", { query: "%engineer%" }],
+    [
+      "orWhere",
+      `EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements_text(job.skills) AS job_skill(skill)
+                WHERE job_skill.skill ILIKE :query
+              )`,
+      { query: "%engineer%" },
+    ],
   ]);
 });

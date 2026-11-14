@@ -1,9 +1,10 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsEmail,
   IsIn,
   IsInt,
   IsISO8601,
+  Matches,
   IsOptional,
   IsString,
   IsUrl,
@@ -11,6 +12,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from "class-validator";
 
 export class EmployerApplicantsQueryDto {
@@ -33,19 +35,8 @@ export class EmployerApplicantsQueryDto {
   q?: string;
 
   @IsOptional()
-  @IsIn([
-    "all",
-    "submitted",
-    "in_review",
-    "interview",
-    "offer",
-    "offer_expired",
-    "offer_accepted",
-    "offer_declined",
-    "rejected",
-    "withdrawal_requested",
-    "withdrawn",
-  ])
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{0,19}$/)
   status?: string;
 
   @IsOptional()
@@ -60,6 +51,14 @@ export class CreateEmployerNoteDto {
   @MinLength(1)
   @MaxLength(5000)
   note!: string;
+}
+
+export class AssignApplicationDto {
+  @Transform(({ value }) => (value === null ? null : Number(value)))
+  @ValidateIf((_object, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  assigneeUserId!: number | null;
 }
 
 export class EmployerTagDto {

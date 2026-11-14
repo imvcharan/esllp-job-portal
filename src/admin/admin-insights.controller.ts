@@ -27,4 +27,18 @@ export class AdminInsightsController {
   activity() {
     return this.insightsService.activity();
   }
+
+  @Get("revenue/employer-subscriptions")
+  @Roles(UserRole.SUPERADMIN)
+  @Header("Cache-Control", "private, no-store")
+  employerSubscriptionRevenue() {
+    return this.insightsService.employerSubscriptionRevenue();
+  }
+
+  @Get("revenue/reconciliation")
+  @Roles(UserRole.SUPERADMIN)
+  @Header("Cache-Control", "private, no-store")
+  paymentReconciliation() {
+    return this.insightsService.paymentReconciliation();
+  }
 }

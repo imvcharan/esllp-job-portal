@@ -13,4 +13,5 @@ export interface AuthenticatedUser {
 
 export interface AccessTokenPayload {
   sub: number;
+  mfa?: boolean;
 }

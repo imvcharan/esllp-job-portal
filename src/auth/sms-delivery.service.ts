@@ -1,24 +1,17 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { TwilioConfigurationService } from "../providers/twilio-configuration.service";
 
 @Injectable()
 export class SmsDeliveryService {
-  assertConfigured(): void {
-    if (
-      !process.env.TWILIO_ACCOUNT_SID?.trim() ||
-      !process.env.TWILIO_AUTH_TOKEN ||
-      !process.env.TWILIO_FROM_NUMBER?.trim()
-    ) {
-      throw new ServiceUnavailableException(
-        "SMS verification is not configured. Configure Twilio credentials before registering.",
-      );
-    }
+  constructor(private readonly configuration: TwilioConfigurationService) {}
+
+  async assertConfigured(): Promise<void> {
+    await this.configuration.credentials();
   }
 
   async sendVerificationCode(phoneNumber: string, code: string): Promise<void> {
-    this.assertConfigured();
-    const accountSid = process.env.TWILIO_ACCOUNT_SID!.trim();
-    const authToken = process.env.TWILIO_AUTH_TOKEN!;
-    const from = process.env.TWILIO_FROM_NUMBER!.trim();
+    const { accountSid, authToken, fromNumber } =
+      await this.configuration.credentials();
     const authorization = Buffer.from(`${accountSid}:${authToken}`).toString(
       "base64",
     );
@@ -32,7 +25,7 @@ export class SmsDeliveryService {
         },
         body: new URLSearchParams({
           To: phoneNumber,
-          From: from,
+          From: fromNumber,
           Body: `Your esllp verification code is ${code}. It expires in 10 minutes. Do not share it.`,
         }),
         signal: AbortSignal.timeout(10_000),

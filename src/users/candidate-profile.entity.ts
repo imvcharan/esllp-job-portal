@@ -138,6 +138,23 @@ export class CandidateProfile {
   @Column({ name: "job_alert_emails", type: "boolean", default: false })
   jobAlertEmails!: boolean;
 
+  @Column({
+    name: "whatsapp_interview_reminders",
+    type: "boolean",
+    default: false,
+  })
+  whatsappInterviewReminders!: boolean;
+
+  @Column({
+    name: "whatsapp_interview_reminders_consented_at",
+    type: "timestamptz",
+    nullable: true,
+  })
+  whatsappInterviewRemindersConsentedAt!: Date | null;
+
+  @Column({ name: "onboarding_step", type: "smallint", default: 1 })
+  onboardingStep!: number;
+
   @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
   updatedAt!: Date;
 }

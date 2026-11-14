@@ -39,6 +39,7 @@ function createService({ linkedEntity } = {}) {
     { record: async (entry) => audits.push(entry) },
     {},
     {},
+    { assertTaxonomyValue: async () => {}, jobOptions: async () => ({}) },
   );
   return { service, audits, removedIds };
 }

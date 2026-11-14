@@ -61,6 +61,36 @@ import { EmailNotificationOutbox } from "../notifications/email-notification-out
 import { EmailNotificationOutbox1729000000028 } from "./migrations/1729000000028-EmailNotificationOutbox";
 import { EmailNotificationRetention1729000000029 } from "./migrations/1729000000029-EmailNotificationRetention";
 import { PhoneVerificationAndUsernames1729000000030 } from "./migrations/1729000000030-PhoneVerificationAndUsernames";
+import { AuditRequestId1729000000031 } from "./migrations/1729000000031-AuditRequestId";
+import { ReportReporterMessage1729000000032 } from "./migrations/1729000000032-ReportReporterMessage";
+import { ContentEntry } from "../content/content-entry.entity";
+import { CreateContentEntries1729000000033 } from "./migrations/1729000000033-CreateContentEntries";
+import { CandidateOnboardingProgress1729000000034 } from "./migrations/1729000000034-CandidateOnboardingProgress";
+import { ContentEntryRevision } from "../content/content-entry-revision.entity";
+import { CreateContentEntryRevisions1729000000035 } from "./migrations/1729000000035-CreateContentEntryRevisions";
+import { EmployerSubscriptionPayment } from "../employers/employer-subscription-payment.entity";
+import { EmployerSubscriptionPayments1729000000036 } from "./migrations/1729000000036-EmployerSubscriptionPayments";
+import { AddHiredApplicationStatus1729000000037 } from "./migrations/1729000000037-AddHiredApplicationStatus";
+import { PlatformConfiguration } from "../platform-config/platform-configuration.entity";
+import { PlatformConfiguration1729000000038 } from "./migrations/1729000000038-PlatformConfiguration";
+import { AdminJobTaxonomies1729000000039 } from "./migrations/1729000000039-AdminJobTaxonomies";
+import { NotificationEmailTemplates1729000000040 } from "./migrations/1729000000040-NotificationEmailTemplates";
+import { StructuredJobSkills1729000000041 } from "./migrations/1729000000041-StructuredJobSkills";
+import { ConfigurableApplicationStages1729000000042 } from "./migrations/1729000000042-ConfigurableApplicationStages";
+import { ApplicationSourceAttribution1729000000043 } from "./migrations/1729000000043-ApplicationSourceAttribution";
+import { CandidateApplicationAssignee1729000000044 } from "./migrations/1729000000044-CandidateApplicationAssignee";
+import { ConfigurableReportDefinitions1729000000045 } from "./migrations/1729000000045-ConfigurableReportDefinitions";
+import { TwilioConfiguration } from "../providers/twilio-configuration.entity";
+import { TwilioConfiguration1729000000046 } from "./migrations/1729000000046-TwilioConfiguration";
+import {
+  SuperadminMfa,
+  SuperadminMfaRecoveryCode,
+} from "../auth/superadmin-mfa.entity";
+import { SuperadminMfa1729000000047 } from "./migrations/1729000000047-SuperadminMfa";
+import { InterviewReminderTemplate1729000000048 } from "./migrations/1729000000048-InterviewReminderTemplate";
+import { CandidateQuickApplyPreference } from "../users/candidate-quick-apply-preference.entity";
+import { CandidateQuickApplyPreferences1729000000049 } from "./migrations/1729000000049-CandidateQuickApplyPreferences";
+import { WhatsAppInterviewReminders1729000000050 } from "./migrations/1729000000050-WhatsAppInterviewReminders";
 
 export const AppDataSource = new DataSource({
   ...getDatabaseConfig(),
@@ -94,6 +124,14 @@ export const AppDataSource = new DataSource({
     EmployerApplicationScorecard,
     CandidateApplicationDocument,
     EmailNotificationOutbox,
+    ContentEntry,
+    ContentEntryRevision,
+    EmployerSubscriptionPayment,
+    PlatformConfiguration,
+    TwilioConfiguration,
+    SuperadminMfa,
+    SuperadminMfaRecoveryCode,
+    CandidateQuickApplyPreference,
   ],
   migrations: [
     CreateJobsTable1729000000000,
@@ -127,6 +165,26 @@ export const AppDataSource = new DataSource({
     EmailNotificationOutbox1729000000028,
     EmailNotificationRetention1729000000029,
     PhoneVerificationAndUsernames1729000000030,
+    AuditRequestId1729000000031,
+    ReportReporterMessage1729000000032,
+    CreateContentEntries1729000000033,
+    CandidateOnboardingProgress1729000000034,
+    CreateContentEntryRevisions1729000000035,
+    EmployerSubscriptionPayments1729000000036,
+    AddHiredApplicationStatus1729000000037,
+    PlatformConfiguration1729000000038,
+    AdminJobTaxonomies1729000000039,
+    NotificationEmailTemplates1729000000040,
+    StructuredJobSkills1729000000041,
+    ConfigurableApplicationStages1729000000042,
+    ApplicationSourceAttribution1729000000043,
+    CandidateApplicationAssignee1729000000044,
+    ConfigurableReportDefinitions1729000000045,
+    TwilioConfiguration1729000000046,
+    SuperadminMfa1729000000047,
+    InterviewReminderTemplate1729000000048,
+    CandidateQuickApplyPreferences1729000000049,
+    WhatsAppInterviewReminders1729000000050,
   ],
   synchronize: false,
 });

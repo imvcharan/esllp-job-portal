@@ -20,6 +20,7 @@ import {
 import { CandidatePremiumProduct } from "./candidate-premium-product.entity";
 import {
   UpdateCandidatePremiumFulfillmentDto,
+  CreateCandidatePremiumProductDto,
   UpdateCandidatePremiumProductDto,
   VerifyCandidatePremiumPaymentDto,
 } from "./dto/candidate-premium.dto";
@@ -288,6 +289,42 @@ export class CandidatePremiumService {
     );
   }
 
+  async createProduct(
+    dto: CreateCandidatePremiumProductDto,
+    actor: AuthenticatedUser,
+  ) {
+    const key = dto.key.trim();
+    if (await this.products.findOneBy({ key }))
+      throw new ConflictException(
+        "A candidate service with this key already exists.",
+      );
+    if (dto.fulfillmentDays && key !== "profile-boost")
+      throw new BadRequestException(
+        "Fulfillment days can only be set for profile boosts.",
+      );
+    const product = this.products.create({
+      key,
+      name: dto.name.trim(),
+      description: dto.description.trim(),
+      amountPaise: Math.round(dto.amountInr * 100),
+      fulfillmentDays: dto.fulfillmentDays ?? 0,
+      enabled: dto.enabled ?? true,
+    });
+    const saved = await this.products.save(product);
+    await this.audit.record({
+      actorUserId: actor.id,
+      action: "admin.candidate_premium_product_created",
+      targetType: "candidate_premium_product",
+      targetId: saved.key,
+      details: {
+        amountPaise: saved.amountPaise,
+        enabled: saved.enabled,
+        fulfillmentDays: saved.fulfillmentDays,
+      },
+    });
+    return this.publicProduct(saved);
+  }
+
   async updateProduct(
     key: string,
     dto: UpdateCandidatePremiumProductDto,
@@ -303,6 +340,15 @@ export class CandidatePremiumService {
       throw new BadRequestException(
         "A profile boost must last at least one day.",
       );
+    if (
+      key !== "profile-boost" &&
+      dto.fulfillmentDays !== undefined &&
+      dto.fulfillmentDays !== 0
+    )
+      throw new BadRequestException(
+        "Fulfillment days can only be set for profile boosts.",
+      );
+    if (dto.name !== undefined) product.name = dto.name.trim();
     product.amountPaise = Math.round(dto.amountInr * 100);
     if (dto.fulfillmentDays !== undefined)
       product.fulfillmentDays = dto.fulfillmentDays;
@@ -316,10 +362,31 @@ export class CandidatePremiumService {
       targetType: "candidate_premium_product",
       targetId: saved.key,
       details: {
+        name: saved.name,
         amountPaise: saved.amountPaise,
         enabled: saved.enabled,
         fulfillmentDays: saved.fulfillmentDays,
       },
+    });
+    return this.publicProduct(saved);
+  }
+
+  async disableProduct(
+    key: string,
+    reason: string,
+    actor: AuthenticatedUser,
+  ) {
+    const product = await this.products.findOneBy({ key });
+    if (!product) throw new NotFoundException("Premium service was not found.");
+    if (!product.enabled) return this.publicProduct(product);
+    product.enabled = false;
+    const saved = await this.products.save(product);
+    await this.audit.record({
+      actorUserId: actor.id,
+      action: "admin.candidate_premium_product_disabled",
+      targetType: "candidate_premium_product",
+      targetId: saved.key,
+      details: { reason: reason.trim() },
     });
     return this.publicProduct(saved);
   }
@@ -336,6 +403,111 @@ export class CandidatePremiumService {
       candidateEmail: order.user.email,
       candidateId: order.userId,
     }));
+  }
+
+  async adminRevenue() {
+    const paidCondition =
+      "order.paymentStatus = 'paid' AND order.paidAt IS NOT NULL";
+    const monthExpression =
+      "to_char(date_trunc('month', order.paidAt AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM')";
+    const totalsQuery = this.orders
+      .createQueryBuilder("order")
+      .select(
+        `COUNT(*) FILTER (WHERE ${paidCondition})::text`,
+        "paidOrders",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(order.amountPaise) FILTER (WHERE ${paidCondition}), 0)::numeric / 100, 2)::text`,
+        "grossPaidInr",
+      )
+      .addSelect(
+        "COUNT(*) FILTER (WHERE order.paymentStatus = 'pending')::text",
+        "pendingOrders",
+      );
+    const productsQuery = this.orders
+      .createQueryBuilder("order")
+      .select("order.productKey", "productKey")
+      .addSelect("order.productName", "productName")
+      .addSelect("COUNT(*)::text", "paidOrders")
+      .addSelect(
+        "ROUND(COALESCE(SUM(order.amountPaise), 0)::numeric / 100, 2)::text",
+        "grossPaidInr",
+      )
+      .where(paidCondition)
+      .groupBy("order.productKey")
+      .addGroupBy("order.productName")
+      .orderBy("order.productName", "ASC");
+    const monthlyQuery = this.orders
+      .createQueryBuilder("order")
+      .select(monthExpression, "month")
+      .addSelect("COUNT(*)::text", "paidOrders")
+      .addSelect(
+        "ROUND(COALESCE(SUM(order.amountPaise), 0)::numeric / 100, 2)::text",
+        "grossPaidInr",
+      )
+      .where(paidCondition)
+      .andWhere(
+        "order.paidAt >= ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata') - INTERVAL '11 months') AT TIME ZONE 'Asia/Kolkata')",
+      )
+      .groupBy(monthExpression)
+      .orderBy(monthExpression, "ASC");
+
+    const [totals, products, monthly] = await Promise.all([
+      totalsQuery.getRawOne<{
+        paidOrders?: string;
+        pendingOrders?: string;
+        grossPaidInr?: string;
+      }>(),
+      productsQuery.getRawMany<{
+        productKey: string;
+        productName: string;
+        paidOrders: string;
+        grossPaidInr: string;
+      }>(),
+      monthlyQuery.getRawMany<{
+        month: string;
+        paidOrders: string;
+        grossPaidInr: string;
+      }>(),
+    ]);
+
+    const indiaParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(new Date());
+    const currentYear = Number(
+      indiaParts.find((part) => part.type === "year")?.value,
+    );
+    const currentMonth =
+      Number(indiaParts.find((part) => part.type === "month")?.value) - 1;
+    const currentMonthIndex = currentYear * 12 + currentMonth;
+    const monthlyByMonth = new Map(
+      monthly.map((row) => [row.month, row]),
+    );
+
+    return {
+      currency: "INR",
+      scope: "candidate_service_payments",
+      totals: {
+        paidOrders: totals?.paidOrders ?? "0",
+        pendingOrders: totals?.pendingOrders ?? "0",
+        grossPaidInr: totals?.grossPaidInr ?? "0",
+      },
+      byProduct: products,
+      monthly: Array.from({ length: 12 }, (_, index) => {
+        const monthIndex = currentMonthIndex - 11 + index;
+        const year = Math.floor(monthIndex / 12);
+        const month = String((monthIndex % 12) + 1).padStart(2, "0");
+        const key = `${year}-${month}`;
+        const row = monthlyByMonth.get(key);
+        return {
+          month: key,
+          paidOrders: row?.paidOrders ?? "0",
+          grossPaidInr: row?.grossPaidInr ?? "0",
+        };
+      }),
+    };
   }
 
   async updateFulfillment(

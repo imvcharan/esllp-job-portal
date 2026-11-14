@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   HttpCode,
@@ -24,6 +25,8 @@ import { UserRole } from "./user.entity";
 import {
   CreateCandidatePremiumCheckoutDto,
   UpdateCandidatePremiumFulfillmentDto,
+  CreateCandidatePremiumProductDto,
+  DeleteCandidatePremiumProductDto,
   UpdateCandidatePremiumProductDto,
   VerifyCandidatePremiumPaymentDto,
 } from "./dto/candidate-premium.dto";
@@ -71,6 +74,14 @@ export class AdminCandidatePremiumController {
     return this.premium.adminProducts();
   }
 
+  @Post("products")
+  createProduct(
+    @Body() dto: CreateCandidatePremiumProductDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.premium.createProduct(dto, user);
+  }
+
   @Patch("products/:key")
   updateProduct(
     @Param("key") key: string,
@@ -80,10 +91,25 @@ export class AdminCandidatePremiumController {
     return this.premium.updateProduct(key, dto, user);
   }
 
+  @Delete("products/:key")
+  deleteProduct(
+    @Param("key") key: string,
+    @Body() dto: DeleteCandidatePremiumProductDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.premium.disableProduct(key, dto.reason, user);
+  }
+
   @Get("orders")
   @Header("Cache-Control", "private, no-store")
   orders() {
     return this.premium.adminOrders();
+  }
+
+  @Get("revenue")
+  @Header("Cache-Control", "private, no-store")
+  revenue() {
+    return this.premium.adminRevenue();
   }
 
   @Patch("orders/:id/fulfillment")

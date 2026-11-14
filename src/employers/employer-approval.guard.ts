@@ -9,6 +9,7 @@ import { Reflector } from "@nestjs/core";
 import { Request } from "express";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { EmployerApprovalStatus, UserRole } from "../users/user.entity";
+import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
 
 const PENDING_EMPLOYER_READ_ONLY = "pending-employer-read-only";
 
@@ -17,9 +18,12 @@ export const AllowPendingEmployerReadOnly = () =>
 
 @Injectable()
 export class EmployerApprovalGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly platformConfiguration: PlatformConfigurationService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
       .getRequest<Request & { user?: AuthenticatedUser }>();
@@ -27,6 +31,12 @@ export class EmployerApprovalGuard implements CanActivate {
     if (
       user?.role !== UserRole.EMPLOYER ||
       user.employerApprovalStatus === EmployerApprovalStatus.APPROVED
+    ) {
+      return true;
+    }
+    if (
+      user.employerApprovalStatus === EmployerApprovalStatus.PENDING &&
+      !(await this.platformConfiguration.get()).employerApprovalRequired
     ) {
       return true;
     }

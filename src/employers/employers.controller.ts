@@ -22,12 +22,14 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { UserRole } from "../users/user.entity";
 import {
+  BulkCreateEmployerJobsDto,
   CreateEmployerJobDto,
   UpdateEmployerJobDto,
 } from "./dto/employer-job.dto";
 import { UpdateCompanyDto } from "./dto/update-company.dto";
 import {
   AcceptTeamInviteDto,
+  AssignApplicationDto,
   CreateEmployerSubscriptionDto,
   CreateEmployerInterviewDto,
   CreateEmployerOfferDto,
@@ -137,6 +139,19 @@ export class EmployersController {
     return this.employersService.createJob(
       user,
       dto,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("jobs/bulk")
+  bulkCreateJobs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: BulkCreateEmployerJobsDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.bulkCreateJobs(
+      user,
+      dto.jobs,
       optionalOrganizationId(organizationId),
     );
   }
@@ -276,6 +291,21 @@ export class EmployersController {
       applicationId,
       body.status,
       body.note,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Patch("applications/:applicationId/assignee")
+  assignApplication(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Body() dto: AssignApplicationDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.assignApplication(
+      user,
+      applicationId,
+      dto.assigneeUserId,
       optionalOrganizationId(organizationId),
     );
   }

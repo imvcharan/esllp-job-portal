@@ -9,8 +9,9 @@ import {
   MinLength,
   ValidateIf,
 } from "class-validator";
+import { CaptchaDto } from "./captcha.dto";
 
-export class RegisterDto {
+export class RegisterDto extends CaptchaDto {
   @IsEmail()
   @MaxLength(254)
   email!: string;
@@ -30,7 +31,7 @@ export class RegisterDto {
   phoneNumber!: string;
 }
 
-export class RegisterEmployerDto {
+export class RegisterEmployerDto extends CaptchaDto {
   @IsEmail()
   @MaxLength(254)
   email!: string;
@@ -71,7 +72,7 @@ export class RegisterEmployerDto {
   invitationToken?: string;
 }
 
-export class BootstrapSuperadminDto {
+export class BootstrapSuperadminDto extends CaptchaDto {
   @IsEmail()
   @MaxLength(254)
   email!: string;

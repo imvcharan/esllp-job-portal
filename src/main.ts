@@ -2,13 +2,13 @@ import "dotenv/config";
 import { resolve } from "node:path";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ValidationPipe } from "@nestjs/common";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { RequestMethod } from "@nestjs/common";
-import { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
-import { auditRequestContext } from "./audit/audit-request-context";
+import { createRequestContextMiddleware } from "./audit/request-context.middleware";
 
 async function bootstrap(): Promise<void> {
   if (
@@ -32,21 +32,16 @@ async function bootstrap(): Promise<void> {
   }
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser());
-  app.use((request: Request, _response: Response, next: NextFunction) => {
-    auditRequestContext.run(
-      {
-        ipAddress: request.ip ?? null,
-        userAgent: request.get("user-agent") ?? null,
-      },
-      () => next(),
-    );
-  });
+  app.use(createRequestContextMiddleware());
   app.useStaticAssets(resolve(process.cwd(), "public"), {
     index: "index.html",
   });
   app.setGlobalPrefix("api", {
     exclude: [
       { path: "share/jobs/:id", method: RequestMethod.GET },
+      { path: "jobs/categories/:slug", method: RequestMethod.GET },
+      { path: "jobs/locations/:slug", method: RequestMethod.GET },
+      { path: "pages/:slug", method: RequestMethod.GET },
       { path: "sitemap.xml", method: RequestMethod.GET },
       { path: "robots.txt", method: RequestMethod.GET },
     ],
@@ -58,6 +53,18 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
+  if (process.env.NODE_ENV !== "production") {
+    const openApiConfig = new DocumentBuilder()
+      .setTitle("esllp Job Portal API")
+      .setDescription("REST API for the esllp recruitment portal.")
+      .setVersion("1.0.0")
+      .build();
+    const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);
+    SwaggerModule.setup("docs", app, openApiDocument, {
+      useGlobalPrefix: true,
+      jsonDocumentUrl: "openapi.json",
+    });
+  }
   await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
 }
 

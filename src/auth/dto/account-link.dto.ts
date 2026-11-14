@@ -1,12 +1,13 @@
 import { IsEmail, IsString, MaxLength, MinLength } from "class-validator";
+import { CaptchaDto } from "./captcha.dto";
 
-export class AccountEmailDto {
+export class AccountEmailDto extends CaptchaDto {
   @IsEmail()
   @MaxLength(254)
   email!: string;
 }
 
-export class AccountTokenDto {
+export class AccountTokenDto extends CaptchaDto {
   @IsString()
   @MinLength(20)
   @MaxLength(128)

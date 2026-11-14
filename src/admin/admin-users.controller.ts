@@ -23,6 +23,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { Roles } from "../auth/roles.decorator";
 import { UserRole } from "../users/user.entity";
+import { AdminActionReasonDto } from "./dto/admin-action-reason.dto";
 import { UpdateUserRoleDto } from "./dto/update-user-role.dto";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto";
 import { UpdateEmployerApprovalDto } from "./dto/update-employer-approval.dto";
@@ -63,10 +64,16 @@ export class AdminUsersController {
   @Delete(":id")
   remove(
     @Param("id", ParseIntPipe) id: number,
+    @Body() dto: AdminActionReasonDto,
     @CurrentUser() actor: AuthenticatedUser,
     @Req() request: Request,
   ) {
-    return this.adminUsersService.remove(id, actor.id, request.ip);
+    return this.adminUsersService.remove(
+      id,
+      actor.id,
+      dto.reason,
+      request.ip,
+    );
   }
 
   @Patch(":id/role")
@@ -80,6 +87,7 @@ export class AdminUsersController {
       actor.id,
       id,
       dto.role,
+      dto.reason,
       request.ip,
     );
   }
@@ -95,6 +103,7 @@ export class AdminUsersController {
       actor.id,
       id,
       dto.isActive,
+      dto.reason,
       request.ip,
     );
   }
@@ -110,6 +119,7 @@ export class AdminUsersController {
       actor.id,
       id,
       dto.status,
+      dto.reason,
       request.ip,
     );
   }

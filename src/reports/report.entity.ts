@@ -54,6 +54,14 @@ export class Report {
   })
   resolutionNote!: string | null;
 
+  @Column({
+    name: "reporter_message",
+    type: "varchar",
+    length: 1000,
+    nullable: true,
+  })
+  reporterMessage!: string | null;
+
   @Column({ name: "reporter_user_id", type: "integer", nullable: true })
   reporterUserId!: number | null;
 

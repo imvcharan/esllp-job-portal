@@ -28,6 +28,8 @@ import { EmployerSavedSearch } from "./employer-saved-search.entity";
 import { PublicCompanyPagesController } from "./public-company-pages.controller";
 import { EmployerApplicationScorecard } from "./employer-application-scorecard.entity";
 import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
+import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
+import { InterviewReminderService } from "./interview-reminder.service";
 
 @Module({
   imports: [
@@ -55,12 +57,13 @@ import { CandidateApplicationDocument } from "../users/candidate-application-doc
     JobsModule,
     CandidateProfileModule,
     PaymentsModule,
+    PlatformConfigurationModule,
   ],
   controllers: [
     EmployersController,
     RazorpayWebhookController,
     PublicCompanyPagesController,
   ],
-  providers: [EmployersService, EmployerApprovalGuard],
+  providers: [EmployersService, EmployerApprovalGuard, InterviewReminderService],
 })
 export class EmployersModule {}

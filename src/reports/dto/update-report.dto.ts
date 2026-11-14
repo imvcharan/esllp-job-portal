@@ -9,4 +9,9 @@ export class UpdateReportDto {
   @IsString()
   @MaxLength(1000)
   resolutionNote?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  reporterMessage?: string;
 }

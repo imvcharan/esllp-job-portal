@@ -24,12 +24,13 @@ import { CandidateApplicationMessage } from "./candidate-application-message.ent
 import { CreateCandidateApplicationMessageDto } from "./dto/create-candidate-application-message.dto";
 import { collectApplicationAnswers } from "./application-questions";
 import { CandidateApplicationDocument } from "./candidate-application-document.entity";
-
-const EMPLOYER_TRANSITIONS: Record<string, string[]> = {
-  submitted: ["in_review", "interview", "rejected"],
-  in_review: ["interview", "rejected"],
-  interview: ["rejected"],
-};
+import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
+import { normalizeApplicationSourceAttribution } from "./application-attribution";
+import { CandidateQuickApplyPreference } from "./candidate-quick-apply-preference.entity";
+import {
+  QuickApplyDto,
+  SaveQuickApplyPreferenceDto,
+} from "./dto/quick-apply.dto";
 
 @Injectable()
 export class CandidateApplicationsService {
@@ -58,6 +59,7 @@ export class CandidateApplicationsService {
     private readonly fileStorage: CandidateFileStorageService,
     private readonly emailDelivery: EmailDeliveryService,
     private readonly auditService: AuditService,
+    private readonly platformConfiguration: PlatformConfigurationService,
   ) {}
 
   async list(user: AuthenticatedUser, requestedPage = 1, requestedLimit = 20) {
@@ -90,12 +92,22 @@ export class CandidateApplicationsService {
   }
 
   async getForJob(user: AuthenticatedUser, jobId: number) {
+    const preference = await this.dataSource
+      .getRepository(CandidateQuickApplyPreference)
+      .findOneBy({ userId: user.id, jobId });
+    const quickApplyPreference = preference
+      ? {
+          includeResume: preference.includeResume,
+          shareProfile: preference.shareProfile,
+          consentedAt: preference.consentedAt,
+        }
+      : null;
     const application = await this.applicationsRepository.findOne({
       where: { userId: user.id, jobId, status: Not("withdrawn") },
       relations: { job: true },
       order: { createdAt: "DESC", id: "DESC" },
     });
-    if (!application) return { application: null };
+    if (!application) return { application: null, quickApplyPreference };
     const histories = await this.getHistories([application]);
     const records = await this.getWorkflowRecords([application]);
     return {
@@ -105,7 +117,100 @@ export class CandidateApplicationsService {
         records.offers.get(application.id) ?? null,
         records.messages.get(application.id) ?? [],
       ),
+      quickApplyPreference,
     };
+  }
+
+  async saveQuickApplyPreference(
+    user: AuthenticatedUser,
+    jobId: number,
+    dto: SaveQuickApplyPreferenceDto,
+  ) {
+    const job = await this.jobsRepository.findOneBy({
+      id: jobId,
+      isActive: true,
+    });
+    if (
+      !job ||
+      (job.applicationDeadline &&
+        job.applicationDeadline < currentJobDeadlineDate())
+    )
+      throw new NotFoundException(`Published job ${jobId} was not found`);
+    if (
+      (job.applicationQuestions ?? []).length ||
+      (job.requiredDocuments ?? []).length
+    )
+      throw new BadRequestException(
+        "This role requires additional answers or documents; use the standard application review.",
+      );
+    const existingApplication = await this.applicationsRepository.findOne({
+      where: { userId: user.id, jobId },
+    });
+    if (existingApplication)
+      throw new BadRequestException(
+        "Quick-apply preferences cannot be changed after applying to this role.",
+      );
+    const profile = await this.profilesRepository.findOneBy({
+      userId: user.id,
+    });
+    if (dto.includeResume && !profile?.resumePath)
+      throw new BadRequestException(
+        "Upload a resume to your profile before choosing to include it.",
+      );
+    if (dto.shareProfile && !profile?.shareProfileOnApplication)
+      throw new BadRequestException(
+        "Enable profile sharing in your profile preferences before sharing it with an application.",
+      );
+    if (dto.shareProfile && profile?.profileVisibility === "private")
+      throw new BadRequestException(
+        "Change profile visibility to applications or recruiters before sharing profile details with an application.",
+      );
+
+    const preferences = this.dataSource.getRepository(
+      CandidateQuickApplyPreference,
+    );
+    const preference =
+      (await preferences.findOneBy({ userId: user.id, jobId })) ??
+      preferences.create({ userId: user.id, jobId });
+    preference.includeResume = dto.includeResume;
+    preference.shareProfile = dto.shareProfile;
+    preference.consentedAt = new Date();
+    const savedPreference = await preferences.save(preference);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "candidate.quick_apply_preferences_saved",
+      targetType: "job",
+      targetId: jobId,
+      details: {
+        includeResume: savedPreference.includeResume,
+        shareProfile: savedPreference.shareProfile,
+      },
+    });
+    return {
+      includeResume: savedPreference.includeResume,
+      shareProfile: savedPreference.shareProfile,
+      consentedAt: savedPreference.consentedAt,
+    };
+  }
+
+  async quickApply(user: AuthenticatedUser, jobId: number, dto: QuickApplyDto) {
+    const preference = await this.dataSource
+      .getRepository(CandidateQuickApplyPreference)
+      .findOneBy({ userId: user.id, jobId });
+    if (!preference)
+      throw new BadRequestException(
+        "Save your sharing choices for this role before using quick apply.",
+      );
+    return this.submit(
+      user,
+      jobId,
+      {
+        includeResume: preference.includeResume,
+        shareProfile: preference.shareProfile,
+        sourceAttribution: dto.sourceAttribution,
+      },
+      true,
+    );
   }
 
   async listUploadedDocuments(user: AuthenticatedUser, jobId: number) {
@@ -216,6 +321,7 @@ export class CandidateApplicationsService {
     user: AuthenticatedUser,
     jobId: number,
     dto: SubmitCandidateApplicationDto,
+    quickApply = false,
   ) {
     const existingApplication = await this.applicationsRepository.findOne({
       where: { userId: user.id, jobId, status: Not("withdrawn") },
@@ -243,6 +349,9 @@ export class CandidateApplicationsService {
     });
     const includeResume = dto.includeResume === true;
     const shareProfile = dto.shareProfile === true;
+    const sourceAttribution = normalizeApplicationSourceAttribution(
+      dto.sourceAttribution,
+    );
     if (includeResume && !profile?.resumePath) {
       throw new BadRequestException(
         "Upload a resume to your profile before choosing to include it.",
@@ -280,6 +389,14 @@ export class CandidateApplicationsService {
       if (!lockedJob?.isActive) {
         throw new NotFoundException(`Published job ${jobId} was not found`);
       }
+      if (
+        quickApply &&
+        ((lockedJob.applicationQuestions ?? []).length ||
+          (lockedJob.requiredDocuments ?? []).length)
+      )
+        throw new BadRequestException(
+          "This role requires additional answers or documents; use the standard application review.",
+        );
       const applicationAnswers = collectApplicationAnswers(
         lockedJob.applicationQuestions,
         dto.answers,
@@ -326,6 +443,7 @@ export class CandidateApplicationsService {
           resumePath: includeResume ? profile!.resumePath : null,
           resumeFileName: includeResume ? profile!.resumeFileName : null,
           profileShared: shareProfile,
+          sourceAttribution,
           profileSnapshot: shareProfile
             ? {
                 displayName: account.displayName,
@@ -413,6 +531,8 @@ export class CandidateApplicationsService {
   }
 
   async withdraw(user: AuthenticatedUser, applicationId: number) {
+    const applicationStages = (await this.platformConfiguration.get())
+      .applicationStages;
     await this.dataSource.transaction(async (manager) => {
       const applications = manager.getRepository(CandidateApplication);
       const application = await applications.findOne({
@@ -424,8 +544,10 @@ export class CandidateApplicationsService {
         throw new NotFoundException("Application was not found");
       }
       if (
-        !["submitted", "in_review", "interview", "offer"].includes(
-          application.status,
+        application.status !== "offer" &&
+        !applicationStages.some(
+          (stage) =>
+            stage.key === application.status && stage.transitions.length > 0,
         )
       ) {
         throw new BadRequestException(
@@ -542,11 +664,7 @@ export class CandidateApplicationsService {
     note?: string,
     organizationId?: number,
   ) {
-    if (!["in_review", "interview", "rejected"].includes(status)) {
-      throw new BadRequestException(
-        "Choose a valid employer application status.",
-      );
-    }
+    const configuration = await this.platformConfiguration.get();
     const { application, history } = await this.dataSource.transaction(
       async (manager) => {
         const applications = manager.getRepository(CandidateApplication);
@@ -568,7 +686,13 @@ export class CandidateApplicationsService {
         if (!application) {
           throw new NotFoundException("Application was not found");
         }
-        if (!EMPLOYER_TRANSITIONS[application.status]?.includes(status)) {
+        const allowedTransitions =
+          application.status === "offer_accepted"
+            ? ["hired"]
+            : (configuration.applicationStages.find(
+                (stage) => stage.key === application.status,
+              )?.transitions ?? []);
+        if (!allowedTransitions.includes(status)) {
           throw new BadRequestException(
             `An application cannot move from ${application.status} to ${status}.`,
           );
@@ -590,7 +714,11 @@ export class CandidateApplicationsService {
             userId: application.userId,
             type: "application_status",
             title: "Application status updated",
-            message: `Your application for ${application.job.title} is now ${status.replace("_", " ")}.`,
+            message: `Your application for ${application.job.title} is now ${
+              configuration.applicationStages.find(
+                (stage) => stage.key === status,
+              )?.label ?? status.replace(/_/g, " ")
+            }.`,
             link: "/#dashboard/applications",
             readAt: null,
           }),
@@ -609,8 +737,21 @@ export class CandidateApplicationsService {
         await this.emailDelivery.sendNotification(
           application.user.email,
           `Application update: ${application.job.title}`,
-          `Your application for ${application.job.title} at ${application.job.company} is now ${status.replace("_", " ")}.`,
+          `Your application for ${application.job.title} at ${application.job.company} is now ${
+            configuration.applicationStages.find(
+              (stage) => stage.key === status,
+            )?.label ?? status.replace(/_/g, " ")
+          }.`,
           `application-status:${applicationId}:${history.id}`,
+          "application_status",
+          {
+            jobTitle: application.job.title,
+            company: application.job.company,
+            status:
+              configuration.applicationStages.find(
+                (stage) => stage.key === status,
+              )?.label ?? status.replace(/_/g, " "),
+          },
         );
         notificationQueued = true;
         notificationStatus = "queued";
@@ -994,6 +1135,8 @@ export class CandidateApplicationsService {
             `New application received: ${job.title}`,
             `A candidate submitted an application for ${job.title} at ${job.company}. Sign in to your esllp employer workspace to review applicants.`,
             `application-received:${applicationId}:${recipient.id}`,
+            "application_received",
+            { jobTitle: job.title, company: job.company },
           ),
         ),
       );

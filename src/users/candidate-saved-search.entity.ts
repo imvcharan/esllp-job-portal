@@ -11,9 +11,11 @@ import {
 import { User } from "./user.entity";
 
 export interface CandidateSavedSearchFilters {
-  workplaceType?: "remote" | "hybrid" | "onsite";
-  employmentType?:
-    "full-time" | "part-time" | "contract" | "internship" | "temporary";
+  workplaceType?: string;
+  employmentType?: string;
+  category?: string;
+  industry?: string;
+  skill?: string;
   experience?: "early" | "mid" | "senior";
   company?: string;
   minimumSalary?: number;

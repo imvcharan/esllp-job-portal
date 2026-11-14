@@ -19,6 +19,8 @@ import {
   CandidateExperienceDto,
   UpdateCandidateProfileDto,
 } from "./dto/update-candidate-profile.dto";
+import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
+import { extractResumeSuggestions } from "./resume-suggestions";
 
 @Injectable()
 export class CandidateProfileService {
@@ -34,6 +36,7 @@ export class CandidateProfileService {
     @InjectRepository(CandidateResumeVersion)
     private readonly resumeVersionsRepository: Repository<CandidateResumeVersion>,
     private readonly auditService: AuditService,
+    private readonly platformConfiguration: PlatformConfigurationService,
   ) {}
 
   async get(user: AuthenticatedUser) {
@@ -45,15 +48,23 @@ export class CandidateProfileService {
       throw new NotFoundException("Candidate account was not found");
     }
 
-    const [photoUrl, resumeUrl] = await Promise.all([
-      profile?.photoPath
-        ? this.fileStorage.createSignedUrl(profile.photoPath)
-        : null,
-      profile?.resumePath
-        ? this.fileStorage.createSignedUrl(profile.resumePath)
-        : null,
-    ]);
-    const resumeVersions = profile ? await this.listResumeVersions(user) : [];
+    const [photoUrl, resumeUrl, resumeVersions, activeResumeVersion] =
+      await Promise.all([
+        profile?.photoPath
+          ? this.fileStorage.createSignedUrl(profile.photoPath)
+          : null,
+        profile?.resumePath
+          ? this.fileStorage.createSignedUrl(profile.resumePath)
+          : null,
+        profile ? this.listResumeVersions(user) : [],
+        profile?.resumePath
+          ? this.resumeVersionsRepository.findOneBy({
+              userId: user.id,
+              storagePath: profile.resumePath,
+            })
+          : null,
+      ]);
+    const parsedResumeText = activeResumeVersion?.parsedText ?? "";
 
     return {
       id: account.id,
@@ -81,8 +92,8 @@ export class CandidateProfileService {
       allowRecruiterResumeAccess: profile?.allowRecruiterResumeAccess ?? false,
       premiumBoostUntil: profile?.premiumBoostUntil ?? null,
       resumeBuilder: profile?.resumeBuilder ?? {},
-      parsedResumeText:
-        resumeVersions.find((version) => version.active)?.parsedText ?? "",
+      parsedResumeText,
+      resumeSuggestions: extractResumeSuggestions(parsedResumeText),
       resumeVersions,
       links: {
         linkedin: profile?.links?.linkedin ?? "",
@@ -96,12 +107,27 @@ export class CandidateProfileService {
       shareProfileOnApplication: profile?.shareProfileOnApplication ?? false,
       applicationEmailUpdates: profile?.applicationEmailUpdates ?? true,
       jobAlertEmails: profile?.jobAlertEmails ?? false,
+      whatsappInterviewReminders: profile?.whatsappInterviewReminders ?? false,
+      whatsappInterviewRemindersConsentedAt:
+        profile?.whatsappInterviewRemindersConsentedAt ?? null,
+      onboardingStep: profile?.onboardingStep ?? 1,
       updatedAt: profile?.updatedAt ?? null,
     };
   }
 
   async update(user: AuthenticatedUser, dto: UpdateCandidateProfileDto) {
     this.validateCareerDates(dto.experience, dto.education);
+    await Promise.all([
+      ...(dto.employmentTypes ?? []).map((value) =>
+        this.platformConfiguration.assertTaxonomyValue(
+          "employmentTypes",
+          value,
+        ),
+      ),
+      ...(dto.workplaceTypes ?? []).map((value) =>
+        this.platformConfiguration.assertTaxonomyValue("workplaceTypes", value),
+      ),
+    ]);
     await this.dataSource.transaction(async (manager) => {
       const users = manager.getRepository(User);
       const profiles = manager.getRepository(CandidateProfile);
@@ -109,6 +135,13 @@ export class CandidateProfileService {
       if (!account) {
         throw new NotFoundException("Candidate account was not found");
       }
+      if (
+        dto.whatsappInterviewReminders &&
+        (!account.phoneVerified || !account.phoneE164)
+      )
+        throw new BadRequestException(
+          "Verify a mobile number before enabling WhatsApp interview reminders.",
+        );
 
       account.displayName = dto.displayName.trim();
       await users.save(account);
@@ -138,7 +171,13 @@ export class CandidateProfileService {
           shareProfileOnApplication: false,
           applicationEmailUpdates: true,
           jobAlertEmails: false,
+          whatsappInterviewReminders: false,
+          whatsappInterviewRemindersConsentedAt: null,
+          onboardingStep: 1,
         });
+      const whatsappConsentChanged =
+        dto.whatsappInterviewReminders !== undefined &&
+        dto.whatsappInterviewReminders !== profile.whatsappInterviewReminders;
       if (dto.headline !== undefined) profile.headline = dto.headline.trim();
       if (dto.location !== undefined) profile.location = dto.location.trim();
       if (dto.phone !== undefined) profile.phone = dto.phone.trim();
@@ -208,7 +247,34 @@ export class CandidateProfileService {
       profile.applicationEmailUpdates =
         dto.applicationEmailUpdates ?? profile.applicationEmailUpdates;
       profile.jobAlertEmails = dto.jobAlertEmails ?? profile.jobAlertEmails;
+      profile.whatsappInterviewReminders =
+        dto.whatsappInterviewReminders ?? profile.whatsappInterviewReminders;
+      if (whatsappConsentChanged)
+        profile.whatsappInterviewRemindersConsentedAt =
+          dto.whatsappInterviewReminders ? new Date() : null;
+      if (dto.onboardingStep !== undefined) {
+        profile.onboardingStep = dto.onboardingStep;
+      }
       await profiles.save(profile);
+      if (dto.whatsappInterviewReminders === false)
+        await manager.query(
+          `UPDATE whatsapp_notification_outbox
+           SET status = 'cancelled', to_number = NULL,
+               template_variables = NULL, updated_at = now()
+           WHERE user_id = $1 AND status IN ('queued', 'sending')`,
+          [user.id],
+        );
+      if (whatsappConsentChanged)
+        await this.auditService.record(
+          {
+            actorUserId: user.id,
+            action: "candidate.whatsapp_interview_reminders_consent_changed",
+            targetType: "user",
+            targetId: user.id,
+            details: { optedIn: dto.whatsappInterviewReminders === true },
+          },
+          manager,
+        );
     });
 
     await this.auditService.record({
@@ -312,6 +378,14 @@ export class CandidateProfileService {
       userId: user.id,
     });
     const versions = await this.resumeVersionsRepository.find({
+      select: {
+        id: true,
+        userId: true,
+        storagePath: true,
+        fileName: true,
+        mimeType: true,
+        createdAt: true,
+      },
       where: { userId: user.id },
       order: { createdAt: "DESC", id: "DESC" },
       take: 20,
@@ -321,7 +395,6 @@ export class CandidateProfileService {
         id: version.id,
         fileName: version.fileName,
         mimeType: version.mimeType,
-        parsedText: version.parsedText,
         createdAt: version.createdAt,
         active: profile?.resumePath === version.storagePath,
         url: await this.fileStorage.createSignedUrl(version.storagePath),
@@ -551,6 +624,8 @@ export class CandidateProfileService {
         shareProfileOnApplication: false,
         applicationEmailUpdates: true,
         jobAlertEmails: false,
+        whatsappInterviewReminders: false,
+        whatsappInterviewRemindersConsentedAt: null,
       }),
     );
   }

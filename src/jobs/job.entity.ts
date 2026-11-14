@@ -19,6 +19,15 @@ export class Job {
   @Column({ length: 120 })
   location!: string;
 
+  @Column({ type: "varchar", length: 80, nullable: true })
+  category!: string | null;
+
+  @Column({ type: "varchar", length: 100, nullable: true })
+  industry!: string | null;
+
+  @Column({ type: "jsonb", default: () => "'[]'::jsonb" })
+  skills!: string[];
+
   @Column({ name: "workplace_type", length: 20, default: "onsite" })
   workplaceType!: string;
 

@@ -45,6 +45,12 @@ export class ReportsController {
   ) {
     return this.reportsService.create(user, dto, request.ip);
   }
+
+  @Get("mine")
+  @Header("Cache-Control", "private, no-store")
+  listMine(@CurrentUser() user: AuthenticatedUser) {
+    return this.reportsService.listMine(user.id);
+  }
 }
 
 @Controller("admin/reports")

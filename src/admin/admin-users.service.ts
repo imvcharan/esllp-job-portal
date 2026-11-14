@@ -199,8 +199,10 @@ export class AdminUsersService {
   async remove(
     targetUserId: number,
     actorUserId: number,
+    reason: string,
     ipAddress?: string,
   ): Promise<{ success: true }> {
+    const actionReason = this.requireActionReason(reason);
     if (actorUserId === targetUserId) {
       throw new BadRequestException(
         "You cannot permanently delete your own account.",
@@ -352,7 +354,7 @@ export class AdminUsersService {
             action: "user.permanently_deleted",
             targetType: "user",
             targetId: targetUserId,
-            details: deletedUser,
+            details: { ...deletedUser, reason: actionReason },
             ipAddress,
           },
           manager,
@@ -368,8 +370,10 @@ export class AdminUsersService {
     actorUserId: number,
     targetUserId: number,
     role: UserRole,
+    reason: string,
     ipAddress?: string,
   ): Promise<SafeUser> {
+    const actionReason = this.requireActionReason(reason);
     if (role === UserRole.EMPLOYER) {
       throw new BadRequestException(
         "Employers must register through the employer registration form and be approved separately.",
@@ -420,7 +424,7 @@ export class AdminUsersService {
       action: "user.role_changed",
       targetType: "user",
       targetId: targetUserId,
-      details: { previousRole, newRole: role },
+      details: { previousRole, newRole: role, reason: actionReason },
       ipAddress,
     });
     return this.toSafeUser(saved);
@@ -430,8 +434,10 @@ export class AdminUsersService {
     actorUserId: number,
     targetUserId: number,
     isActive: boolean,
+    reason: string,
     ipAddress?: string,
   ): Promise<SafeUser> {
+    const actionReason = this.requireActionReason(reason);
     if (actorUserId === targetUserId && !isActive) {
       throw new BadRequestException("You cannot deactivate your own account");
     }
@@ -470,7 +476,7 @@ export class AdminUsersService {
       action: isActive ? "user.activated" : "user.deactivated",
       targetType: "user",
       targetId: targetUserId,
-      details: { previousStatus, isActive },
+      details: { previousStatus, isActive, reason: actionReason },
       ipAddress,
     });
     return this.toSafeUser(saved);
@@ -480,8 +486,10 @@ export class AdminUsersService {
     actorUserId: number,
     targetUserId: number,
     status: "approved" | "rejected",
+    reason: string,
     ipAddress?: string,
   ): Promise<SafeUser> {
+    const actionReason = this.requireActionReason(reason);
     const saved = await this.usersRepository.manager.transaction(
       async (manager) => {
         const users = manager.getRepository(User);
@@ -526,10 +534,21 @@ export class AdminUsersService {
         previousStatus: saved.previousStatus,
         newStatus: saved.saved.employerApprovalStatus,
         companyName: saved.saved.companyName,
+        reason: actionReason,
       },
       ipAddress,
     });
     return this.toSafeUser(saved.saved);
+  }
+
+  private requireActionReason(reason: string): string {
+    const normalized = typeof reason === "string" ? reason.trim() : "";
+    if (normalized.length < 3 || normalized.length > 500) {
+      throw new BadRequestException(
+        "Provide an action reason between 3 and 500 characters.",
+      );
+    }
+    return normalized;
   }
 
   private toSafeUser(user: User): SafeUser {

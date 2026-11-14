@@ -183,6 +183,9 @@ export class CandidateAccountService {
             shareProfileOnApplication: profile.shareProfileOnApplication,
             applicationEmailUpdates: profile.applicationEmailUpdates,
             jobAlertEmails: profile.jobAlertEmails,
+            whatsappInterviewReminders: profile.whatsappInterviewReminders,
+            whatsappInterviewRemindersConsentedAt:
+              profile.whatsappInterviewRemindersConsentedAt,
             updatedAt: profile.updatedAt,
           }
         : null,

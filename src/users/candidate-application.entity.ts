@@ -21,6 +21,9 @@ export class CandidateApplication {
   @Column({ name: "job_id" })
   jobId!: number;
 
+  @Column({ name: "assigned_to_user_id", type: "integer", nullable: true })
+  assignedToUserId!: number | null;
+
   @Column({ name: "cover_letter", type: "text", nullable: true })
   coverLetter!: string | null;
 
@@ -55,6 +58,13 @@ export class CandidateApplication {
     answer: string;
   }>;
 
+  @Column({ name: "source_attribution", type: "jsonb", nullable: true })
+  sourceAttribution!: {
+    source: string | null;
+    medium: string | null;
+    campaign: string | null;
+  } | null;
+
   @Column({ name: "withdrawn_at", type: "timestamptz", nullable: true })
   withdrawnAt!: Date | null;
 
@@ -82,6 +92,10 @@ export class CandidateApplication {
   @ManyToOne(() => User, { onDelete: "CASCADE" })
   @JoinColumn({ name: "user_id" })
   user!: User;
+
+  @ManyToOne(() => User, { onDelete: "SET NULL", nullable: true })
+  @JoinColumn({ name: "assigned_to_user_id" })
+  assignedTo!: User | null;
 
   @ManyToOne(() => Job, { onDelete: "CASCADE" })
   @JoinColumn({ name: "job_id" })

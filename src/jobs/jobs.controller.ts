@@ -13,6 +13,11 @@ import { JobsService } from "./jobs.service";
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
+  @Get("options")
+  options() {
+    return this.jobsService.jobOptions();
+  }
+
   @Get()
   findAll(
     @Query("q") query?: string,
@@ -23,6 +28,8 @@ export class JobsController {
     @Query("employmentType") employmentType?: string,
     @Query("experience") experience?: string,
     @Query("company") company?: string,
+    @Query("category") category?: string,
+    @Query("industry") industry?: string,
     @Query("minimumSalary", new DefaultValuePipe(0), ParseIntPipe)
     minimumSalary = 0,
     @Query("salaryCurrency") salaryCurrency?: string,
@@ -30,6 +37,7 @@ export class JobsController {
     @Query("freshnessDays", new DefaultValuePipe(0), ParseIntPipe)
     freshnessDays = 0,
     @Query("sort") sort?: string,
+    @Query("skill") skill?: string,
   ) {
     return this.jobsService.findAll({
       query,
@@ -40,11 +48,14 @@ export class JobsController {
       employmentType,
       experience,
       company,
+      category,
+      industry,
       minimumSalary,
       salaryCurrency,
       salaryPeriod,
       freshnessDays,
       sort,
+      skill,
     });
   }
 

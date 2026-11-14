@@ -1,14 +1,13 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from "node:crypto";
 import { Repository } from "typeorm";
 import { AuditService } from "../audit/audit.service";
 import { AuthenticatedUser } from "../auth/auth.types";
+import {
+  decryptConfigSecret,
+  encryptConfigSecret,
+  getConfigSecretKey,
+} from "../common/encrypted-config-secret";
 import { UpdateRazorpayConfigurationDto } from "./dto/update-razorpay-configuration.dto";
 import { RazorpayConfiguration } from "./razorpay-configuration.entity";
 
@@ -414,10 +413,7 @@ export class RazorpayConfigurationService {
   }
 
   private encryptionKey() {
-    const configured = process.env.RAZORPAY_CONFIG_ENCRYPTION_KEY?.trim();
-    return configured && configured.length >= 32
-      ? createHash("sha256").update(configured, "utf8").digest()
-      : null;
+    return getConfigSecretKey(process.env.RAZORPAY_CONFIG_ENCRYPTION_KEY);
   }
 
   private encrypt(value: string) {
@@ -426,13 +422,7 @@ export class RazorpayConfigurationService {
       throw new ServiceUnavailableException(
         "Razorpay secret encryption is not configured.",
       );
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", key, iv);
-    const encrypted = Buffer.concat([
-      cipher.update(value, "utf8"),
-      cipher.final(),
-    ]);
-    return `v1:${iv.toString("base64")}:${cipher.getAuthTag().toString("base64")}:${encrypted.toString("base64")}`;
+    return encryptConfigSecret(value, key);
   }
 
   private decrypt(value: string) {
@@ -441,25 +431,11 @@ export class RazorpayConfigurationService {
       throw new ServiceUnavailableException(
         "RAZORPAY_CONFIG_ENCRYPTION_KEY is required to read saved Razorpay secrets.",
       );
-    const [version, ivText, tagText, encryptedText] = value.split(":");
-    if (version !== "v1" || !ivText || !tagText || !encryptedText)
-      throw new ServiceUnavailableException(
-        "The stored Razorpay secret has an unsupported format.",
-      );
     try {
-      const decipher = createDecipheriv(
-        "aes-256-gcm",
-        key,
-        Buffer.from(ivText, "base64"),
-      );
-      decipher.setAuthTag(Buffer.from(tagText, "base64"));
-      return Buffer.concat([
-        decipher.update(Buffer.from(encryptedText, "base64")),
-        decipher.final(),
-      ]).toString("utf8");
+      return decryptConfigSecret(value, key);
     } catch (error) {
       throw new ServiceUnavailableException(
-        "Razorpay secret decryption failed; verify RAZORPAY_CONFIG_ENCRYPTION_KEY.",
+        "Razorpay secret decryption failed or the stored value has an unsupported format; verify RAZORPAY_CONFIG_ENCRYPTION_KEY.",
         { cause: error },
       );
     }

@@ -5,9 +5,13 @@ import { AuditLog } from "../audit/audit-log.entity";
 import { EmployerInterview } from "../employers/employer-interview.entity";
 import { EmployerOrganizationMember } from "../employers/organization-member.entity";
 import { EmployerOrganization } from "../employers/organization.entity";
+import { EmployerSubscriptionPayment } from "../employers/employer-subscription-payment.entity";
 import { Job } from "../jobs/job.entity";
 import { CandidateApplication } from "../users/candidate-application.entity";
+import { CandidateApplicationStatus } from "../users/candidate-application-status.entity";
+import { CandidatePremiumOrder } from "../users/candidate-premium-order.entity";
 import { User, UserRole } from "../users/user.entity";
+import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
 
 @Injectable()
 export class AdminInsightsService {
@@ -18,6 +22,8 @@ export class AdminInsightsService {
     private readonly users: Repository<User>,
     @InjectRepository(CandidateApplication)
     private readonly applications: Repository<CandidateApplication>,
+    @InjectRepository(CandidateApplicationStatus)
+    private readonly applicationStatuses: Repository<CandidateApplicationStatus>,
     @InjectRepository(EmployerInterview)
     private readonly interviews: Repository<EmployerInterview>,
     @InjectRepository(EmployerOrganization)
@@ -26,6 +32,11 @@ export class AdminInsightsService {
     private readonly memberships: Repository<EmployerOrganizationMember>,
     @InjectRepository(AuditLog)
     private readonly auditLogs: Repository<AuditLog>,
+    @InjectRepository(EmployerSubscriptionPayment)
+    private readonly employerPayments: Repository<EmployerSubscriptionPayment>,
+    @InjectRepository(CandidatePremiumOrder)
+    private readonly candidatePayments: Repository<CandidatePremiumOrder>,
+    private readonly platformConfiguration: PlatformConfigurationService,
   ) {}
 
   async overview() {
@@ -39,9 +50,12 @@ export class AdminInsightsService {
       scheduledInterviews,
       organizations,
       applicationsByStatus,
+      applicationsBySource,
       weeklyApplications,
       topJobs,
       applicationsByJob,
+      hiringMetrics,
+      configuration,
     ] = await Promise.all([
       this.jobs.countBy({ isActive: true }),
       this.jobs.count(),
@@ -57,6 +71,37 @@ export class AdminInsightsService {
         .addSelect("COUNT(*)", "count")
         .groupBy("application.status")
         .getRawMany<{ status: string; count: string }>(),
+      this.applications
+        .createQueryBuilder("application")
+        .select(
+          "COALESCE(application.source_attribution ->> 'source', 'unattributed')",
+          "source",
+        )
+        .addSelect(
+          "COALESCE(application.source_attribution ->> 'medium', 'unspecified')",
+          "medium",
+        )
+        .addSelect(
+          "COALESCE(application.source_attribution ->> 'campaign', '')",
+          "campaign",
+        )
+        .addSelect("COUNT(*)", "applicationCount")
+        .addSelect(
+          "COUNT(*) FILTER (WHERE application.status = 'hired')",
+          "hireCount",
+        )
+        .groupBy("source")
+        .addGroupBy("medium")
+        .addGroupBy("campaign")
+        .orderBy("COUNT(*)", "DESC")
+        .limit(30)
+        .getRawMany<{
+          source: string;
+          medium: string;
+          campaign: string;
+          applicationCount: string;
+          hireCount: string;
+        }>(),
       this.applications
         .createQueryBuilder("application")
         .select("date_trunc('week', application.createdAt)", "week")
@@ -94,6 +139,8 @@ export class AdminInsightsService {
         .addSelect("COUNT(*)", "count")
         .groupBy("application.jobId")
         .getRawMany<{ jobId: number; count: string }>(),
+      this.hiringMetrics(),
+      this.platformConfiguration.get(),
     ]);
 
     const [candidateDelta, employerDelta] = await Promise.all([
@@ -118,6 +165,23 @@ export class AdminInsightsService {
         status: row.status,
         count: Number(row.count),
       })),
+      applicationsBySource: applicationsBySource.map((row) => {
+        const applicationCount = Number(row.applicationCount);
+        const hireCount = Number(row.hireCount);
+        return {
+          source: row.source,
+          medium: row.medium,
+          campaign: row.campaign || null,
+          applicationCount,
+          hireCount,
+          hireConversionRate:
+            applicationCount > 0
+              ? Number(((hireCount / applicationCount) * 100).toFixed(1))
+              : 0,
+        };
+      }),
+      applicationStages: configuration.applicationStages,
+      reportDefinitions: configuration.reportDefinitions,
       weeklyApplications: weeklyApplications.map((row) => ({
         week: new Date(row.week).toISOString(),
         count: Number(row.count),
@@ -131,6 +195,50 @@ export class AdminInsightsService {
         jobId: Number(row.jobId),
         count: Number(row.count),
       })),
+      hiringMetrics,
+    };
+  }
+
+  async hiringMetrics() {
+    const [acceptance, hires] = await Promise.all([
+      this.applicationStatuses
+        .createQueryBuilder("history")
+        .innerJoin("history.application", "application")
+        .select("COUNT(DISTINCT history.applicationId)::text", "acceptedOffers")
+        .addSelect(
+          "COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (history.createdAt - application.createdAt)) / 86400), 2), 0)::text",
+          "averageDaysToAcceptance",
+        )
+        .where("history.toStatus = 'offer_accepted'")
+        .andWhere("history.fromStatus = 'offer'")
+        .andWhere("history.createdAt >= application.createdAt")
+        .getRawOne<{
+          acceptedOffers?: string;
+          averageDaysToAcceptance?: string;
+        }>(),
+      this.applicationStatuses
+        .createQueryBuilder("history")
+        .innerJoin("history.application", "application")
+        .select("COUNT(DISTINCT history.applicationId)::text", "hires")
+        .addSelect(
+          "COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (history.createdAt - application.createdAt)) / 86400), 2), 0)::text",
+          "averageDaysToHire",
+        )
+        .where("history.toStatus = 'hired'")
+        .andWhere("history.fromStatus = 'offer_accepted'")
+        .andWhere("history.createdAt >= application.createdAt")
+        .getRawOne<{
+          hires?: string;
+          averageDaysToHire?: string;
+        }>(),
+    ]);
+    return {
+      acceptedOffers: Number(acceptance?.acceptedOffers ?? 0),
+      averageDaysToAcceptance: Number(
+        acceptance?.averageDaysToAcceptance ?? 0,
+      ),
+      hires: Number(hires?.hires ?? 0),
+      averageDaysToHire: Number(hires?.averageDaysToHire ?? 0),
     };
   }
 
@@ -210,4 +318,120 @@ export class AdminInsightsService {
       createdAt,
     }));
   }
+
+  async employerSubscriptionRevenue() {
+    const monthExpression =
+      "to_char(date_trunc('month', payment.paidAt AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM')";
+    const totalsQuery = this.employerPayments
+      .createQueryBuilder("payment")
+      .select("payment.currency", "currency")
+      .addSelect("COUNT(*)::text", "paidOrders")
+      .addSelect(
+        "ROUND(COALESCE(SUM(payment.amountPaise), 0)::numeric / 100, 2)::text",
+        "grossAmount",
+      )
+      .groupBy("payment.currency")
+      .orderBy("payment.currency", "ASC");
+    const monthlyQuery = this.employerPayments
+      .createQueryBuilder("payment")
+      .select("payment.currency", "currency")
+      .addSelect(monthExpression, "month")
+      .addSelect("COUNT(*)::text", "paidOrders")
+      .addSelect(
+        "ROUND(COALESCE(SUM(payment.amountPaise), 0)::numeric / 100, 2)::text",
+        "grossAmount",
+      )
+      .where(
+        "payment.paidAt >= ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata') - INTERVAL '11 months') AT TIME ZONE 'Asia/Kolkata')",
+      )
+      .groupBy("payment.currency")
+      .addGroupBy(monthExpression)
+      .orderBy(monthExpression, "ASC")
+      .addOrderBy("payment.currency", "ASC");
+    const planQuery = this.employerPayments
+      .createQueryBuilder("payment")
+      .select("payment.planKey", "planKey")
+      .addSelect("payment.currency", "currency")
+      .addSelect("COUNT(*)::text", "paidOrders")
+      .addSelect(
+        "ROUND(COALESCE(SUM(payment.amountPaise), 0)::numeric / 100, 2)::text",
+        "grossAmount",
+      )
+      .groupBy("payment.planKey")
+      .addGroupBy("payment.currency")
+      .orderBy("payment.planKey", "ASC")
+      .addOrderBy("payment.currency", "ASC");
+    const [totalsByCurrency, monthly, byPlan] = await Promise.all([
+      totalsQuery.getRawMany<{
+        currency: string;
+        paidOrders: string;
+        grossAmount: string;
+      }>(),
+      monthlyQuery.getRawMany<{
+        currency: string;
+        month: string;
+        paidOrders: string;
+        grossAmount: string;
+      }>(),
+      planQuery.getRawMany<{
+        planKey: string | null;
+        currency: string;
+        paidOrders: string;
+        grossAmount: string;
+      }>(),
+    ]);
+    return {
+      scope: "employer_subscription_charges",
+      totalsByCurrency,
+      monthly,
+      byPlan,
+    };
+  }
+
+  async paymentReconciliation() {
+    const [candidateOrders, employerPayments] = await Promise.all([
+      this.candidatePayments.find({
+        where: { paymentStatus: "paid" },
+        order: { paidAt: "DESC", createdAt: "DESC" },
+        take: 500,
+      }),
+      this.employerPayments.find({
+        order: { paidAt: "DESC", id: "DESC" },
+        take: 500,
+      }),
+    ]);
+    const candidateItems = candidateOrders.map((order) => ({
+      source: "candidate_service" as const,
+      gatewayPaymentId: order.razorpayPaymentId,
+      gatewayReferenceId: order.razorpayOrderId,
+      invoiceId: null,
+      amount: paiseToAmount(String(order.amountPaise)),
+      currency: order.currency,
+      status: order.razorpayPaymentId ? "captured" : "missing_payment_id",
+      paidAt: order.paidAt?.toISOString() ?? null,
+    }));
+    const employerItems = employerPayments.map((payment) => ({
+      source: "employer_subscription" as const,
+      gatewayPaymentId: payment.razorpayPaymentId,
+      gatewayReferenceId: payment.subscriptionId,
+      invoiceId: payment.invoiceId,
+      amount: paiseToAmount(payment.amountPaise),
+      currency: payment.currency,
+      status: "captured",
+      paidAt: payment.paidAt.toISOString(),
+    }));
+    const items = [...candidateItems, ...employerItems]
+      .sort((left, right) =>
+        (right.paidAt ?? "").localeCompare(left.paidAt ?? ""),
+      )
+      .slice(0, 500);
+    return { items, limit: 500 };
+  }
+}
+
+function paiseToAmount(paise: string): string {
+  const amount = BigInt(paise);
+  const whole = amount / 100n;
+  const fraction = String(amount % 100n).padStart(2, "0");
+  return `${whole}.${fraction}`;
 }

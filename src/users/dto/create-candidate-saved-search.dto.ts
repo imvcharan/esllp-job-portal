@@ -10,14 +10,6 @@ import {
 } from "class-validator";
 import { JOB_SALARY_CURRENCIES, JOB_SALARY_PERIODS } from "../../jobs/job.constants";
 
-const employmentTypes = [
-  "full-time",
-  "part-time",
-  "contract",
-  "internship",
-  "temporary",
-];
-const workplaceTypes = ["onsite", "hybrid", "remote"];
 const experienceLevels = ["early", "mid", "senior"];
 const sortOptions = ["newest", "salary", "title"];
 
@@ -37,12 +29,29 @@ export class CreateCandidateSavedSearchDto {
   location?: string;
 
   @IsOptional()
-  @IsIn(workplaceTypes)
+  @IsString()
+  @MaxLength(120)
   workplaceType?: string;
 
   @IsOptional()
-  @IsIn(employmentTypes)
+  @IsString()
+  @MaxLength(120)
   employmentType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  industry?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  skill?: string;
 
   @IsOptional()
   @IsIn(experienceLevels)

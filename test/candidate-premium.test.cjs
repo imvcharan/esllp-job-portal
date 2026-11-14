@@ -181,6 +181,134 @@ test("candidate premium rejects a forged payment signature before contacting Raz
   }
 });
 
+test("admin candidate revenue reports only paid orders and fills the last 12 IST months", async () => {
+  const builders = [];
+  function builder(result, resultType) {
+    const calls = [];
+    const query = {
+      select: (...args) => { calls.push(["select", ...args]); return query; },
+      addSelect: (...args) => { calls.push(["addSelect", ...args]); return query; },
+      where: (...args) => { calls.push(["where", ...args]); return query; },
+      andWhere: (...args) => { calls.push(["andWhere", ...args]); return query; },
+      groupBy: (...args) => { calls.push(["groupBy", ...args]); return query; },
+      addGroupBy: (...args) => { calls.push(["addGroupBy", ...args]); return query; },
+      orderBy: (...args) => { calls.push(["orderBy", ...args]); return query; },
+      getRawOne: async () => result,
+      getRawMany: async () => result,
+    };
+    builders.push({ calls });
+    return query;
+  }
+  const indiaParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const currentMonth =
+    `${indiaParts.find((part) => part.type === "year").value}-` +
+    indiaParts.find((part) => part.type === "month").value;
+  const service = new CandidatePremiumService(
+    {},
+    {},
+    {
+      createQueryBuilder: () => {
+        const index = builders.length;
+        if (index === 0)
+          return builder({
+            paidOrders: "2",
+            pendingOrders: "1",
+            grossPaidInr: "48.98",
+          }, "one");
+        if (index === 1)
+          return builder([{
+            productKey: "resume-review",
+            productName: "Resume review",
+            paidOrders: "2",
+            grossPaidInr: "48.98",
+          }], "many");
+        return builder([{
+          month: currentMonth,
+          paidOrders: "2",
+          grossPaidInr: "48.98",
+        }], "many");
+      },
+    },
+    {},
+    {},
+    {},
+  );
+
+  const revenue = await service.adminRevenue();
+
+  assert.equal(revenue.scope, "candidate_service_payments");
+  assert.equal(revenue.currency, "INR");
+  assert.deepEqual(revenue.totals, {
+    paidOrders: "2",
+    pendingOrders: "1",
+    grossPaidInr: "48.98",
+  });
+  assert.deepEqual(revenue.byProduct, [{
+    productKey: "resume-review",
+    productName: "Resume review",
+    paidOrders: "2",
+    grossPaidInr: "48.98",
+  }]);
+  assert.equal(revenue.monthly.length, 12);
+  assert.deepEqual(revenue.monthly[11], {
+    month: currentMonth,
+    paidOrders: "2",
+    grossPaidInr: "48.98",
+  });
+  assert.equal(revenue.monthly[0].paidOrders, "0");
+  assert.ok(builders[0].calls.some(([, expression]) =>
+    String(expression).includes("order.paymentStatus = 'pending'")));
+  assert.ok(builders[1].calls.some(([, expression]) =>
+    String(expression).includes("order.paymentStatus = 'paid' AND order.paidAt IS NOT NULL")));
+  assert.ok(builders[2].calls.some(([, expression]) =>
+    String(expression).includes("INTERVAL '11 months'")));
+});
+
+test("admin candidate revenue returns zero totals for an empty payment history", async () => {
+  let queryCount = 0;
+  const service = new CandidatePremiumService(
+    {},
+    {},
+    {
+      createQueryBuilder: () => {
+        const index = queryCount++;
+        const query = {
+          select: () => query,
+          addSelect: () => query,
+          where: () => query,
+          andWhere: () => query,
+          groupBy: () => query,
+          addGroupBy: () => query,
+          orderBy: () => query,
+          getRawOne: async () => null,
+          getRawMany: async () => [],
+        };
+        assert.ok(index < 3);
+        return query;
+      },
+    },
+    {},
+    {},
+    {},
+  );
+
+  const revenue = await service.adminRevenue();
+
+  assert.deepEqual(revenue.totals, {
+    paidOrders: "0",
+    pendingOrders: "0",
+    grossPaidInr: "0",
+  });
+  assert.deepEqual(revenue.byProduct, []);
+  assert.equal(revenue.monthly.length, 12);
+  assert.ok(revenue.monthly.every((month) =>
+    month.paidOrders === "0" && month.grossPaidInr === "0"));
+});
+
 test("candidate premium webhook verifies raw-body signatures and processes captured payments once", async () => {
   const previousSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
   process.env.RAZORPAY_WEBHOOK_SECRET = "webhook-secret";

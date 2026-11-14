@@ -42,6 +42,10 @@ export class AuditLog {
   @Column({ name: 'user_agent', type: 'varchar', length: 1000, nullable: true })
   userAgent!: string | null;
 
+  @Index("IDX_audit_logs_request_id")
+  @Column({ name: 'request_id', type: 'uuid', nullable: true })
+  requestId!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }

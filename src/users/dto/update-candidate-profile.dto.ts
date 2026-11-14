@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsOptional,
   IsNumber,
   IsString,
@@ -223,15 +224,15 @@ export class UpdateCandidateProfileDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(5)
-  @IsIn(["full-time", "part-time", "contract", "internship", "temporary"], {
-    each: true,
-  })
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
   employmentTypes?: string[];
 
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(3)
-  @IsIn(["onsite", "hybrid", "remote"], { each: true })
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
   workplaceTypes?: string[];
 
   @IsOptional()
@@ -297,4 +298,14 @@ export class UpdateCandidateProfileDto {
   @IsOptional()
   @IsBoolean()
   jobAlertEmails?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  whatsappInterviewReminders?: boolean;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  onboardingStep?: number;
 }

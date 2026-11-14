@@ -71,6 +71,9 @@ export class CandidateSavedSearchesService {
     if (
       dto.workplaceType !== undefined ||
       dto.employmentType !== undefined ||
+      dto.category !== undefined ||
+      dto.industry !== undefined ||
+      dto.skill !== undefined ||
       dto.experience !== undefined ||
       dto.company !== undefined ||
       dto.minimumSalary !== undefined ||
@@ -83,6 +86,9 @@ export class CandidateSavedSearchesService {
         ...savedSearch.filters,
         ...this.toFilters(dto),
       };
+      if (dto.skill !== undefined && !dto.skill.trim()) {
+        delete savedSearch.filters.skill;
+      }
     }
     const saved = await this.savedSearchesRepository.save(savedSearch);
     await this.auditService.record({
@@ -125,7 +131,10 @@ export class CandidateSavedSearchesService {
         !query ||
         title.includes(query) ||
         company.includes(query) ||
-        Boolean(job.description?.toLocaleLowerCase().includes(query));
+        Boolean(job.description?.toLocaleLowerCase().includes(query)) ||
+        (job.skills ?? []).some((skill) =>
+          skill.toLocaleLowerCase().includes(query),
+        );
       const locationMatches =
         !search.location ||
         location.includes(search.location.toLocaleLowerCase());
@@ -134,6 +143,16 @@ export class CandidateSavedSearchesService {
       const employmentMatches =
         !filters.employmentType ||
         filters.employmentType === job.employmentType;
+      const categoryMatches =
+        !filters.category || filters.category === job.category;
+      const industryMatches =
+        !filters.industry || filters.industry === job.industry;
+      const skillFilter = filters.skill?.toLocaleLowerCase();
+      const skillMatches =
+        !skillFilter ||
+        (job.skills ?? []).some((skill) =>
+          skill.toLocaleLowerCase().includes(skillFilter),
+        );
       const years = job.experience?.match(/\d+/g)?.map(Number) ?? [];
       const experienceMatches =
         !filters.experience ||
@@ -176,6 +195,9 @@ export class CandidateSavedSearchesService {
         locationMatches &&
         workplaceMatches &&
         employmentMatches &&
+        categoryMatches &&
+        industryMatches &&
+        skillMatches &&
         experienceMatches &&
         companyMatches &&
         salaryUnitMatches &&
@@ -207,11 +229,11 @@ export class CandidateSavedSearchesService {
           }
         : {}),
       ...(dto.employmentType
-        ? {
-            employmentType:
-              dto.employmentType as CandidateSavedSearchFilters["employmentType"],
-          }
+        ? { employmentType: dto.employmentType }
         : {}),
+      ...(dto.category ? { category: dto.category } : {}),
+      ...(dto.industry ? { industry: dto.industry } : {}),
+      ...(dto.skill?.trim() ? { skill: dto.skill.trim() } : {}),
       ...(dto.experience
         ? {
             experience:

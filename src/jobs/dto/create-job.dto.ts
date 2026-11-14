@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsIn,
@@ -11,7 +13,11 @@ import {
   Min,
   MinLength,
 } from "class-validator";
-import { JOB_SALARY_CURRENCIES, JOB_SALARY_PERIODS } from "../job.constants";
+import {
+  JOB_SALARY_CURRENCIES,
+  JOB_SALARY_PERIODS,
+  MAX_JOB_SKILLS,
+} from "../job.constants";
 
 export class CreateJobDto {
   @IsString()
@@ -31,13 +37,34 @@ export class CreateJobDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(["onsite", "hybrid", "remote"])
+  @MinLength(1)
+  @MaxLength(120)
   workplaceType?: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(["full-time", "part-time", "contract", "internship", "temporary"])
+  @MinLength(1)
+  @MaxLength(120)
   employmentType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  category?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  industry?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_JOB_SKILLS)
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(60, { each: true })
+  @Matches(/\S/, { each: true })
+  skills?: string[];
 
   @IsOptional()
   @IsInt()

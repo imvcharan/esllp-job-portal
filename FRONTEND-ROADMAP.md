@@ -57,8 +57,9 @@ explicit so those gaps are found before they become expensive rework.
 - Paid employer plans are in scope. Keep checkout unavailable until plan
   configuration, verified webhooks, and staging payment tests are complete;
   candidates are not charged to apply.
-- Do not build unrequested social networks, AI ranking, automated hiring
-  decisions, payroll, or background checks into v1.
+- Do not add opaque ranking or automated hiring decisions. Keep matching
+  explainable and human-reviewed; any AI-assisted feature needs an approved
+  provider, privacy review, and quality/bias evaluation plan.
 - Email verification, password recovery, application messaging, push
   notifications, company verification, and report handling are real product
   flows only when their server and operations support is delivered. Never
@@ -114,12 +115,17 @@ the current API and workflow guide; use the following baseline instead.
   and rate limits are implemented. SMTP delivery still requires deployment
   configuration and verification.
 - Public job search supports filtering, sorting, pagination, share pages,
-  sitemap, and structured data. Admins manage listings; approved employers
-  manage organization-owned jobs and company details.
+  sitemap, and structured data. Homepage and careers discovery use
+  admin-managed categories and locations; matching category/location pages
+  have canonical server-rendered routes and sitemap entries. Admins manage
+  listings; approved employers manage organization-owned jobs and company
+  details.
 - Candidate profile and preferences, private photo/resume storage, saved jobs
   and searches, consent-based application data sharing, application history
   and withdrawal, employer-defined application questions, notifications, and
-  interview updates are implemented.
+  interview updates are implemented. PDF/DOCX text extraction now produces
+  section-based skill, experience, and education suggestions for candidate
+  review; this is not an AI model or a guarantee of extraction accuracy.
 - Employer organization membership, invitations, applicant review/status
   changes, notes/tags, interviews, notifications, configurable plan limits,
   Boolean recruiter search, saved searches, candidate-consented resume access,
@@ -127,17 +133,78 @@ the current API and workflow guide; use the following baseline instead.
   requires matching provider plans, verified webhooks, and staging checks.
 - Staff/admin/superadmin dashboards, employer approval, user administration,
   analytics, and the protected audit log are implemented.
+- Superadmins can configure candidate/employer registration availability and
+  employer/job approval requirements. Database-seeded defaults keep
+  registration open and require both approvals; changes and resets require a
+  reason and are audited. Employer policy changes do not override rejected
+  accounts, and job policy changes do not retroactively publish pending jobs.
+- Superadmins can edit and reset seeded email templates for account links,
+  sign-in codes, application updates, job alerts, interviews, and team
+  invitations. Supported placeholders are validated; edits apply to new
+  messages and are audited.
+- Admin analytics include application-stage counts, normalized UTM source,
+  medium, and campaign summaries with employer-reported hire conversion, the
+  average time from application submission to an accepted offer, and time to
+  employer-confirmed hire. Raw referrer URLs are not stored; older applications
+  remain unattributed, and employment dates are not independently verified.
+- Superadmins can review candidate-service collections from paid orders in
+  INR, grouped by service and month, plus verified employer subscription
+  charges grouped by currency and month. Employer charges are recorded only
+  from the new ledger onward; earlier receipts are not backfilled. These are
+  gross collections, not net revenue: refunds, chargebacks, gateway fees, and
+  taxes are not modeled.
+- A first CMS foundation now supports staff/admin/superadmin editing and
+  publishing of public pages, FAQs, blog posts, and homepage announcements.
+  Published items are available from public routes and SEO fields; content
+  bodies are plain text. Scheduled publication and revision restore are
+  supported; rich-text/media management, page templates, and legal review
+  workflows remain outstanding.
 - TypeORM migrations and PostgreSQL configuration exist; startup runs pending
   migrations. The existing backend and static web client are the supported
   local product surfaces.
-- Repository gaps still include database integration/browser end-to-end tests,
-  company/user reporting controls and appeal/feedback workflows, an approved
-  account deletion/retention policy, upload quarantine/operational scanning
-  monitoring, and complete operational observability/recovery/support readiness.
-  Provider-backed production configuration and verification are not evidenced
-  by repository code.
+- Repository gaps still include full
+  AI-assisted authoring/gap-analysis/interview-question features, database
+  integration/browser end-to-end tests, appeals/fraud operations, an approved
+  account deletion/retention policy,
+  upload quarantine/operational scanning monitoring, and complete
+  observability/recovery/support readiness. Provider-backed production
+  configuration and verification are not evidenced by repository code.
 - See [README.md](./README.md) for setup, API, storage, email, billing, and
   deployment configuration details.
+
+### Admin configuration inventory
+
+| Area | Current control | Remaining boundary |
+| --- | --- | --- |
+| Registration and approval | Superadmin runtime controls, persisted with safe defaults and audit history | Does not change already-rejected employers or pending listings |
+| Razorpay and employer plans | Superadmin gateway enablement/credentials, four tier IDs/prices/entitlements; current seeded rates are owner-approved; reconciliation export shows the latest 500 locally recorded captured payments | Tier count is fixed; automated refunds, tax treatment, invoice generation, coupons, live gateway reconciliation, and provider verification are not implemented |
+| Candidate services | Superadmin can create services, edit names/prices/descriptions/availability, and remove services from checkout | Removed products remain in the catalog for order history; their keys cannot be reused |
+| Website content and SEO | Staff/admin/superadmin can create, edit, publish, schedule, restore revisions, and delete CMS entries | Rich media/templates, legal review, and configurable banner campaigns remain |
+| Notification delivery | Superadmin-editable, audited email templates cover authentication, application, job-alert, interview, and team-invitation mail; Twilio credentials are encrypted and masked; WhatsApp interview reminders require an approved template and explicit candidate opt-in | Provider approval, production credentials, and real-device delivery remain to be verified |
+| Runtime infrastructure | SMTP, OAuth, storage, malware scanning, database, app URLs, CAPTCHA, TOTP MFA, and encryption keys use server environment configuration; Twilio credentials support secure superadmin overrides with environment fallback | Provider credentials still require deployment verification and protected secret provisioning |
+| Operational/business policy | No admin override for privacy retention/deletion rules, appeals, fraud handling, refunds, tax treatment, or emergency access | Requires approved legal, finance, privacy, and operations decisions before safe defaults can be chosen |
+| Job taxonomies | Superadmin-managed categories, industries, employment/workplace types, and location suggestions; public search, homepage/careers discovery, and canonical category/location landing pages consume them | Existing free-text locations remain valid; category/location landing pages without matching published jobs are excluded from the sitemap |
+| Applicant tracking | Superadmin-managed stage labels and transitions; employer-side assignment to active recruiters/hiring managers is tenant-scoped and audited; a minute polling worker queues a deduplicated 24-hour interview reminder through the editable email-template/outbox flow when candidate email updates are enabled | Production PostgreSQL/SMTP verification, explicit eligibility-check rules, custom report queries, and broader recruiter ownership/retention analytics remain |
+| Analytics report definitions | Superadmins can rename, enable/disable, and reorder the four supported live reports; changes are audited and defaults are seeded | Definitions select existing reports only; arbitrary query construction is intentionally unsupported |
+| Product catalogs and analytics | Candidate-service catalog is dynamic; employer plan prices and entitlements are editable for four fixed tiers; hiring and collections reports by currency, plan, service, and month plus a bounded local payment reconciliation export are available | Coupons, taxes/refunds/invoice generation/live reconciliation, MRR/ARPU/churn/CAC/LTV and full funnel metrics remain unavailable or require approved definitions/source data |
+
+### DOCX scope audit
+
+| DOCX area | Status | Remaining work or boundary |
+| --- | --- | --- |
+| Public website and SEO | Partial | Responsive search has a dedicated free-text skill filter that carries through shareable search URLs, saved searches, and matching email alerts; selectable skill facets and paid featured-placement controls remain. CMS, job/company pages, canonical metadata, category/location landing pages, and a dedicated contact route exist. The owner-confirmed support mailbox is `hello@esllp.in`; add career-resource content and complete browser acceptance/accessibility tests and final business/legal copy |
+| Candidate module | Partial | Profile, builder, saved jobs, applications, visibility, export, and candidate-reviewed resume suggestions exist. Consent-preserving per-job quick apply is available only for roles without questions or requested documents; standard reviewed application remains available. WhatsApp interview reminders require verified-phone consent. AI improvements and approved retention/deletion rules remain |
+| Employer and recruiter module | Partial | Organizations, teams, jobs, applicant workflows, resume access, and subscriptions exist. Evidence-based company verification/appeals, pay-per-job, sponsored placement, employer campaigns, agency/enterprise packages, and generated GST invoices are not implemented; gateway invoice identifiers are only recorded when supplied |
+| Applicant tracking | Partial | Status history, screening questions, interviews, scorecards, hiring metrics, admin-configurable stages/transitions, privacy-minimized source attribution, tenant-scoped recruiter assignment, and scheduled email/opt-in WhatsApp interview reminders exist. Production provider verification, explicit eligibility-check rules, broader funnel, and recruiter retention metrics remain |
+| AI and matching | Partial | Matching is deterministic and explainable; resume suggestions are heuristic and reviewed by candidates. JD writing, skill-gap analysis, interview-question generation, provider integration, and bias/model monitoring are not implemented |
+| Superadmin and CMS | Partial | Moderation, CMS, templates, taxonomies, selected analytics/configuration, and editable definitions for supported reports exist; dynamic admin-role permissions, coupons, invoices, and refund workflows are absent |
+| Backend and integrations | Partial | NestJS/PostgreSQL, private storage, malware-scan hooks, payment and notification flows exist. Twilio WhatsApp interview reminders are available with verified-phone opt-in and an approved Content Template; production sender/template and delivery still need verification. OpenAPI documentation exists, but routes are not versioned; search uses database queries without a dedicated search index; calendar/video, external ATS, AI integrations, and production operations are not evidenced |
+| Security, privacy, and compliance | Partial | Password/session controls, tenant checks, rate limits, TOTP MFA with one-time recovery codes, Google reCAPTCHA v2 verification, and audit events exist; approved retention/deletion policy, legal review, production secret provisioning, and TLS verification remain |
+| Testing, deployment, and handover | Partial | Build, typecheck, unit tests, and CI foundations exist; database/browser integration, load/security tests, backup-restore drills, staging/production deployment, and handover/training remain |
+| Revenue and commercial operations | Partial | Employer subscriptions and candidate services are supported; the owner approved the seeded employer rates for production. Pay-per-post, sponsored/branding/agency/hiring/enterprise revenue streams and MRR/ARPU/churn/CAC/LTV/conversion/fill-rate reporting are absent; tax treatment, refunds, and generated GST invoices remain unimplemented |
+| Native mobile applications | Excluded from this DOCX scope | The document defines a mobile-responsive web platform and explicitly excludes native apps unless separately agreed; do not treat the optional mobile roadmap as a current launch gap |
+
+**Source-document check:** the owner confirmed that the DOCX numbering jump from section 13 to section 15 is intentional; section 14 is omitted by design.
 
 Do not remove an existing screen/API until the replacement has parity for its
 required behavior, permission checks, tests, and operational ownership.
@@ -196,8 +263,9 @@ demonstrable exit gate; adjust scope only by recording the tradeoff and impact.
       and the later staging/production promotion and rollback process.
 - [x] Add a CI build-and-unit-test gate on pushes and pull requests; keep
       environment credentials out of Git.
-- [ ] Extend CI with formatting, lint, explicit type-check, API/database
-      integration, browser, and mobile checks.
+- [x] Add an explicit TypeScript no-emit type-check to CI.
+- [ ] Extend CI with formatting, lint, API/database integration, browser, and
+      mobile checks.
 - [ ] Choose cloud, email, file storage, analytics/monitoring, and push
       providers based on documented requirements; do not choose solely by
       convenience.
@@ -217,8 +285,10 @@ instructions without production credentials or data.
 - [ ] Audit current API behavior, auth/session handling, migrations, CORS,
       cookies, request validation, throttling, error responses, and admin
       authorization. Fix launch blockers before adding clients.
-- [ ] Add OpenAPI generation and a checked/generated TypeScript client, plus
-      contract checks that fail when clients and API drift.
+- [x] Generate an OpenAPI document and local interactive API docs; production
+      documentation routes stay disabled by default.
+- [ ] Add a checked/generated TypeScript client and contract checks that fail
+      when clients and API drift.
 - [x] Implement the browser session flow using short-lived access tokens and
       an HttpOnly refresh cookie that is Secure in production.
 - [ ] Complete an API/authentication review and add contract documentation;
@@ -228,9 +298,11 @@ instructions without production credentials or data.
 - [ ] Add common design tokens, typography, responsive breakpoints, form
       patterns, accessible controls, error/empty/loading states, and analytics
       event conventions.
-- [ ] Add request IDs, structured logs, health/readiness checks, and a safe
-      error-reporting strategy that excludes credentials, tokens, and resume
-      content.
+- [x] Add request IDs, structured request logs, and health/readiness checks.
+      Request logs use route templates and omit raw URLs, query strings, and
+      request bodies.
+- [ ] Add a safe error-reporting strategy that excludes credentials, tokens,
+      and resume content.
 
 **Exit gate:** The responsive web client runs against the local API; auth
 behavior is documented and tested; local development uses no production
@@ -245,6 +317,8 @@ secrets or data. A staging deployment is not a prerequisite for feature work.
       client.
 - [x] Add shareable job pages, canonical metadata, sitemap, and structured
       data for public listings.
+- [x] Render homepage/careers discovery from configured categories and
+      locations; add canonical category/location pages and sitemap entries.
 - [x] Keep search and filters URL-addressable and preserve direct job links.
 - [x] Handle no results, API failures, unavailable listings, and preview-only
       sample jobs without treating samples as actionable vacancies.
@@ -269,7 +343,7 @@ empty or successful results; core journeys pass automated browser tests.
       default profile behavior.
 - [x] Extend profiles with experience, education, desired role titles, and
       employment/workplace preferences.
-- [ ] Add optional compensation expectations to candidate profiles.
+- [x] Add optional compensation expectations to candidate profiles.
 - [x] Add profile/application audit events and enforce candidate consent for
       employer visibility.
 - [x] Implement email verification and password recovery with expiring,
@@ -278,6 +352,9 @@ empty or successful results; core journeys pass automated browser tests.
 - [x] Implement private resume upload/replacement/removal and authorized
       download using object storage with file size/type validation and private
       storage paths.
+- [x] Extract selectable PDF/DOCX text and offer section-based skill,
+      experience, and education suggestions that candidates review and add to
+      their profile form; suggestions are heuristic, not model-generated.
 - [ ] Configure malware scanning/quarantine for uploaded files before
       production use.
 - [ ] Define approved retention, anonymization, and deletion behavior for
@@ -294,12 +371,15 @@ empty or successful results; core journeys pass automated browser tests.
 - [x] Build a responsive candidate profile editor with server-backed save,
       session refresh/recovery, and honest private-by-default disclosure.
 - [x] Show profile completeness feedback based on saved profile data.
-- [ ] Build guided save-and-resume onboarding and a candidate profile preview.
+- [x] Build four-step guided candidate onboarding with server-persisted
+      progress, partial saves, optional experience/education, privacy choices,
+      and resume-on-return behavior.
+- [x] Add an in-account preview of saved candidate profile information.
 - [x] Add privacy/visibility controls with a clear explanation of when an
       employer can access profile or resume information.
 - [x] Add resume file constraints, replacement/removal, and actionable error
       states.
-- [ ] Add upload progress and retry behavior.
+- [x] Add upload progress and retry behavior.
 
 **Exit gate:** A candidate can securely register, recover access, manage a
 persisted profile/resume, and control visibility on web; unauthorized accounts
@@ -319,6 +399,9 @@ cannot read or modify another candidate's data; files are private and tested.
 - [x] Support core job listing fields for location,
       work arrangement, employment type, experience, compensation, application
       visibility, publication, and expiry.
+- [x] Bulk-import up to 50 jobs from CSV as private drafts with nested API
+      validation, tenant-scoped permissions, transactionally recorded audit
+      events, and individual review/publication.
 - [x] Add employer-defined application questions and explicit moderation,
       pause, rejection, and closure transitions with required admin reasons
       and audit events.
@@ -329,6 +412,8 @@ cannot read or modify another candidate's data; files are private and tested.
 
 - [x] Build company setup/edit, team/member management, job posting, draft
       save, preview, publish, edit, and close flows on web.
+- [x] Add a downloadable CSV template, import preview, and draft-import
+      results to the employer Hiring workspace.
 - [x] Build public company pages using employer-supplied data and the explicit
       employer-account approval record; do not label it as company verification.
 - [x] Keep public job search and job details aligned with server publication
@@ -358,8 +443,9 @@ verification or moderation cases.
 - [x] Add application, status-history, and event records. Enforce
       candidate ownership and employer tenant access on every operation.
 - [x] Define and enforce the status lifecycle (submitted, in review,
-      interview, offer response, rejected, withdrawal request/confirmation)
-      and permitted transitions; synchronize interview scheduling with stage.
+      interview, offer response, employer-confirmed hire, rejected, withdrawal
+      request/confirmation) and permitted transitions; synchronize interview
+      scheduling with stage.
 - [x] Add an audit trail for employer decisions and access to sensitive
       application/resume data.
 - [x] Add in-app notifications for application status, offers, messages,
@@ -395,7 +481,11 @@ verification or moderation cases.
 lifecycle; permissions, duplicate requests, transitions, audit history,
 notifications, and failure/retry cases have automated integration coverage.
 
-### Phase 6 — iOS and Android apps for candidates and employers
+### Optional follow-on — native mobile apps (outside current DOCX scope)
+
+The supplied scope calls for responsive web and excludes native mobile apps
+unless separately agreed. Keep this checklist as a possible future workstream,
+not as a current v1 release blocker.
 
 **Candidate app**
 
@@ -439,12 +529,16 @@ after the full local acceptance gate.
 - [ ] Complete application-specific admin moderation queues where
       operationally justified.
 - [x] Enforce role-restricted admin actions and immutable audit logging.
-- [ ] Add sensitive-action reason capture and an emergency access process.
-- [ ] Complete report job/company/user intake, appeal, and reporter feedback
-      states with abuse prevention. Job reports have a web intake form;
-      authenticated API intake supports job/company/user targets; admins can
-      triage, action, or dismiss. Public company/account report controls,
-      appeals, and reporter feedback are not implemented.
+- [x] Require a reason for superadmin user-role/status changes, employer
+      approval changes, and permanent account deletion; include it in the
+      audit event.
+- [ ] Define an emergency access process.
+- [x] Add authenticated web intake for job/company reports from job details
+      and candidate-profile reports from recruiter search; the API validates
+      targets and the admin queue supports triage, action, and dismissal.
+- [x] Let reporters review their submitted reports and read a moderator message
+      separate from internal resolution notes.
+- [ ] Add an appeal process and abuse prevention across report intake.
 - [ ] Define fraud/scam handling and response procedures for suspicious
       listings, impersonation, spam, and compromised accounts.
 - [ ] Publish real About, Help/Support, Privacy, Terms, employer contact, and

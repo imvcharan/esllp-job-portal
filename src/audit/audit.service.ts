@@ -45,6 +45,7 @@ export class AuditService {
         locationRegion: location?.region ?? null,
         locationCountry: location?.country ?? null,
         userAgent: requestContext?.userAgent?.slice(0, 1000) ?? null,
+        requestId: requestContext?.requestId ?? null,
       }),
     );
   }
@@ -76,7 +77,7 @@ export class AuditService {
     const search = filters.query?.trim();
     if (search) {
       queryBuilder.andWhere(
-        "(audit.action ILIKE :search OR audit.targetType ILIKE :search OR audit.targetId ILIKE :search OR audit.details ILIKE :search OR audit.ipAddress ILIKE :search OR audit.locationCity ILIKE :search OR audit.locationRegion ILIKE :search OR audit.locationCountry ILIKE :search OR actor.email ILIKE :search OR actor.displayName ILIKE :search)",
+        "(audit.action ILIKE :search OR audit.targetType ILIKE :search OR audit.targetId ILIKE :search OR CAST(audit.requestId AS text) ILIKE :search OR audit.details ILIKE :search OR audit.ipAddress ILIKE :search OR audit.locationCity ILIKE :search OR audit.locationRegion ILIKE :search OR audit.locationCountry ILIKE :search OR actor.email ILIKE :search OR actor.displayName ILIKE :search)",
         { search: `%${search}%` },
       );
     }
