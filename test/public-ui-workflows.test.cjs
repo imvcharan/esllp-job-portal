@@ -233,6 +233,23 @@ test("admin SMS settings use clear field labels, switch cards, and responsive la
   assert.match(html, /"Enter the Twilio Auth Token"/);
 });
 
+test("admin API requests renew an expired access token and retry once", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
+  const adminScript = scripts.at(-1)?.[1];
+  assert.ok(adminScript, "admin application script exists");
+
+  assert.match(adminScript, /let adminRefreshPromise = null/);
+  assert.match(adminScript, /async function refreshAdminSession\(\)/);
+  assert.match(adminScript, /fetch\("\/api\/auth\/refresh"/);
+  assert.match(
+    adminScript,
+    /response\.status === 401 &&\s+adminAccessToken &&\s+path !== "\/api\/auth\/refresh"/,
+  );
+  assert.match(adminScript, /response = await sendRequest\(\)/);
+  assert.match(adminScript, /Your admin session expired\. Sign in again\. The request was not saved\./);
+});
+
 test("admin email template controls use separate labels and full-width fields", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
 

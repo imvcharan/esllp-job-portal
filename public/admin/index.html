@@ -1095,6 +1095,7 @@
     const authError = document.querySelector("#auth-error");
     let adminAccessToken = null;
     let currentAdminUser = null;
+    let adminRefreshPromise = null;
     let adminPaymentReconciliationItems = [];
     let adminJobs = [];
     let adminJobOptions = null;
@@ -3214,19 +3215,68 @@
       if (currentAdminUser?.role !== "staff") await loadAdminActivity();
     }
 
+    async function refreshAdminSession() {
+      if (!adminRefreshPromise) {
+        adminRefreshPromise = (async () => {
+          const response = await fetch("/api/auth/refresh", {
+            method: "POST",
+            credentials: "same-origin",
+            signal: AbortSignal.timeout(15000),
+          });
+          if (response.status === 401) return null;
+          if (!response.ok)
+            throw new Error(`Admin session refresh failed (${response.status}).`);
+          const session = await response.json().catch(() => null);
+          if (
+            !session?.accessToken ||
+            !["staff", "admin", "superadmin"].includes(session.user?.role) ||
+            session.user?.id !== currentAdminUser?.id ||
+            session.user?.role !== currentAdminUser?.role
+          ) {
+            return null;
+          }
+          adminAccessToken = session.accessToken;
+          return session;
+        })().finally(() => {
+          adminRefreshPromise = null;
+        });
+      }
+      return adminRefreshPromise;
+    }
+
     async function authRequest(path, options = {}) {
-      const response = await fetch(path, {
-        ...options,
-        signal: options.signal ?? AbortSignal.timeout(15000),
-        credentials: "same-origin",
-        headers: {
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-          ...(adminAccessToken
-            ? { Authorization: `Bearer ${adminAccessToken}` }
-            : {}),
-          ...options.headers
+      const signal = options.signal ?? AbortSignal.timeout(15000);
+      const sendRequest = () =>
+        fetch(path, {
+          ...options,
+          signal,
+          credentials: "same-origin",
+          headers: {
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+            ...(adminAccessToken
+              ? { Authorization: `Bearer ${adminAccessToken}` }
+              : {}),
+            ...options.headers,
+          },
+        });
+      let response = await sendRequest();
+      if (
+        response.status === 401 &&
+        adminAccessToken &&
+        path !== "/api/auth/refresh"
+      ) {
+        const session = await refreshAdminSession();
+        if (!session) {
+          adminAccessToken = null;
+          currentAdminUser = null;
+          authError.textContent =
+            "Your admin session expired. Sign in again. The request was not saved.";
+          authGate.hidden = false;
+          adminApp.classList.remove("authenticated");
+          throw new Error(authError.textContent);
         }
-      });
+        response = await sendRequest();
+      }
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const message = Array.isArray(payload.message)
