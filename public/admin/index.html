@@ -408,6 +408,40 @@
     .form-row-toggle { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); align-items: center; }
     .form-row-toggle .toggle-label { display: flex; min-height: 42px; align-items: center; gap: 10px; color: #344256; font-size: 14px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
     .form-row-toggle > small { align-self: center; margin: 0; }
+    #twilio-config-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; align-items: start; }
+    #twilio-config-form .form-row:not(.form-row-toggle) { grid-template-columns: minmax(0, 1fr); align-content: start; align-items: start; gap: 8px; padding: 16px 0; border-top: 0; border-bottom: 1px solid #edf1f4; }
+    #twilio-config-form .form-row:not(.form-row-toggle) > label { padding: 0; color: #344256; font-size: 13px; font-weight: 700; line-height: 1.4; }
+    #twilio-config-form .form-row:not(.form-row-toggle) input:not([type="checkbox"]) { width: 100%; max-width: none; min-height: 46px; padding: 10px 13px; border: 1px solid #d5dee7; border-radius: 9px; color: #26364a; background: #fff; font-size: 14px; }
+    #twilio-config-form .form-row:not(.form-row-toggle) input:not([type="checkbox"]):focus-visible { border-color: var(--teal); outline: 3px solid rgba(17, 123, 120, .13); outline-offset: 0; }
+    #twilio-config-form .form-row:not(.form-row-toggle) > small { grid-column: 1; margin: 0; color: #6b7787; font-size: 12px; line-height: 1.5; }
+    #twilio-config-form > .form-row-wide,
+    #twilio-config-form > .form-row-toggle,
+    #twilio-config-form > .form-feedback,
+    #twilio-config-form > .heading-actions { grid-column: 1 / -1; }
+    #twilio-config-form > .form-row-toggle { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.1fr); align-items: center; gap: 12px 24px; margin: 8px 0; padding: 16px 18px; border: 1px solid #dfe8e5; border-radius: 12px; background: #f7faf9; }
+    #twilio-config-form .form-row-toggle .toggle-label { min-height: 44px; gap: 13px; color: #26364a; font-size: 14px; font-weight: 700; line-height: 1.4; white-space: normal; }
+    #twilio-config-form .form-row-toggle > small { grid-column: 2; align-self: center; margin: 0; color: #5f6e7c; font-size: 12px; line-height: 1.55; }
+    #twilio-config-form .form-row-toggle input.toggle[name="enabled"],
+    #twilio-config-form .form-row-toggle input.toggle[name="whatsappEnabled"] { -webkit-appearance: none; appearance: none; position: relative; width: 44px; height: 24px; min-height: 24px; flex: 0 0 44px; margin: 0; border: 1px solid #b5c3cc; border-radius: 999px; background: #dce4e8; cursor: pointer; transition: background .16s ease, border-color .16s ease; }
+    #twilio-config-form .form-row-toggle input.toggle[name="enabled"]::before,
+    #twilio-config-form .form-row-toggle input.toggle[name="whatsappEnabled"]::before { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(25, 45, 59, .25); content: ""; transition: transform .16s ease; }
+    #twilio-config-form .form-row-toggle input.toggle[name="enabled"]:checked,
+    #twilio-config-form .form-row-toggle input.toggle[name="whatsappEnabled"]:checked { border-color: var(--teal); background: var(--teal); }
+    #twilio-config-form .form-row-toggle input.toggle[name="enabled"]:checked::before,
+    #twilio-config-form .form-row-toggle input.toggle[name="whatsappEnabled"]:checked::before { transform: translateX(20px); }
+    #twilio-config-form .form-row-toggle input.toggle[name="enabled"]:focus-visible,
+    #twilio-config-form .form-row-toggle input.toggle[name="whatsappEnabled"]:focus-visible { outline: 3px solid rgba(17, 123, 120, .2); outline-offset: 2px; }
+    #twilio-config-form > .form-row-toggle.form-row-danger { border-color: #efd9d5; background: #fff8f6; }
+    #twilio-config-form .form-row-danger .toggle-label { color: #853f35; }
+    #twilio-config-form .form-row-danger input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 20px; accent-color: #b54739; }
+    #twilio-config-form .form-row-danger > small { color: #8f625c; }
+    #twilio-config-form > .form-feedback:empty { display: none; }
+    #twilio-config-form > .heading-actions { justify-content: flex-start; padding-top: 8px; }
+    @media (max-width: 1024px) {
+      #twilio-config-form { grid-template-columns: minmax(0, 1fr); }
+      #twilio-config-form > .form-row-toggle { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+      #twilio-config-form .form-row-toggle > small { grid-column: 1; }
+    }
     #notification-templates-list { display: grid; gap: 18px; }
     .notification-template-form .form-row { grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); }
     .notification-template-form .form-row textarea { max-width: none; min-height: 200px; }
@@ -932,13 +966,13 @@
             <form id="twilio-config-form">
               <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="enabled"> Enable SMS verification</span><small>Applies to new OTP delivery requests; existing verification records are unchanged.</small></label>
               <div class="form-row"><label for="twilio-account-sid">Twilio account SID</label><input id="twilio-account-sid" name="accountSid" type="text" maxlength="64" autocomplete="off"></div>
-              <div class="form-row"><label for="twilio-auth-token">Twilio auth token</label><input id="twilio-auth-token" name="authToken" type="password" maxlength="255" autocomplete="new-password"><small id="twilio-auth-token-state"></small></div>
-              <div class="form-row"><label for="twilio-from-number">Twilio sender number</label><input id="twilio-from-number" name="fromNumber" type="text" maxlength="40" autocomplete="off"></div>
+              <div class="form-row"><label for="twilio-auth-token">Twilio auth token</label><input id="twilio-auth-token" name="authToken" type="password" maxlength="255" autocomplete="off"><small id="twilio-auth-token-state"></small></div>
+              <div class="form-row form-row-wide"><label for="twilio-from-number">Twilio sender number</label><input id="twilio-from-number" name="fromNumber" type="text" maxlength="40" autocomplete="off"></div>
               <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="whatsappEnabled"> Enable WhatsApp interview reminders</span><small>Delivery remains opt-in per candidate and requires an approved WhatsApp Content Template.</small></label>
               <div class="form-row"><label for="twilio-whatsapp-from">WhatsApp sender</label><input id="twilio-whatsapp-from" name="whatsappFrom" type="text" maxlength="40" placeholder="whatsapp:+14155238886" autocomplete="off"></div>
               <div class="form-row"><label for="twilio-whatsapp-template-sid">Approved Twilio Content SID</label><input id="twilio-whatsapp-template-sid" name="whatsappTemplateSid" type="text" maxlength="64" placeholder="HX followed by 32 hexadecimal characters" autocomplete="off"><small>Template variables: {{1}} job title, {{2}} company, {{3}} interview time, {{4}} meeting link/location.</small></div>
-              <label class="form-row form-row-toggle"><span class="toggle-label"><input class="toggle" type="checkbox" name="clearAuthToken"> Clear saved auth token</span><small>Clearing the database value may expose the environment-variable fallback.</small></label>
-              <div class="form-row"><label for="twilio-config-reason">Reason for change</label><input id="twilio-config-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are SMS settings changing?"></div>
+              <label class="form-row form-row-toggle form-row-danger"><span class="toggle-label"><input class="toggle" type="checkbox" name="clearAuthToken"> Clear saved auth token</span><small>Clearing the database value may expose the environment-variable fallback.</small></label>
+              <div class="form-row form-row-wide"><label for="twilio-config-reason">Reason for change</label><input id="twilio-config-reason" name="reason" type="text" required minlength="3" maxlength="500" placeholder="Why are SMS settings changing?"></div>
               <p class="form-feedback" id="twilio-config-feedback" role="status" aria-live="polite"></p>
               <div class="heading-actions"><button class="button button-primary" type="submit">Save messaging settings</button></div>
             </form>
@@ -2939,8 +2973,8 @@
       form.elements.authToken.value = "";
       form.elements.clearAuthToken.checked = false;
       form.elements.authToken.placeholder = configuration.authTokenConfigured
-        ? "Saved — enter a new value only to rotate"
-        : "Not configured";
+        ? "Leave blank to keep the saved token"
+        : "Enter the Twilio Auth Token";
       document.querySelector("#twilio-auth-token-state").textContent =
         configuration.authTokenConfigured
           ? "Auth token is configured; its value is never shown."

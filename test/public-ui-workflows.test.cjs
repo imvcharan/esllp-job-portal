@@ -221,6 +221,18 @@ test("admin messaging settings expose independent SMS and WhatsApp controls", ()
   assert.match(html, /configuration\.whatsappReady/);
 });
 
+test("admin SMS settings use clear field labels, switch cards, and responsive layout", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+
+  assert.match(html, /#twilio-config-form\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(html, /#twilio-config-form \.form-row:not\(\.form-row-toggle\)\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(html, /#twilio-config-form > \.form-row-toggle\s*\{[^}]*background:\s*#f7faf9/);
+  assert.match(html, /input\.toggle\[name="enabled"\],/);
+  assert.match(html, /@media \(max-width: 1024px\)\s*\{\s*#twilio-config-form \{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(html, /name="authToken" type="password" maxlength="255" autocomplete="off"/);
+  assert.match(html, /"Enter the Twilio Auth Token"/);
+});
+
 test("admin email template controls use separate labels and full-width fields", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
 
