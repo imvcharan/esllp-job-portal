@@ -159,9 +159,15 @@ test("superadmin MFA code field appears before the verify button", () => {
 
   assert.match(
     html,
-    /submitButton\.insertAdjacentHTML\(\s*"beforebegin",\s*`<label class="auth-field">Authenticator or recovery code/,
+    /submitButton\.insertAdjacentHTML\(\s*"beforebegin",\s*`<label class="auth-field">Authenticator code or recovery code/,
   );
   assert.match(html, /form\.elements\.mfaCode\.focus\(\)/);
+  assert.match(
+    html,
+    /For routine sign-in, use the current 6-digit code from your authenticator app\. Recovery codes are single-use backups\./,
+  );
+  assert.match(html, /Complete the CAPTCHA again, then verify\./);
+  assert.match(html, /The CAPTCHA has been reset; complete it again before retrying\./);
 });
 
 test("announcement banner skips the API request in file previews", () => {

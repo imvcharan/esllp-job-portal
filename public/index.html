@@ -7341,13 +7341,13 @@
             if (!form.elements.mfaCode) {
               submitButton.insertAdjacentHTML(
                 "beforebegin",
-                `<label class="auth-field">Authenticator or recovery code<input name="mfaCode" type="text" inputmode="text" autocomplete="one-time-code" maxlength="32" required></label>`,
+                `<label class="auth-field">Authenticator code or recovery code<input name="mfaCode" type="text" inputmode="text" autocomplete="one-time-code" maxlength="32" required><small>For routine sign-in, use the current 6-digit code from your authenticator app. Recovery codes are single-use backups.</small></label>`,
               );
             }
             form.elements.mfaCode.focus();
             resetCaptchaForForm(form);
             setAuthNotice(
-              "Enter a current authenticator code or an unused recovery code.",
+              "Enter your current 6-digit authenticator code or an unused recovery code. Complete the CAPTCHA again, then verify.",
             );
             submitButton.disabled = false;
             submitButton.textContent = "Verify code";
@@ -7422,7 +7422,13 @@
           if (inviteToken && authState.notice) showToast(authState.notice);
           redirectAuthenticatedUser();
         } catch (error) {
-          setAuthNotice(displayAuthError(error), "error");
+          const errorMessage = displayAuthError(error);
+          setAuthNotice(
+            form.elements.mfaCode
+              ? `${errorMessage} The CAPTCHA has been reset; complete it again before retrying.`
+              : errorMessage,
+            "error",
+          );
           resetCaptchaForForm(form);
           submitButton.disabled = false;
           submitButton.innerHTML = `${isSignup ? (accountType === "employer" ? "Submit for approval" : "Create candidate account") : form.elements.mfaCode ? "Verify code" : "Log in"} <span aria-hidden="true">→</span>`;
