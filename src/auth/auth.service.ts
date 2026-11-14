@@ -736,9 +736,10 @@ export class AuthService {
       isActive: true,
     });
     if (user?.phoneE164 && !user.phoneVerified) {
+      const phoneNumber = user.pendingPhoneE164 ?? user.phoneE164;
       const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-      await this.issueOtp(user, code, "phone_verification", user.phoneE164);
-      await this.smsDelivery.sendVerificationCode(user.phoneE164, code);
+      await this.issueOtp(user, code, "phone_verification", phoneNumber);
+      await this.smsDelivery.sendVerificationCode(phoneNumber, code);
     }
     return {
       message:
@@ -746,10 +747,83 @@ export class AuthService {
     };
   }
 
+  async changeUnverifiedRegistrationPhone(
+    emailInput: string,
+    password: string,
+    phoneInput: string,
+  ): Promise<{ message: string }> {
+    const email = this.normalizeEmail(emailInput);
+    if (Buffer.byteLength(password, "utf8") > 72) {
+      throw new UnauthorizedException(
+        "Verify your email and enter the password used to create this account before changing its mobile number.",
+      );
+    }
+    const user = await this.usersRepository
+      .createQueryBuilder("user")
+      .addSelect("user.passwordHash")
+      .where("user.email = :email", { email })
+      .getOne();
+    if (
+      !user ||
+      !user.isActive ||
+      !user.emailVerified ||
+      !user.passwordHash ||
+      !(await compare(password, user.passwordHash))
+    ) {
+      throw new UnauthorizedException(
+        "Verify your email and enter the password used to create this account before changing its mobile number.",
+      );
+    }
+    if (user.phoneVerified) {
+      throw new BadRequestException(
+        "Your mobile number is already verified. Sign in to change it from your profile.",
+      );
+    }
+
+    await this.smsDelivery.assertConfigured();
+    const phoneNumber = this.normalizePhoneNumber(phoneInput);
+    const existing = await this.usersRepository.findOneBy({
+      phoneE164: phoneNumber,
+    });
+    const pending = await this.usersRepository.findOneBy({
+      pendingPhoneE164: phoneNumber,
+    });
+    if (
+      (existing && existing.id !== user.id) ||
+      (pending && pending.id !== user.id)
+    ) {
+      throw new ConflictException(
+        "That phone number is already associated with another account.",
+      );
+    }
+
+    user.pendingPhoneE164 =
+      user.phoneE164 === phoneNumber ? null : phoneNumber;
+    await this.usersRepository.save(user);
+    const destination = user.pendingPhoneE164 ?? user.phoneE164;
+    if (!destination) {
+      throw new BadRequestException("Enter a valid mobile number.");
+    }
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    await this.issueOtp(user, code, "phone_verification", destination);
+    await this.auditService.record({
+      actorUserId: user.id,
+      action: "auth.registration_phone_changed",
+      targetType: "user",
+      targetId: user.id,
+    });
+    await this.smsDelivery.sendVerificationCode(destination, code);
+    return { message: "A new verification code was sent to your mobile." };
+  }
+
   async verifyRegistrationPhone(
     emailInput: string,
     code: string,
-  ): Promise<{ message: string }> {
+  ): Promise<{
+    message: string;
+    emailVerified: boolean;
+    phoneVerified: true;
+  }> {
     const user = await this.usersRepository.findOneBy({
       email: this.normalizeEmail(emailInput),
       isActive: true,
@@ -782,6 +856,8 @@ export class AuthService {
       message: user.emailVerified
         ? "Phone verified. Your email and phone are verified; you can now sign in."
         : "Phone verified. Verify your email before signing in.",
+      emailVerified: user.emailVerified,
+      phoneVerified: true,
     };
   }
 
@@ -916,7 +992,11 @@ export class AuthService {
     return { username };
   }
 
-  async verifyEmail(rawToken: string): Promise<{ message: string }> {
+  async verifyEmail(rawToken: string): Promise<{
+    message: string;
+    emailVerified: true;
+    phoneVerified: boolean;
+  }> {
     const userId = await this.consumeEmailToken(rawToken, "email_verification");
     await this.usersRepository.update(
       { id: userId, emailVerified: false },
@@ -943,6 +1023,8 @@ export class AuthService {
           user.phoneE164 && !user.phoneVerified
             ? "Email address verified. Verify your mobile number before signing in; employer publishing also requires administrator approval."
             : "Email address verified. You can sign in to a read-only workspace while your employer account awaits administrator approval.",
+        emailVerified: true,
+        phoneVerified: Boolean(user.phoneVerified),
       };
     }
     return {
@@ -950,6 +1032,8 @@ export class AuthService {
         user.phoneE164 && !user.phoneVerified
           ? "Email address verified. Verify your mobile number before signing in."
           : "Email address verified. You can now sign in.",
+      emailVerified: true,
+      phoneVerified: Boolean(user.phoneVerified),
     };
   }
 

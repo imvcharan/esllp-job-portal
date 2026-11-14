@@ -2753,6 +2753,57 @@
       .auth-notice:empty {
         display: none;
       }
+      .verification-steps {
+        display: grid;
+        gap: 12px;
+        margin: 0 0 18px;
+      }
+      .verification-step {
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #f8faf8;
+      }
+      .verification-step.is-verified {
+        border-color: #b7ddca;
+        background: #f0f8f3;
+      }
+      .verification-step-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .verification-step-header strong {
+        color: var(--ink);
+        font-size: 13px;
+      }
+      .verification-step-status {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .verification-step.is-verified .verification-step-status {
+        color: #17653e;
+      }
+      .verification-step p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .verification-step a {
+        display: inline-block;
+        margin-top: 8px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 700;
+        text-underline-offset: 3px;
+      }
+      .verification-form-actions {
+        display: grid;
+        gap: 8px;
+      }
       .account-actions {
         display: grid;
         gap: 12px;
@@ -4338,6 +4389,26 @@
         }
         .application-card {
           padding: 16px;
+        }
+      }
+      body.auth-verification-mode #auth-view {
+        padding: 24px 0 48px;
+      }
+      body.auth-verification-mode #auth-view .auth-copy {
+        display: none;
+      }
+      body.auth-verification-mode #auth-view .auth-layout {
+        grid-template-columns: minmax(0, 540px);
+        justify-content: center;
+        gap: 0;
+        max-width: 540px;
+      }
+      @media (max-width: 560px) {
+        body.auth-verification-mode #auth-view {
+          padding: 12px 0 22px;
+        }
+        body.auth-verification-mode #auth-view .auth-card {
+          padding: 18px;
         }
       }
     </style>
@@ -6608,31 +6679,98 @@
         authView.hidden = false;
         const action = authRouteName();
         const isSignup = action === "sign-up" || action === "employer-sign-up";
+        const verificationMode =
+          action === "registration-verification" ||
+          action === "registration-phone-change";
+        document.body.classList.toggle(
+          "auth-verification-mode",
+          verificationMode,
+        );
+        const verificationDescription = document.querySelector(
+          "#auth-description",
+        );
+        if (
+          action === "registration-verification" ||
+          action === "registration-phone-change"
+        ) {
+          document.body.classList.add("auth-mode");
+          document.title =
+            action === "registration-phone-change"
+              ? "Change mobile number — esllp"
+              : "Verify your account — esllp";
+          verificationDescription.textContent =
+            action === "registration-phone-change"
+              ? "Update the mobile number for your new account."
+              : "A quick final step keeps your account and contact details secure.";
+        }
         const authParams = new URLSearchParams(
           currentRouteHash.split("?")[1] || "",
         );
         const token = authParams.get("token") || "";
         const inviteToken = authParams.get("invite") || "";
+        if (action === "registration-phone-change") {
+          const email = authParams.get("email") || "";
+          const emailVerified = authParams.get("emailVerified") === "1";
+          if (!emailVerified) {
+            authCard.innerHTML = `<h2>Verify your email first</h2>
+            <p class="auth-card-copy">To safely change the mobile number on this account, verify the email address first.</p>
+            <p class="auth-notice" role="status">Open the verification link we sent to your email, then return here to update your mobile number.</p>
+            <p class="auth-switch"><a href="#registration-verification?email=${encodeURIComponent(email)}">Return to verification</a></p>`;
+            return;
+          }
+          authCard.innerHTML = `<h2>Change mobile number</h2>
+          <p class="auth-card-copy">Verify your email and enter the password used to create this account. We’ll send a new 6-digit code to the updated number.</p>
+          <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
+          <form class="auth-form" data-action="registration-phone-change" novalidate>
+            <label class="auth-field">Account email<input name="email" type="email" autocomplete="email" maxlength="254" required value="${escapeHtml(email)}" readonly></label>
+            <label class="auth-field">Account password<input name="password" type="password" autocomplete="current-password" minlength="8" maxlength="72" required></label>
+            <label class="auth-field">Correct mobile number<input name="phoneNumber" type="tel" inputmode="tel" autocomplete="tel" pattern="\\+[1-9][0-9]{7,14}" placeholder="+919876543210" maxlength="16" required><small>Include the country calling code in international format.</small></label>
+            <div class="auth-captcha" data-recaptcha-container></div>
+            <button class="button button-dark" type="submit">Send code to new number</button>
+          </form>
+          <p class="auth-switch"><a href="#registration-verification?email=${encodeURIComponent(email)}&emailVerified=1">Return to verification</a></p>`;
+          void mountCaptchaWidgets();
+          return;
+        }
         if (action === "registration-verification") {
           const email = authParams.get("email") || "";
+          const emailVerified = authParams.get("emailVerified") === "1";
+          const phoneVerified = authParams.get("phoneVerified") === "1";
+          const resendReturnParams = new URLSearchParams({
+            email,
+            returnToRegistration: "1",
+            ...(emailVerified ? { emailVerified: "1" } : {}),
+            ...(phoneVerified ? { phoneVerified: "1" } : {}),
+          });
           const resendEmailHref = email
-            ? `#resend-verification?email=${encodeURIComponent(email)}`
+            ? `#resend-verification?${resendReturnParams.toString()}`
             : "#resend-verification";
-          authCard.innerHTML = `<h2>Verify your email and mobile</h2>
-          <p class="auth-card-copy">${escapeHtml(authState.notice || "Enter the 6-digit code sent to your mobile. Also open the verification link sent to your email. Both checks are required before you can sign in.")}</p>
-          <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.noticeType === "error" ? authState.notice : "")}</p>
-          <form class="auth-form" id="phone-verification-verify-form" data-action="phone-verification-verify" novalidate>
-            <label class="auth-field">Account email<input name="email" type="email" autocomplete="email" maxlength="254" required value="${escapeHtml(email)}"></label>
-            <label class="auth-field">Mobile verification code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label>
+          authCard.innerHTML = `<h2>${emailVerified && phoneVerified ? "Your account is verified" : "Verify your account"}</h2>
+          <p class="auth-card-copy">${emailVerified && phoneVerified ? "Both checks are complete. You can now sign in." : "Complete these two checks to activate your account. You can do them in either order."}</p>
+          <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
+          <div class="verification-steps" aria-label="Verification progress">
+            <section class="verification-step${emailVerified ? " is-verified" : ""}" aria-live="polite">
+              <div class="verification-step-header"><strong>Email address</strong><span class="verification-step-status">${emailVerified ? "Verified" : "Waiting for verification"}</span></div>
+              <p>${emailVerified ? `Verified: ${escapeHtml(email)}` : `Open the verification link sent to ${escapeHtml(email || "your email address")}. The link expires in 24 hours.`}</p>
+              ${emailVerified ? "" : `<a href="${resendEmailHref}">Resend email link</a>`}
+            </section>
+            <section class="verification-step${phoneVerified ? " is-verified" : ""}" aria-live="polite">
+              <div class="verification-step-header"><strong>Mobile number</strong><span class="verification-step-status">${phoneVerified ? "Verified" : "Code required"}</span></div>
+              <p>${phoneVerified ? "Your mobile number is verified." : "Enter the 6-digit code sent to the number you registered. It expires in 10 minutes."}</p>
+              ${emailVerified && !phoneVerified ? `<a href="#registration-phone-change?email=${encodeURIComponent(email)}&emailVerified=1">Wrong number? Change it</a>` : ""}
+            </section>
+          </div>
+          ${phoneVerified ? "" : `<form class="auth-form" id="phone-verification-verify-form" data-action="phone-verification" novalidate>
+            <label class="auth-field">Account email<input name="email" type="email" autocomplete="email" maxlength="254" required value="${escapeHtml(email)}"${email ? " readonly" : ""}></label>
+            <label class="auth-field">6-digit SMS code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required autofocus></label>
             <div class="auth-captcha" data-recaptcha-container></div>
-            <button class="button button-dark" type="submit">Verify mobile number</button>
-          </form>
-          <form class="auth-form" id="phone-verification-resend-form" data-action="phone-verification-resend" novalidate>
-            <div class="auth-captcha" data-recaptcha-container></div>
-            <button class="button button-light" type="submit">Resend SMS code</button>
-          </form>
-          <p class="auth-switch"><a href="${resendEmailHref}">Resend email verification</a> · <a href="#sign-in">Go to sign in</a></p>`;
+            <div class="verification-form-actions"><button class="button button-dark" type="submit" name="intent" value="verify">Verify mobile number</button><button class="button button-light" type="submit" name="intent" value="resend">Resend SMS code</button></div>
+          </form>`}
+          ${emailVerified && phoneVerified ? `<div class="account-actions"><a class="button button-dark" href="#sign-in?email=${encodeURIComponent(email)}">Continue to sign in</a></div>` : `<p class="auth-switch"><a href="#sign-in">Return to sign in</a></p>`}`;
           void mountCaptchaWidgets();
+          authCard
+            .querySelector('#phone-verification-verify-form [name="code"]')
+            ?.focus();
           return;
         }
         if (action === "email-otp") {
@@ -6712,6 +6850,8 @@
               : isResend
                 ? "Send verification link"
                 : "Send reset link";
+          const returnToVerification =
+            isResend && authParams.get("returnToRegistration") === "1";
           authCard.innerHTML = `<h2>${heading}</h2><p class="auth-card-copy">${copy}</p>
           <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
           <form class="auth-form" id="account-action-form" data-action="${escapeHtml(action)}" novalidate>
@@ -6720,7 +6860,7 @@
             <div class="auth-captcha" data-recaptcha-container></div>
             <button class="button button-dark" type="submit">${button}</button>
           </form>
-          <p class="auth-switch"><a href="#sign-in">Return to sign in</a></p>`;
+          <p class="auth-switch">${returnToVerification ? `<a href="#registration-verification?email=${encodeURIComponent(authParams.get("email") || "")}${authParams.get("emailVerified") === "1" ? "&emailVerified=1" : ""}${authParams.get("phoneVerified") === "1" ? "&phoneVerified=1" : ""}">Return to account verification</a>` : '<a href="#sign-in">Return to sign in</a>'}</p>`;
           void mountCaptchaWidgets();
           return;
         }
@@ -6788,7 +6928,7 @@
           }
           ${isSignup && accountType === "employer" && inviteToken ? `<input name="invitationToken" type="hidden" value="${escapeHtml(inviteToken)}">` : ""}
           <label class="auth-field" for="auth-email">Email address
-            <input id="auth-email" name="email" type="email" autocomplete="email" maxlength="254" required${inviteToken && !isSignup ? ' aria-describedby="invitation-signin-note"' : ""}>
+            <input id="auth-email" name="email" type="email" autocomplete="email" maxlength="254" required${!isSignup && authParams.get("email") ? ` value="${escapeHtml(authParams.get("email"))}"` : ""}${inviteToken && !isSignup ? ' aria-describedby="invitation-signin-note"' : ""}>
           </label>
           ${inviteToken && !isSignup ? '<p class="auth-card-copy" id="invitation-signin-note">Use the invited email address. You can also create an employer account from the Create account tab.</p>' : ""}
           <label class="auth-field" for="auth-password">Password
@@ -7095,12 +7235,31 @@
         if (event.target.matches("form[data-action]")) {
           event.preventDefault();
           const form = event.target;
-          if (!form.reportValidity()) return;
-          const action = form.dataset.action;
+          const action =
+            form.dataset.action === "phone-verification"
+              ? event.submitter?.value === "resend"
+                ? "phone-verification-resend"
+                : "phone-verification-verify"
+              : form.dataset.action;
+          if (
+            action !== "phone-verification-resend" &&
+            !form.reportValidity()
+          )
+            return;
           const actionParams = new URLSearchParams(
             currentRouteHash.split("?")[1] || "",
           );
           const formData = new FormData(form);
+          if (
+            action === "phone-verification-resend" &&
+            !String(formData.get("email") || "").trim()
+          ) {
+            setAuthNotice(
+              "Enter your account email above before requesting another SMS code.",
+              "error",
+            );
+            return;
+          }
           if (!captchaConfigurationReady()) return;
           const captchaToken = captchaTokenForForm(form);
           if (
@@ -7110,7 +7269,8 @@
             setAuthNotice("Complete the CAPTCHA challenge.", "error");
             return;
           }
-          const button = form.querySelector('[type="submit"]');
+          const button =
+            event.submitter || form.querySelector('[type="submit"]');
           button.disabled = true;
           const originalText = button.textContent;
           button.textContent = "Please wait…";
@@ -7151,18 +7311,43 @@
             }
             return;
           }
+          if (action === "registration-phone-change") {
+            const email = String(formData.get("email") || "").trim();
+            try {
+              const response = await fetch(
+                "/api/auth/phone-verification/change",
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email,
+                    password: String(formData.get("password") || ""),
+                    phoneNumber: String(formData.get("phoneNumber") || "").trim(),
+                    captchaToken,
+                  }),
+                },
+              );
+              const result = await readAuthResponse(response);
+              authState.notice = result.message;
+              authState.noticeType = "";
+              navigate(
+                `#registration-verification?email=${encodeURIComponent(email)}&emailVerified=1`,
+              );
+            } catch (error) {
+              setAuthNotice(displayAuthError(error), "error");
+              resetCaptchaForForm(form);
+              button.disabled = false;
+              button.textContent = originalText;
+            }
+            return;
+          }
           if (
             action === "phone-verification-verify" ||
             action === "phone-verification-resend"
           ) {
             const verify = action === "phone-verification-verify";
-            const email = verify
-              ? String(formData.get("email") || "").trim()
-              : String(
-                  authCard.querySelector(
-                    '#phone-verification-verify-form [name="email"]',
-                  )?.value || "",
-                ).trim();
+            const email = String(formData.get("email") || "").trim();
             if (!email) {
               setAuthNotice(
                 "Enter your account email above before requesting another SMS code.",
@@ -7187,12 +7372,26 @@
                 },
               );
               const result = await readAuthResponse(response);
-              authState.notice = result.message;
-              authState.noticeType = "";
-              resetCaptchaForForm(form);
-              button.disabled = false;
-              button.textContent = originalText;
-              renderAuth();
+              if (verify) {
+                authState.notice = result.message;
+                authState.noticeType = "";
+                const verificationParams = new URLSearchParams({ email });
+                if (result.emailVerified) {
+                  verificationParams.set("emailVerified", "1");
+                }
+                if (result.phoneVerified) {
+                  verificationParams.set("phoneVerified", "1");
+                }
+                navigate(
+                  `#registration-verification?${verificationParams.toString()}`,
+                );
+              } else {
+                setAuthNotice(result.message);
+                resetCaptchaForForm(form);
+                button.disabled = false;
+                button.textContent = originalText;
+                renderAuth();
+              }
             } catch (error) {
               setAuthNotice(displayAuthError(error), "error");
               resetCaptchaForForm(form);
@@ -7222,12 +7421,39 @@
               authState.notice = result.message;
               authState.noticeType = "";
               if (action === "verify-email" && actionParams.get("email")) {
+                const verificationParams = new URLSearchParams({
+                  email: actionParams.get("email"),
+                });
+                if (result.emailVerified) {
+                  verificationParams.set("emailVerified", "1");
+                }
+                if (result.phoneVerified) {
+                  verificationParams.set("phoneVerified", "1");
+                }
                 navigate(
-                  `#registration-verification?email=${encodeURIComponent(actionParams.get("email"))}`,
+                  `#registration-verification?${verificationParams.toString()}`,
                 );
               } else {
                 navigate("#sign-in");
               }
+            } else if (
+              action === "resend-verification" &&
+              actionParams.get("returnToRegistration") === "1"
+            ) {
+              authState.notice = result.message;
+              authState.noticeType = "";
+              const verificationParams = new URLSearchParams({
+                email: actionParams.get("email") || "",
+              });
+              if (actionParams.get("emailVerified") === "1") {
+                verificationParams.set("emailVerified", "1");
+              }
+              if (actionParams.get("phoneVerified") === "1") {
+                verificationParams.set("phoneVerified", "1");
+              }
+              navigate(
+                `#registration-verification?${verificationParams.toString()}`,
+              );
             } else {
               setAuthNotice(result.message);
               resetCaptchaForForm(form);
@@ -12576,6 +12802,8 @@
             "#reset-password",
             "#verify-email",
             "#resend-verification",
+            "#registration-verification",
+            "#registration-phone-change",
           ].some((route) => hash === route || hash.startsWith(`${route}?`))
         ) {
           hideViews();

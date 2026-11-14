@@ -1,5 +1,26 @@
-import { IsEmail, IsString, Matches, MaxLength } from "class-validator";
+import {
+  IsEmail,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from "class-validator";
 import { CaptchaDto } from "./captcha.dto";
+
+export class ChangeRegistrationPhoneDto extends CaptchaDto {
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(72)
+  password!: string;
+
+  @IsString()
+  @Matches(/^\+[1-9]\d{7,14}$/)
+  phoneNumber!: string;
+}
 
 export class VerifyRegistrationPhoneDto extends CaptchaDto {
   @IsEmail()

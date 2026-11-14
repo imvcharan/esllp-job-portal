@@ -26,6 +26,7 @@ import {
   VerifyEmailOtpDto,
 } from "./dto/email-otp.dto";
 import {
+  ChangeRegistrationPhoneDto,
   RequestPhoneChangeDto,
   ResendRegistrationPhoneDto,
   UpdateUsernameDto,
@@ -92,6 +93,21 @@ export class AuthController {
   ) {
     await this.captcha.verify(dto.captchaToken, request.ip);
     return this.authService.requestRegistrationPhoneVerification(dto.email);
+  }
+
+  @Post("phone-verification/change")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  async changeUnverifiedRegistrationPhone(
+    @Body() dto: ChangeRegistrationPhoneDto,
+    @Req() request: Request,
+  ) {
+    await this.captcha.verify(dto.captchaToken, request.ip);
+    return this.authService.changeUnverifiedRegistrationPhone(
+      dto.email,
+      dto.password,
+      dto.phoneNumber,
+    );
   }
 
   @Post("phone-verification/verify")

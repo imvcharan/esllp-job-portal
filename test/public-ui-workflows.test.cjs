@@ -63,11 +63,27 @@ test("verification resend actions reuse the account email and offer recovery", (
   const html = readFileSync("public/index.html", "utf8");
 
   assert.match(html, /#email-otp\?email=\$\{encodeURIComponent\(email\)\}/);
-  assert.match(html, /#phone-verification-verify-form \[name="email"\]/);
+  assert.match(html, /name="email" type="email" autocomplete="email"/);
+  assert.match(html, /const email = String\(formData\.get\("email"\) \|\| ""\)\.trim\(\)/);
+  assert.match(html, /name="intent" value="resend">Resend SMS code/);
+  assert.match(html, /action !== "phone-verification-resend" &&\s*!form\.reportValidity\(\)/);
   assert.match(
     html,
     /Enter your account email above before requesting another SMS code/,
   );
+});
+
+test("registration opens a two-step verification screen with immediate SMS entry", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(html, /Verify your account/);
+  assert.match(html, /Open the verification link sent to/);
+  assert.match(html, /6-digit SMS code<input name="code"/);
+  assert.match(html, /autocomplete="one-time-code"/);
+  assert.match(html, /result\.emailVerified/);
+  assert.match(html, /result\.phoneVerified/);
+  assert.match(html, /Wrong number\? Change it/);
+  assert.match(html, /#registration-phone-change/);
 });
 
 test("application review reflects the candidate contact-sharing preference", () => {

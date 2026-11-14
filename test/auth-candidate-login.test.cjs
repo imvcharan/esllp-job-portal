@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+const { hash } = require("bcryptjs");
 const { AuthService } = require("../dist/auth/auth.service.js");
 const {
   User,
@@ -12,6 +13,7 @@ function createService(user) {
   let tokenRecord = null;
   const sentCodes = [];
   const sentSmsCodes = [];
+  const sentSms = [];
   const sessions = [];
   const updates = [];
   const rawQueries = [];
@@ -64,7 +66,10 @@ function createService(user) {
     { sendLoginCode: async (_email, code) => sentCodes.push(code) },
     {
       assertConfigured: () => undefined,
-      sendVerificationCode: async (_phone, code) => sentSmsCodes.push(code),
+      sendVerificationCode: async (phone, code) => {
+        sentSmsCodes.push(code);
+        sentSms.push({ phone, code });
+      },
     },
     { record: async (entry) => audits.push(entry) },
   );
@@ -72,6 +77,7 @@ function createService(user) {
     service,
     sentCodes,
     sentSmsCodes,
+    sentSms,
     sessions,
     audits,
     updates,
@@ -192,9 +198,141 @@ test("registration phone OTP verifies the number before sign-in", async () => {
   );
 
   assert.match(result.message, /Verify your email/);
+  assert.equal(result.emailVerified, false);
+  assert.equal(result.phoneVerified, true);
   assert.equal(updates[0].phoneVerified, true);
   assert.equal(updates[0].phoneE164, account.phoneE164);
   assert.equal(audits[0].action, "auth.phone_verified");
+});
+
+test("email verification reports both account verification states", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: false,
+    phoneVerified: false,
+    phoneE164: "+919876543210",
+  };
+  const { service } = createService(account);
+  service.consumeEmailToken = async () => account.id;
+
+  const result = await service.verifyEmail("valid-email-token");
+
+  assert.equal(result.emailVerified, true);
+  assert.equal(result.phoneVerified, false);
+  assert.equal(account.emailVerified, true);
+});
+
+test("registration phone can be corrected after email ownership is verified", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: true,
+    phoneE164: "+919876543210",
+    pendingPhoneE164: null,
+    phoneVerified: false,
+    passwordHash: await hash("correct-horse-battery", 4),
+  };
+  const { service, sentSms, audits, updates } = createService(account);
+  service.usersRepository.createQueryBuilder = () => {
+    const query = {
+      addSelect: () => query,
+      where: () => query,
+      getOne: async () => account,
+    };
+    return query;
+  };
+  service.usersRepository.findOneBy = async (criteria) => {
+    if (Object.hasOwn(criteria, "phoneE164")) {
+      return criteria.phoneE164 === account.phoneE164 ? account : null;
+    }
+    if (Object.hasOwn(criteria, "pendingPhoneE164")) {
+      return criteria.pendingPhoneE164 === account.pendingPhoneE164
+        ? account
+        : null;
+    }
+    return account;
+  };
+
+  const result = await service.changeUnverifiedRegistrationPhone(
+    account.email,
+    "correct-horse-battery",
+    "+14155550123",
+  );
+  assert.match(result.message, /new verification code was sent/);
+  assert.equal(account.pendingPhoneE164, "+14155550123");
+  assert.equal(sentSms[0].phone, "+14155550123");
+  assert.equal(audits[0].action, "auth.registration_phone_changed");
+
+  await service.requestRegistrationPhoneVerification(account.email);
+  assert.equal(sentSms[1].phone, "+14155550123");
+  await assert.rejects(
+    service.verifyRegistrationPhone(account.email, sentSms[0].code),
+    /incorrect or expired/,
+  );
+  const verified = await service.verifyRegistrationPhone(
+    account.email,
+    sentSms[1].code,
+  );
+  assert.equal(verified.phoneVerified, true);
+  assert.equal(account.phoneE164, "+14155550123");
+  assert.equal(account.pendingPhoneE164, null);
+  assert.equal(updates.at(-1).phoneVerified, true);
+});
+
+test("registration phone cannot be changed before email verification", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: false,
+    phoneE164: "+919876543210",
+    phoneVerified: false,
+    passwordHash: await hash("correct-horse-battery", 4),
+  };
+  const { service, sentSms } = createService(account);
+  service.usersRepository.createQueryBuilder = () => {
+    const query = {
+      addSelect: () => query,
+      where: () => query,
+      getOne: async () => account,
+    };
+    return query;
+  };
+
+  await assert.rejects(
+    service.changeUnverifiedRegistrationPhone(
+      account.email,
+      "correct-horse-battery",
+      "+14155550123",
+    ),
+    /Verify your email/,
+  );
+  assert.equal(sentSms.length, 0);
+
+  account.emailVerified = true;
+  await assert.rejects(
+    service.changeUnverifiedRegistrationPhone(
+      account.email,
+      "wrong-password",
+      "+14155550123",
+    ),
+    /Verify your email and enter the password/,
+  );
+  assert.equal(sentSms.length, 0);
+});
+
+test("registration phone change rejects passwords exceeding the bcrypt byte limit", async () => {
+  const { service, sentSms } = createService(candidate);
+
+  await assert.rejects(
+    service.changeUnverifiedRegistrationPhone(
+      candidate.email,
+      "₹".repeat(25),
+      "+14155550123",
+    ),
+    /Verify your email and enter the password/,
+  );
+  assert.equal(sentSms.length, 0);
 });
 
 test("candidate registration reports when verification email delivery fails", async () => {
