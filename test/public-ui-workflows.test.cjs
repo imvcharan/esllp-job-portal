@@ -154,6 +154,16 @@ test("login uses one clear divider and aligned alternate sign-in buttons", () =>
   assert.match(html, /\.auth-alternatives\s*\{/);
 });
 
+test("superadmin MFA code field appears before the verify button", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(
+    html,
+    /submitButton\.insertAdjacentHTML\(\s*"beforebegin",\s*`<label class="auth-field">Authenticator or recovery code/,
+  );
+  assert.match(html, /form\.elements\.mfaCode\.focus\(\)/);
+});
+
 test("announcement banner skips the API request in file previews", () => {
   const html = readFileSync("public/index.html", "utf8");
 

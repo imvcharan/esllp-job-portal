@@ -7339,11 +7339,12 @@
           }
           if (payload.mfaRequired) {
             if (!form.elements.mfaCode) {
-              form.insertAdjacentHTML(
-                "beforeend",
+              submitButton.insertAdjacentHTML(
+                "beforebegin",
                 `<label class="auth-field">Authenticator or recovery code<input name="mfaCode" type="text" inputmode="text" autocomplete="one-time-code" maxlength="32" required></label>`,
               );
             }
+            form.elements.mfaCode.focus();
             resetCaptchaForForm(form);
             setAuthNotice(
               "Enter a current authenticator code or an unused recovery code.",
