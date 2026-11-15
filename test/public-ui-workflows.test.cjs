@@ -170,6 +170,19 @@ test("login uses one clear divider and aligned alternate sign-in buttons", () =>
   assert.match(html, /\.auth-alternatives\s*\{/);
 });
 
+test("auth layout top-aligns content and resets scroll without animation", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(
+    html,
+    /\.auth-layout\s*\{[^}]*align-items:\s*start/,
+  );
+  assert.match(
+    html,
+    /renderAuth\(\);\s+window\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*"instant"\s*\}\);/,
+  );
+});
+
 test("superadmin MFA code field appears before the verify button", () => {
   const html = readFileSync("public/index.html", "utf8");
 

@@ -471,9 +471,18 @@ Configure `PUBLIC_APP_URL` as the public HTTPS origin, plus `SMTP_HOST`,
 `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in the server
 environment. These are required for email verification, password recovery, and
 email OTP; application notifications and job alerts also use SMTP. Set
-`GOOGLE_OAUTH_CLIENT_ID` and authorize the production site's origin in Google
-Cloud to enable Google sign-in. Never put SMTP credentials in browser code or
-commit them. Job alerts are sent when an
+`GOOGLE_OAUTH_CLIENT_ID` to a Google OAuth client ID for a **Web application**.
+In Google Cloud Console, add every deployed website origin under that client's
+**Authorized JavaScript origins**, including `https://esllp.in` and
+`https://www.esllp.in` when both hostnames serve the site. Enter origins only
+(scheme and hostname, with no path or trailing slash). A missing or
+unrecognized origin causes Google Identity Services to reject the sign-in
+button in the browser. Separately, add those hostnames to the Google reCAPTCHA
+key's allowed domains and set
+`RECAPTCHA_ALLOWED_HOSTNAMES=esllp.in,www.esllp.in` when both hostnames are
+used. A reCAPTCHA fallback frame can make the sign-in card unexpectedly tall;
+check that the page renders the normal checkbox widget. Never put SMTP
+credentials in browser code or commit them. Job alerts are sent when an
 administrator publishes a job matching a candidate's target role and selected
 employment/workplace, location, and salary preferences. Notification emails
 are written to a deduplicated database outbox and delivered asynchronously;

@@ -2360,7 +2360,7 @@
       .auth-layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(320px, 0.78fr);
-        align-items: center;
+        align-items: start;
         gap: clamp(28px, 7vw, 88px);
         max-width: 960px;
         margin: 0 auto;
@@ -12862,7 +12862,7 @@
           hideViews();
           setMainNavigationCurrent("");
           renderAuth();
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          window.scrollTo({ top: 0, behavior: "instant" });
           return;
         }
         if (hash === "#profile") {
