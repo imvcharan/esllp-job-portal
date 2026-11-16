@@ -2768,6 +2768,10 @@
         border-color: #b7ddca;
         background: #f0f8f3;
       }
+      .verification-step.is-current {
+        border-color: #9dc5a8;
+        background: #f4faf5;
+      }
       .verification-step-header {
         display: flex;
         align-items: center;
@@ -2775,8 +2779,30 @@
         gap: 12px;
       }
       .verification-step-header strong {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
         color: var(--ink);
         font-size: 13px;
+      }
+      .verification-step-number {
+        display: inline-grid;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border-radius: 50%;
+        color: var(--muted);
+        background: #e8ece8;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .verification-step.is-current .verification-step-number {
+        color: #fff;
+        background: var(--green);
+      }
+      .verification-step.is-verified .verification-step-number {
+        color: #fff;
+        background: #17653e;
       }
       .verification-step-status {
         color: var(--muted);
@@ -6769,29 +6795,62 @@
         }
         if (action === "registration-verification") {
           const email = authParams.get("email") || "";
+          if (!email) {
+            document.title = "Resume verification — esllp";
+            document.querySelector("#auth-description").textContent =
+              "Sign in with your account email and password to resume the verification step still required.";
+            authState.notice = "";
+            authState.noticeType = "";
+            authCard.innerHTML = `<h2>Resume verification</h2>
+              <p class="auth-card-copy">Your verification status is checked when you sign in, so completed steps won’t be requested again.</p>
+              <div class="account-actions"><a class="button button-dark" href="#sign-in">Continue to sign in</a></div>`;
+            return;
+          }
           const emailVerified = authParams.get("emailVerified") === "1";
           const phoneVerified = authParams.get("phoneVerified") === "1";
+          const phoneCodeSent = authParams.get("phoneCodeSent");
+          document.title =
+            emailVerified && phoneVerified
+              ? "Account verified — esllp"
+              : emailVerified
+                ? "Verify your mobile — esllp"
+                : "Verify your email — esllp";
+          const verificationHeading =
+            emailVerified && phoneVerified
+              ? "Account verified"
+              : emailVerified
+                ? "Step 2 of 2: Verify your mobile"
+                : "Step 1 of 2: Verify your email";
+          const verificationCopy =
+            emailVerified && phoneVerified
+              ? "Both checks are complete. You can now sign in."
+              : emailVerified
+                ? "Your email is confirmed. Next, verify the mobile number on your account with a one-time SMS code."
+                : "First confirm that you own this email address. We’ll send the mobile verification code only after this step is complete.";
+          document.querySelector("#auth-description").textContent =
+            verificationCopy;
           const resendReturnParams = new URLSearchParams({
             email,
             returnToRegistration: "1",
             ...(emailVerified ? { emailVerified: "1" } : {}),
             ...(phoneVerified ? { phoneVerified: "1" } : {}),
+            ...(phoneCodeSent ? { phoneCodeSent } : {}),
           });
           const resendEmailHref = email
             ? `#resend-verification?${resendReturnParams.toString()}`
             : "#resend-verification";
-          authCard.innerHTML = `<h2>${emailVerified && phoneVerified ? "Your account is verified" : "Verify your account"}</h2>
-          <p class="auth-card-copy">${emailVerified && phoneVerified ? "Both checks are complete. You can now sign in." : "Complete these two checks in order: verify your email first, then your mobile number."}</p>
+          authCard.innerHTML = `<h2>${verificationHeading}</h2>
+          <p class="auth-card-copy">${verificationCopy}</p>
           <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
           <div class="verification-steps" aria-label="Verification progress">
-            <section class="verification-step${emailVerified ? " is-verified" : ""}" aria-live="polite">
-              <div class="verification-step-header"><strong>Email address</strong><span class="verification-step-status">${emailVerified ? "Verified" : "Waiting for verification"}</span></div>
-              <p>${emailVerified ? `Verified: ${escapeHtml(email)}` : `Open the verification link sent to ${escapeHtml(email || "your email address")}. The link expires in 24 hours.`}</p>
+            <section class="verification-step${emailVerified ? " is-verified" : " is-current"}" aria-current="${emailVerified ? "false" : "step"}">
+              <div class="verification-step-header"><strong><span class="verification-step-number" aria-hidden="true">${emailVerified ? "✓" : "1"}</span>Email address</strong><span class="verification-step-status">${emailVerified ? "Verified" : "Step 1 — Action needed"}</span></div>
+              <p>${emailVerified ? `Confirmed: ${escapeHtml(email)}` : `Open the verification link sent to ${escapeHtml(email || "your email address")}. The link expires after 24 hours.`}</p>
               ${emailVerified ? "" : `<a href="${resendEmailHref}">Resend email link</a>`}
             </section>
-            <section class="verification-step${phoneVerified ? " is-verified" : ""}" aria-live="polite">
-              <div class="verification-step-header"><strong>Mobile number</strong><span class="verification-step-status">${phoneVerified ? "Verified" : emailVerified ? "Ready to verify" : "Waiting for email"}</span></div>
-              <p>${phoneVerified ? "Your mobile number is verified." : emailVerified ? "Enter the 6-digit code sent to the number you registered. If it hasn’t arrived, choose Resend SMS code. Codes expire in 10 minutes." : "Verify your email first. We’ll send the mobile verification code as soon as your email is confirmed."}</p>
+            <section class="verification-step${phoneVerified ? " is-verified" : emailVerified ? " is-current" : ""}" aria-current="${emailVerified && !phoneVerified ? "step" : "false"}">
+              <div class="verification-step-header"><strong><span class="verification-step-number" aria-hidden="true">${phoneVerified ? "✓" : "2"}</span>Mobile number</strong><span class="verification-step-status">${phoneVerified ? "Verified" : !emailVerified ? "Locked until step 1" : phoneCodeSent === "1" ? "Code sent" : phoneCodeSent === "0" ? "SMS not sent" : "Step 2 — Action needed"}</span></div>
+              <p>${phoneVerified ? "Your mobile number is verified." : !emailVerified ? "After you confirm your email, we’ll send a 6-digit code to the mobile number on your account." : phoneCodeSent === "0" ? "We couldn’t send the SMS code. Choose Resend SMS code below to try again." : phoneCodeSent === "1" ? "We sent a 6-digit code to your registered mobile number. It expires in 10 minutes. If it hasn’t arrived, choose Resend SMS code." : "Enter the 6-digit code if you received it. If not, choose Resend SMS code below. Codes expire in 10 minutes."}</p>
               ${emailVerified && !phoneVerified ? `<a href="#registration-phone-change?email=${encodeURIComponent(email)}&emailVerified=1">Wrong number? Change it</a>` : ""}
             </section>
           </div>
@@ -6854,6 +6913,13 @@
           const isReset = action === "reset-password";
           const isVerification = action === "verify-email";
           const isResend = action === "resend-verification";
+          document.title = isReset
+            ? "Choose a new password — esllp"
+            : isVerification
+              ? "Verify your email — esllp"
+              : isResend
+                ? "Resend verification link — esllp"
+                : "Reset your password — esllp";
           const heading = isReset
             ? "Choose a new password"
             : isVerification
@@ -6864,10 +6930,11 @@
           const copy = isReset
             ? "Use a strong password you do not reuse elsewhere."
             : isVerification
-              ? "Confirm your email to finish activating your account. Employer workspace access follows the platform’s current approval settings."
+              ? "Step 1 of 2: confirm this email address. Select Confirm email address to finish this step. We’ll then send a one-time code to the mobile number on your account."
               : isResend
                 ? "Enter the address used for your candidate or employer account."
                 : "If an account exists for this address, we will send a one-time reset link.";
+          document.querySelector("#auth-description").textContent = copy;
           const input = isReset
             ? `<span class="auth-password"><input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>${passwordVisibilityButton()}</span>`
             : isVerification
@@ -6881,7 +6948,7 @@
           const button = isReset
             ? "Update password"
             : isVerification
-              ? "Verify email"
+              ? "Confirm email address"
               : isResend
                 ? "Send verification link"
                 : "Send reset link";
@@ -6892,7 +6959,7 @@
           <form class="auth-form" id="account-action-form" data-action="${escapeHtml(action)}" novalidate>
             ${isReset || isVerification ? `<input name="token" type="hidden" value="${escapeHtml(token)}">` : ""}
             ${label ? `<label class="auth-field">${label}${input}</label>` : ""}
-            <div class="auth-captcha" data-recaptcha-container></div>
+            ${isVerification ? "" : '<div class="auth-captcha" data-recaptcha-container></div>'}
             <button class="button button-dark" type="submit">${button}</button>
           </form>
           <p class="auth-switch">${isVerification ? `<a href="#resend-verification?email=${encodeURIComponent(authParams.get("email") || "")}">Request a new verification link</a> · ` : ""}${returnToVerification ? `<a href="#registration-verification?email=${encodeURIComponent(authParams.get("email") || "")}${authParams.get("emailVerified") === "1" ? "&emailVerified=1" : ""}${authParams.get("phoneVerified") === "1" ? "&phoneVerified=1" : ""}">Return to account verification</a>` : '<a href="#sign-in">Return to sign in</a>'}</p>`;
@@ -6992,7 +7059,7 @@
               </div>`
             : ""
         }
-        ${!isSignup ? '<p class="auth-switch"><a href="#forgot-password">Forgot password?</a> · <a href="#resend-verification">Resend email verification</a> · <a href="#registration-verification">Verify mobile</a></p>' : ""}`;
+        ${!isSignup ? '<p class="auth-switch"><a href="#forgot-password">Forgot password?</a></p>' : ""}`;
         if (isSignup) {
           void updateRegistrationAvailability(accountType);
         }
@@ -7295,9 +7362,13 @@
             );
             return;
           }
-          if (!captchaConfigurationReady()) return;
-          const captchaToken = captchaTokenForForm(form);
+          const requiresCaptcha = action !== "verify-email";
+          if (requiresCaptcha && !captchaConfigurationReady()) return;
+          const captchaToken = requiresCaptcha
+            ? captchaTokenForForm(form)
+            : undefined;
           if (
+            requiresCaptcha &&
             state.platformConfiguration.captchaSiteKey &&
             !captchaToken
           ) {
@@ -7366,9 +7437,12 @@
               const result = await readAuthResponse(response);
               authState.notice = result.message;
               authState.noticeType = "";
-              navigate(
-                `#registration-verification?email=${encodeURIComponent(email)}&emailVerified=1`,
-              );
+              const verificationParams = new URLSearchParams({
+                email,
+                emailVerified: "1",
+                phoneCodeSent: "1",
+              });
+              navigate(`#registration-verification?${verificationParams.toString()}`);
             } catch (error) {
               setAuthNotice(displayAuthError(error), "error");
               resetCaptchaForForm(form);
@@ -7417,6 +7491,12 @@
                 if (result.phoneVerified) {
                   verificationParams.set("phoneVerified", "1");
                 }
+                if (typeof result.phoneCodeSent === "boolean") {
+                  verificationParams.set(
+                    "phoneCodeSent",
+                    result.phoneCodeSent ? "1" : "0",
+                  );
+                }
                 navigate(
                   `#registration-verification?${verificationParams.toString()}`,
                 );
@@ -7425,7 +7505,6 @@
                 resetCaptchaForForm(form);
                 button.disabled = false;
                 button.textContent = originalText;
-                renderAuth();
               }
             } catch (error) {
               setAuthNotice(displayAuthError(error), "error");
@@ -7608,6 +7687,23 @@
             authState.noticeType = "";
             navigate(
               `#registration-verification?email=${encodeURIComponent(payload.email)}`,
+            );
+            return;
+          }
+          if (payload.verificationRequired) {
+            authState.notice = payload.message;
+            authState.noticeType = "";
+            const verificationParams = new URLSearchParams({
+              email: payload.email,
+            });
+            if (payload.emailVerified) {
+              verificationParams.set("emailVerified", "1");
+            }
+            if (payload.phoneVerified) {
+              verificationParams.set("phoneVerified", "1");
+            }
+            navigate(
+              `#registration-verification?${verificationParams.toString()}`,
             );
             return;
           }

@@ -76,13 +76,16 @@ test("verification resend actions reuse the account email and offer recovery", (
 test("registration opens mobile verification only after email verification", () => {
   const html = readFileSync("public/index.html", "utf8");
 
-  assert.match(html, /Verify your account/);
+  assert.match(html, /Step 1 of 2: Verify your email/);
   assert.match(
     html,
-    /Complete these two checks in order: verify your email first, then your mobile number/,
+    /First confirm that you own this email address/,
   );
   assert.match(html, /Open the verification link sent to/);
-  assert.match(html, /Verify your email first\. We’ll send the mobile verification code/);
+  assert.match(
+    html,
+    /After you confirm your email, we’ll send a 6-digit code to the mobile number on your account/,
+  );
   assert.match(
     html,
     /\$\{!emailVerified \|\| phoneVerified \? "" : `<form class="auth-form" id="phone-verification-verify-form"/,

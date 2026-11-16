@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { hash } = require("bcryptjs");
 const { AuthService } = require("../dist/auth/auth.service.js");
+const { AuthController } = require("../dist/auth/auth.controller.js");
 const {
   User,
   UserRole,
@@ -165,6 +166,124 @@ test("email verification token consumption returns its user ID through TypeORM",
   assert.deepEqual(returningColumns, ["userId"]);
 });
 
+test("email-link confirmation relies on the one-time token instead of CAPTCHA", async () => {
+  let receivedToken;
+  const controller = new AuthController(
+    {
+      verifyEmail: async (token) => {
+        receivedToken = token;
+        return { emailVerified: true };
+      },
+    },
+    {
+      verify: async () => {
+        throw new Error("Email link confirmation should not require CAPTCHA");
+      },
+    },
+  );
+
+  const result = await controller.verifyEmail({ token: "one-time-token" });
+
+  assert.equal(receivedToken, "one-time-token");
+  assert.deepEqual(result, { emailVerified: true });
+});
+
+test("valid password login resumes at mobile verification without issuing a session", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: true,
+    phoneE164: "+919876543210",
+    phoneVerified: false,
+    passwordHash: await hash("correct horse battery", 4),
+  };
+  const { service, sessions } = createService(account);
+  service.usersRepository.createQueryBuilder = () => {
+    const query = {
+      addSelect: () => query,
+      where: () => query,
+      getOne: async () => account,
+    };
+    return query;
+  };
+
+  const result = await service.login({
+    email: account.email,
+    password: "correct horse battery",
+  });
+
+  assert.equal(result.verificationRequired, true);
+  assert.equal(result.email, account.email);
+  assert.equal(result.emailVerified, true);
+  assert.equal(result.phoneVerified, false);
+  assert.equal(sessions.length, 0);
+});
+
+test("valid password login points unverified email to step one", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: false,
+    phoneE164: "+919876543210",
+    phoneVerified: false,
+    passwordHash: await hash("correct horse battery", 4),
+  };
+  const { service, sessions } = createService(account);
+  service.usersRepository.createQueryBuilder = () => {
+    const query = {
+      addSelect: () => query,
+      where: () => query,
+      getOne: async () => account,
+    };
+    return query;
+  };
+
+  const result = await service.login({
+    email: account.email,
+    password: "correct horse battery",
+  });
+
+  assert.equal(result.verificationRequired, true);
+  assert.equal(result.emailVerified, false);
+  assert.equal(result.phoneVerified, false);
+  assert.match(result.message, /Complete Step 1/);
+  assert.equal(sessions.length, 0);
+});
+
+test("login controller returns verification status without issuing a refresh cookie", async () => {
+  const verificationStatus = {
+    verificationRequired: true,
+    email: candidate.email,
+    emailVerified: true,
+    phoneVerified: false,
+    message: "Your email is already verified.",
+  };
+  let clearedCookie = false;
+  let issuedCookie = false;
+  const controller = new AuthController(
+    { login: async () => verificationStatus },
+    { verify: async () => undefined },
+  );
+  const response = {
+    clearCookie: () => {
+      clearedCookie = true;
+    },
+    cookie: () => {
+      issuedCookie = true;
+    },
+  };
+
+  const result = await controller.login(
+    { email: candidate.email, password: "correct password" },
+    { ip: "127.0.0.1" },
+    response,
+  );
+
+  assert.deepEqual(result, verificationStatus);
+  assert.equal(clearedCookie, true);
+  assert.equal(issuedCookie, false);
+});
+
 test("Google sign-in cannot bypass required phone verification", async () => {
   const account = {
     ...candidate,
@@ -261,6 +380,7 @@ test("email verification reports both account verification states", async () => 
 
   assert.equal(result.emailVerified, true);
   assert.equal(result.phoneVerified, false);
+  assert.equal(result.phoneCodeSent, true);
   assert.equal(account.emailVerified, true);
 });
 
@@ -282,6 +402,7 @@ test("email verification keeps the account verified and offers SMS resend when d
   const result = await service.verifyEmail("valid-email-token");
 
   assert.equal(result.emailVerified, true);
+  assert.equal(result.phoneCodeSent, false);
   assert.equal(account.emailVerified, true);
   assert.match(result.message, /mobile verification code could not be sent/);
   assert.match(result.message, /resend SMS code/);

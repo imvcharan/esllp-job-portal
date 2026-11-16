@@ -31,3 +31,38 @@ test("email verification offers a resend path when a link is unusable", () => {
     /href="#resend-verification\?email=\$\{encodeURIComponent\(authParams\.get\("email"\) \|\| ""\)\}">Request a new verification link/,
   );
 });
+
+test("verification progress makes the email-first order and SMS delivery state explicit", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(html, /Step 1 of 2: Verify your email/);
+  assert.match(html, /Step 2 of 2: Verify your mobile/);
+  assert.match(html, /phoneCodeSent === "0" \? "SMS not sent"/);
+  assert.match(html, /We couldn’t send the SMS code/);
+  assert.match(
+    html,
+    /\.set\(\s*"phoneCodeSent",\s*result\.phoneCodeSent \? "1" : "0"/,
+  );
+});
+
+test("email-link confirmation does not add another CAPTCHA challenge", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(
+    html,
+    /\$\{isVerification \? "" : '<div class="auth-captcha" data-recaptcha-container><\/div>'\}/,
+  );
+  assert.match(html, /const requiresCaptcha = action !== "verify-email"/);
+});
+
+test("sign-in resumes at the server-reported verification step", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(html, /if \(payload\.verificationRequired\)/);
+  assert.match(
+    html,
+    /verificationParams\.set\(\s*"emailVerified",\s*"1"\)/,
+  );
+  assert.match(html, /<h2>Resume verification<\/h2>/);
+  assert.match(html, /completed steps won’t be requested again/);
+});

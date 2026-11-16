@@ -248,8 +248,7 @@ export class AuthController {
   @Post("verify-email")
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async verifyEmail(@Body() dto: AccountTokenDto, @Req() request: Request) {
-    await this.captcha.verify(dto.captchaToken, request.ip);
+  async verifyEmail(@Body() dto: AccountTokenDto) {
     return this.authService.verifyEmail(dto.token);
   }
 
@@ -294,7 +293,11 @@ export class AuthController {
   ) {
     await this.captcha.verify(dto.captchaToken, request.ip);
     const session = await this.authService.login(dto);
-    if ("mfaRequired" in session || "mfaSetupRequired" in session) {
+    if (
+      "verificationRequired" in session ||
+      "mfaRequired" in session ||
+      "mfaSetupRequired" in session
+    ) {
       response.clearCookie(REFRESH_COOKIE, refreshCookieOptions);
       return session;
     }

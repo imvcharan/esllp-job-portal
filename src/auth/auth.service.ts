@@ -382,6 +382,13 @@ export class AuthService {
         refreshToken: string;
         user: AuthenticatedUser;
       }
+    | {
+        verificationRequired: true;
+        email: string;
+        emailVerified: boolean;
+        phoneVerified: boolean;
+        message: string;
+      }
     | { mfaRequired: true }
     | { mfaSetupRequired: true; setupToken: string }
   > {
@@ -405,15 +412,25 @@ export class AuthService {
     }
     if (!user.emailVerified) {
       await this.recordLoginFailure(user.id, "email_not_verified");
-      throw new UnauthorizedException(
-        "Verify your email before signing in. You can request a new verification link.",
-      );
+      return {
+        verificationRequired: true,
+        email: user.email,
+        emailVerified: false,
+        phoneVerified: Boolean(user.phoneVerified),
+        message:
+          "Your email still needs verification. Complete Step 1; then we’ll guide you through mobile verification.",
+      };
     }
     if (user.phoneE164 && !user.phoneVerified) {
       await this.recordLoginFailure(user.id, "phone_not_verified");
-      throw new UnauthorizedException(
-        "Verify your mobile number before signing in. Request a new SMS code from the registration verification page.",
-      );
+      return {
+        verificationRequired: true,
+        email: user.email,
+        emailVerified: true,
+        phoneVerified: false,
+        message:
+          "Your email is already verified. Complete mobile verification to finish signing in.",
+      };
     }
     if (
       user.role === UserRole.EMPLOYER &&
@@ -708,7 +725,7 @@ export class AuthService {
     }
     return {
       message:
-        "If the account needs phone verification, a new code will be sent after email verification.",
+        "If this account needs phone verification and its email is verified, a code will be sent to the mobile number on file.",
     };
   }
 
@@ -966,6 +983,7 @@ export class AuthService {
     message: string;
     emailVerified: true;
     phoneVerified: boolean;
+    phoneCodeSent: boolean;
   }> {
     const userId = await this.consumeEmailToken(rawToken, "email_verification");
     await this.usersRepository.update(
@@ -1012,6 +1030,7 @@ export class AuthService {
             : "Email address verified. You can sign in to a read-only workspace while your employer account awaits administrator approval.",
         emailVerified: true,
         phoneVerified: Boolean(user.phoneVerified),
+        phoneCodeSent,
       };
     }
     return {
@@ -1023,6 +1042,7 @@ export class AuthService {
           : "Email address verified. You can now sign in.",
       emailVerified: true,
       phoneVerified: Boolean(user.phoneVerified),
+      phoneCodeSent,
     };
   }
 

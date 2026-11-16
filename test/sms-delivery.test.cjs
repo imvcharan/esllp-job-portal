@@ -88,7 +88,7 @@ test("SMS delivery posts the OTP only to Twilio over the server-side API", async
   );
 });
 
-test("SMS delivery reports provider failures without leaking provider response bodies", async () => {
+test("SMS delivery logs the Twilio error code without exposing its response message", async () => {
   await withTwilioCredentials(
     {
       TWILIO_ACCOUNT_SID: "AC123456789",
@@ -97,27 +97,38 @@ test("SMS delivery reports provider failures without leaking provider response b
     },
     async () => {
       const originalFetch = global.fetch;
+      let loggedError;
       global.fetch = async () => ({
         ok: false,
-        status: 400,
-        text: async () => "sensitive provider details",
+        status: 422,
+        text: async () =>
+          JSON.stringify({
+            code: 21608,
+            message: "sensitive provider details",
+          }),
       });
       try {
+        const delivery = deliveryWith(async () => ({
+          accountSid: "AC123456789",
+          authToken: "test-secret",
+          fromNumber: "+15551234567",
+        }));
+        delivery.logger = {
+          error: (message) => {
+            loggedError = message;
+          },
+          warn: () => undefined,
+        };
         await assert.rejects(
-          deliveryWith(async () => ({
-            accountSid: "AC123456789",
-            authToken: "test-secret",
-            fromNumber: "+15551234567",
-          })).sendVerificationCode(
-            "+919876543210",
-            "123456",
-          ),
+          delivery.sendVerificationCode("+919876543210", "123456"),
           (error) => {
             assert.ok(error instanceof ServiceUnavailableException);
             assert.doesNotMatch(error.message, /sensitive provider details/);
             return true;
           },
         );
+        assert.match(loggedError, /HTTP 422, error code 21608/);
+        assert.doesNotMatch(loggedError, /sensitive provider details/);
       } finally {
         global.fetch = originalFetch;
       }

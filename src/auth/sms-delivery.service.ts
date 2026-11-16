@@ -1,8 +1,14 @@
-import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { TwilioConfigurationService } from "../providers/twilio-configuration.service";
 
 @Injectable()
 export class SmsDeliveryService {
+  private readonly logger = new Logger(SmsDeliveryService.name);
+
   constructor(private readonly configuration: TwilioConfigurationService) {}
 
   async assertConfigured(): Promise<void> {
@@ -32,6 +38,23 @@ export class SmsDeliveryService {
       },
     );
     if (!response.ok) {
+      const responseBody = await response.text();
+      let providerCode: number | undefined;
+      try {
+        const providerError = JSON.parse(responseBody) as { code?: unknown };
+        if (typeof providerError.code === "number") {
+          providerCode = providerError.code;
+        }
+      } catch {
+        this.logger.warn(
+          `Twilio returned a non-JSON error response (HTTP ${response.status}).`,
+        );
+      }
+      this.logger.error(
+        `Twilio rejected a verification SMS (HTTP ${response.status}${
+          providerCode === undefined ? "" : `, error code ${providerCode}`
+        }).`,
+      );
       throw new ServiceUnavailableException(
         `SMS provider rejected the verification message (HTTP ${response.status}).`,
       );
