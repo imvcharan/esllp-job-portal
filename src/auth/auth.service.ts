@@ -1440,7 +1440,7 @@ export class AuthService {
       .andWhere("purpose = :purpose", { purpose })
       .andWhere("used_at IS NULL")
       .andWhere("expires_at > :now", { now: new Date() })
-      .returning(["user_id"])
+      .returning(["userId"])
       .execute()
       .then((queryResult) => queryResult.raw as Array<{ user_id: number }>);
     if (result.length !== 1) {

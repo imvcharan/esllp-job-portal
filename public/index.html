@@ -6895,7 +6895,7 @@
             <div class="auth-captcha" data-recaptcha-container></div>
             <button class="button button-dark" type="submit">${button}</button>
           </form>
-          <p class="auth-switch">${returnToVerification ? `<a href="#registration-verification?email=${encodeURIComponent(authParams.get("email") || "")}${authParams.get("emailVerified") === "1" ? "&emailVerified=1" : ""}${authParams.get("phoneVerified") === "1" ? "&phoneVerified=1" : ""}">Return to account verification</a>` : '<a href="#sign-in">Return to sign in</a>'}</p>`;
+          <p class="auth-switch">${isVerification ? `<a href="#resend-verification?email=${encodeURIComponent(authParams.get("email") || "")}">Request a new verification link</a> · ` : ""}${returnToVerification ? `<a href="#registration-verification?email=${encodeURIComponent(authParams.get("email") || "")}${authParams.get("emailVerified") === "1" ? "&emailVerified=1" : ""}${authParams.get("phoneVerified") === "1" ? "&phoneVerified=1" : ""}">Return to account verification</a>` : '<a href="#sign-in">Return to sign in</a>'}</p>`;
           void mountCaptchaWidgets();
           return;
         }
@@ -7479,7 +7479,8 @@
               action === "resend-verification" &&
               actionParams.get("returnToRegistration") === "1"
             ) {
-              authState.notice = result.message;
+              authState.notice =
+                "Request received. If the account needs verification, a fresh link is on its way. Check your inbox and spam folder.";
               authState.noticeType = "";
               const verificationParams = new URLSearchParams({
                 email: actionParams.get("email") || "",
@@ -7493,6 +7494,14 @@
               navigate(
                 `#registration-verification?${verificationParams.toString()}`,
               );
+            } else if (action === "resend-verification") {
+              const email = String(formData.get("email") || "").trim();
+              const resendHref = `#resend-verification?email=${encodeURIComponent(email)}`;
+              authCard.innerHTML = `<h2>Check your inbox</h2>
+                <p class="auth-card-copy">Request received. If an account needs verification, a fresh link is on its way to <strong>${escapeHtml(email)}</strong>. Check your inbox and spam folder, then open the newest message. Requesting another link invalidates earlier links.</p>
+                <p class="auth-notice" role="status">If the message doesn’t arrive shortly, you can request another link.</p>
+                <p class="auth-switch"><a href="${resendHref}">Resend to this email</a> · <a href="#resend-verification">Use a different email</a></p>
+                <p class="auth-switch"><a href="#sign-in">Return to sign in</a></p>`;
             } else {
               setAuthNotice(result.message);
               resetCaptchaForForm(form);

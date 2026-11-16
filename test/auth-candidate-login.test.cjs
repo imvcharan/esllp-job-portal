@@ -139,6 +139,32 @@ test("email OTP is invalidated after five incorrect attempts", async () => {
   );
 });
 
+test("email verification token consumption returns its user ID through TypeORM", async () => {
+  const account = { ...candidate, isActive: true };
+  const { service } = createService(account);
+  let returningColumns;
+  const query = {
+    update: () => query,
+    set: () => query,
+    where: () => query,
+    andWhere: () => query,
+    returning: (columns) => {
+      returningColumns = columns;
+      return query;
+    },
+    execute: async () => ({ raw: [{ user_id: account.id }] }),
+  };
+  service.tokensRepository.createQueryBuilder = () => query;
+
+  const userId = await service.consumeEmailToken(
+    "valid-email-verification-token",
+    "email_verification",
+  );
+
+  assert.equal(userId, account.id);
+  assert.deepEqual(returningColumns, ["userId"]);
+});
+
 test("Google sign-in cannot bypass required phone verification", async () => {
   const account = {
     ...candidate,
