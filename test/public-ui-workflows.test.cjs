@@ -73,11 +73,20 @@ test("verification resend actions reuse the account email and offer recovery", (
   );
 });
 
-test("registration opens a two-step verification screen with immediate SMS entry", () => {
+test("registration opens mobile verification only after email verification", () => {
   const html = readFileSync("public/index.html", "utf8");
 
   assert.match(html, /Verify your account/);
+  assert.match(
+    html,
+    /Complete these two checks in order: verify your email first, then your mobile number/,
+  );
   assert.match(html, /Open the verification link sent to/);
+  assert.match(html, /Verify your email first\. We’ll send the mobile verification code/);
+  assert.match(
+    html,
+    /\$\{!emailVerified \|\| phoneVerified \? "" : `<form class="auth-form" id="phone-verification-verify-form"/,
+  );
   assert.match(html, /6-digit SMS code<input name="code"/);
   assert.match(html, /autocomplete="one-time-code"/);
   assert.match(html, /result\.emailVerified/);

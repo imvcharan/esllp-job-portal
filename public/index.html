@@ -6781,7 +6781,7 @@
             ? `#resend-verification?${resendReturnParams.toString()}`
             : "#resend-verification";
           authCard.innerHTML = `<h2>${emailVerified && phoneVerified ? "Your account is verified" : "Verify your account"}</h2>
-          <p class="auth-card-copy">${emailVerified && phoneVerified ? "Both checks are complete. You can now sign in." : "Complete these two checks to activate your account. You can do them in either order."}</p>
+          <p class="auth-card-copy">${emailVerified && phoneVerified ? "Both checks are complete. You can now sign in." : "Complete these two checks in order: verify your email first, then your mobile number."}</p>
           <p class="auth-notice${authState.noticeType === "error" ? " error" : ""}" id="auth-notice" role="status">${escapeHtml(authState.notice)}</p>
           <div class="verification-steps" aria-label="Verification progress">
             <section class="verification-step${emailVerified ? " is-verified" : ""}" aria-live="polite">
@@ -6790,12 +6790,12 @@
               ${emailVerified ? "" : `<a href="${resendEmailHref}">Resend email link</a>`}
             </section>
             <section class="verification-step${phoneVerified ? " is-verified" : ""}" aria-live="polite">
-              <div class="verification-step-header"><strong>Mobile number</strong><span class="verification-step-status">${phoneVerified ? "Verified" : "Code required"}</span></div>
-              <p>${phoneVerified ? "Your mobile number is verified." : "Enter the 6-digit code sent to the number you registered. It expires in 10 minutes."}</p>
+              <div class="verification-step-header"><strong>Mobile number</strong><span class="verification-step-status">${phoneVerified ? "Verified" : emailVerified ? "Ready to verify" : "Waiting for email"}</span></div>
+              <p>${phoneVerified ? "Your mobile number is verified." : emailVerified ? "Enter the 6-digit code sent to the number you registered. If it hasn’t arrived, choose Resend SMS code. Codes expire in 10 minutes." : "Verify your email first. We’ll send the mobile verification code as soon as your email is confirmed."}</p>
               ${emailVerified && !phoneVerified ? `<a href="#registration-phone-change?email=${encodeURIComponent(email)}&emailVerified=1">Wrong number? Change it</a>` : ""}
             </section>
           </div>
-          ${phoneVerified ? "" : `<form class="auth-form" id="phone-verification-verify-form" data-action="phone-verification" novalidate>
+          ${!emailVerified || phoneVerified ? "" : `<form class="auth-form" id="phone-verification-verify-form" data-action="phone-verification" novalidate>
             <label class="auth-field">Account email<input name="email" type="email" autocomplete="email" maxlength="254" required value="${escapeHtml(email)}"${email ? " readonly" : ""}></label>
             <label class="auth-field">6-digit SMS code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required autofocus></label>
             <div class="auth-captcha" data-recaptcha-container></div>
@@ -7447,7 +7447,11 @@
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                ...Object.fromEntries(formData.entries()),
+                ...Object.fromEntries(
+                  [...formData.entries()].filter(
+                    ([name]) => name !== "g-recaptcha-response",
+                  ),
+                ),
                 captchaToken,
               }),
             });

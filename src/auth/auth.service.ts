@@ -86,7 +86,6 @@ export class AuthService {
   }> {
     await this.platformConfiguration.assertRegistrationEnabled("candidate");
     const email = this.normalizeEmail(dto.email);
-    await this.smsDelivery.assertConfigured();
     const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber);
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
       throw new BadRequestException(
@@ -112,19 +111,6 @@ export class AuthService {
       phoneVerified: false,
     });
     const saved = await this.usersRepository.save(user);
-    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    await this.issueOtp(saved, code, "phone_verification", phoneNumber);
-    let phoneCodeSent = true;
-    try {
-      await this.smsDelivery.sendVerificationCode(phoneNumber, code);
-    } catch (error) {
-      phoneCodeSent = false;
-      this.logger.error(
-        `Candidate registration SMS delivery failed for user ${saved.id}: ${
-          error instanceof Error ? error.message : "unknown SMS delivery error"
-        }`,
-      );
-    }
     await this.auditService.record({
       actorUserId: saved.id,
       action: "auth.candidate_registered",
@@ -148,13 +134,9 @@ export class AuthService {
       email: saved.email,
       phoneNumber,
       message:
-        emailLinkSent && phoneCodeSent
-          ? "Account created. Verify your email using the link we sent and enter the SMS code before signing in."
-          : !emailLinkSent && !phoneCodeSent
-            ? "Account created, but we could not send the verification email or SMS code. Use the email and SMS resend options on this page before signing in."
-            : !emailLinkSent
-              ? "Account created and the SMS code was sent, but the verification email could not be sent. Use the resend email verification option before signing in."
-              : "Account created. Verify your email using the link we sent. The SMS could not be sent; use the resend code option before signing in.",
+        emailLinkSent
+          ? "Account created. Verify your email using the link we sent. We’ll send your mobile verification code after your email is verified."
+          : "Account created, but the verification email could not be sent. Use the resend email verification option before signing in.",
     };
   }
 
@@ -266,7 +248,6 @@ export class AuthService {
   }> {
     await this.platformConfiguration.assertRegistrationEnabled("employer");
     const email = this.normalizeEmail(dto.email);
-    await this.smsDelivery.assertConfigured();
     const phoneNumber = this.normalizePhoneNumber(dto.phoneNumber);
     const companyName = dto.companyName?.trim();
     if (Buffer.byteLength(dto.password, "utf8") > 72) {
@@ -361,19 +342,6 @@ export class AuthService {
       return { user: savedUser, invited: false };
     });
     const saved = registration.user;
-    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    await this.issueOtp(saved, code, "phone_verification", phoneNumber);
-    let phoneCodeSent = true;
-    try {
-      await this.smsDelivery.sendVerificationCode(phoneNumber, code);
-    } catch (error) {
-      phoneCodeSent = false;
-      this.logger.error(
-        `Employer registration SMS delivery failed for user ${saved.id}: ${
-          error instanceof Error ? error.message : "unknown SMS delivery error"
-        }`,
-      );
-    }
     await this.auditService.record({
       actorUserId: saved.id,
       action: "auth.employer_registered",
@@ -400,15 +368,11 @@ export class AuthService {
       email: saved.email,
       phoneNumber,
       message:
-        emailLinkSent && phoneCodeSent
+        emailLinkSent
           ? registration.invited
-            ? "Company invitation recorded. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
-            : "Employer registration received. Verify your email and phone before using the workspace; employer publishing also requires administrator approval."
-          : !emailLinkSent && !phoneCodeSent
-            ? "Employer account created, but we could not send the verification email or SMS code. Use the email and SMS resend options on this page before signing in; publishing also requires administrator approval."
-            : !emailLinkSent
-              ? "Employer account created, but the verification email could not be sent. Use the resend email verification option before signing in; publishing also requires administrator approval."
-              : "Account created. Verify your email, then request a new SMS code before signing in; publishing also requires administrator approval.",
+            ? "Company invitation recorded. Verify your email first; we’ll send your mobile verification code after your email is verified. Employer publishing also requires administrator approval."
+            : "Employer registration received. Verify your email first; we’ll send your mobile verification code after your email is verified. Employer publishing also requires administrator approval."
+          : "Employer account created, but the verification email could not be sent. Use the resend email verification option before signing in; publishing also requires administrator approval.",
     };
   }
 
@@ -720,6 +684,7 @@ export class AuthService {
             error instanceof Error ? error.message : "unknown delivery error"
           }`,
         );
+        throw error;
       }
     }
     return {
@@ -735,7 +700,7 @@ export class AuthService {
       email: this.normalizeEmail(emailInput),
       isActive: true,
     });
-    if (user?.phoneE164 && !user.phoneVerified) {
+    if (user?.emailVerified && user.phoneE164 && !user.phoneVerified) {
       const phoneNumber = user.pendingPhoneE164 ?? user.phoneE164;
       const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
       await this.issueOtp(user, code, "phone_verification", phoneNumber);
@@ -743,7 +708,7 @@ export class AuthService {
     }
     return {
       message:
-        "If the account needs phone verification, a new code will be sent.",
+        "If the account needs phone verification, a new code will be sent after email verification.",
     };
   }
 
@@ -829,6 +794,11 @@ export class AuthService {
       isActive: true,
     });
     const phoneNumber = user?.pendingPhoneE164 ?? user?.phoneE164;
+    if (user && !user.emailVerified) {
+      throw new UnauthorizedException(
+        "Verify your email before verifying your mobile number.",
+      );
+    }
     if (
       !user ||
       !phoneNumber ||
@@ -1014,6 +984,21 @@ export class AuthService {
       targetType: "user",
       targetId: user.id,
     });
+    let phoneCodeSent = false;
+    if (user.phoneE164 && !user.phoneVerified) {
+      const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      await this.issueOtp(user, code, "phone_verification", user.phoneE164);
+      try {
+        await this.smsDelivery.sendVerificationCode(user.phoneE164, code);
+        phoneCodeSent = true;
+      } catch (error) {
+        this.logger.error(
+          `Registration verification SMS delivery failed for user ${user.id}: ${
+            error instanceof Error ? error.message : "unknown SMS delivery error"
+          }`,
+        );
+      }
+    }
     if (
       user.role === UserRole.EMPLOYER &&
       user.employerApprovalStatus !== EmployerApprovalStatus.APPROVED
@@ -1021,7 +1006,9 @@ export class AuthService {
       return {
         message:
           user.phoneE164 && !user.phoneVerified
-            ? "Email address verified. Verify your mobile number before signing in; employer publishing also requires administrator approval."
+            ? phoneCodeSent
+              ? "Email address verified. A mobile verification code was sent; enter it before signing in. Employer publishing also requires administrator approval."
+              : "Email address verified, but a mobile verification code could not be sent. Use the resend SMS code option before signing in; employer publishing also requires administrator approval."
             : "Email address verified. You can sign in to a read-only workspace while your employer account awaits administrator approval.",
         emailVerified: true,
         phoneVerified: Boolean(user.phoneVerified),
@@ -1030,7 +1017,9 @@ export class AuthService {
     return {
       message:
         user.phoneE164 && !user.phoneVerified
-          ? "Email address verified. Verify your mobile number before signing in."
+          ? phoneCodeSent
+            ? "Email address verified. A mobile verification code was sent; enter it before signing in."
+            : "Email address verified, but a mobile verification code could not be sent. Use the resend SMS code option before signing in."
           : "Email address verified. You can now sign in.",
       emailVerified: true,
       phoneVerified: Boolean(user.phoneVerified),

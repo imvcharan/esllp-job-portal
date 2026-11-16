@@ -188,21 +188,36 @@ test("registration phone OTP verifies the number before sign-in", async () => {
     phoneVerified: false,
     emailVerified: false,
   };
-  const { service, sentSmsCodes, updates, audits } = createService(account);
+  const { service, sentSmsCodes, sentSms, updates, audits } =
+    createService(account);
 
   await service.requestRegistrationPhoneVerification(account.email);
+  assert.equal(sentSmsCodes.length, 0);
+  await assert.rejects(
+    service.verifyRegistrationPhone(account.email, "123456"),
+    /Verify your email before verifying your mobile number/,
+  );
+
+  service.consumeEmailToken = async () => account.id;
+  const emailResult = await service.verifyEmail("valid-email-token");
+  assert.match(emailResult.message, /mobile verification code was sent/i);
   assert.match(sentSmsCodes[0], /^\d{6}$/);
+  assert.equal(sentSms[0].phone, account.phoneE164);
   const result = await service.verifyRegistrationPhone(
     account.email,
     sentSmsCodes[0],
   );
 
-  assert.match(result.message, /Verify your email/);
-  assert.equal(result.emailVerified, false);
+  assert.match(result.message, /email and phone are verified/);
+  assert.equal(result.emailVerified, true);
   assert.equal(result.phoneVerified, true);
-  assert.equal(updates[0].phoneVerified, true);
-  assert.equal(updates[0].phoneE164, account.phoneE164);
-  assert.equal(audits[0].action, "auth.phone_verified");
+  assert.equal(updates[0].emailVerified, true);
+  assert.equal(updates.at(-1).phoneVerified, true);
+  assert.equal(updates.at(-1).phoneE164, account.phoneE164);
+  assert.deepEqual(
+    audits.map(({ action }) => action),
+    ["auth.email_verified", "auth.phone_verified"],
+  );
 });
 
 test("email verification reports both account verification states", async () => {
@@ -221,6 +236,29 @@ test("email verification reports both account verification states", async () => 
   assert.equal(result.emailVerified, true);
   assert.equal(result.phoneVerified, false);
   assert.equal(account.emailVerified, true);
+});
+
+test("email verification keeps the account verified and offers SMS resend when delivery fails", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: false,
+    phoneVerified: false,
+    phoneE164: "+919876543210",
+  };
+  const { service } = createService(account);
+  service.consumeEmailToken = async () => account.id;
+  service.smsDelivery.sendVerificationCode = async () => {
+    throw new Error("SMS provider unavailable");
+  };
+  service.logger = { error: () => undefined };
+
+  const result = await service.verifyEmail("valid-email-token");
+
+  assert.equal(result.emailVerified, true);
+  assert.equal(account.emailVerified, true);
+  assert.match(result.message, /mobile verification code could not be sent/);
+  assert.match(result.message, /resend SMS code/);
 });
 
 test("registration phone can be corrected after email ownership is verified", async () => {
@@ -356,9 +394,27 @@ test("candidate registration reports when verification email delivery fails", as
     phoneNumber: "+919876543210",
   });
 
-  assert.match(result.message, /SMS code was sent/);
   assert.match(result.message, /verification email could not be sent/);
+  assert.doesNotMatch(result.message, /SMS code/);
   assert.doesNotMatch(result.message, /link we sent/);
+});
+
+test("email resend surfaces delivery failures instead of reporting a false success", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: false,
+  };
+  const { service } = createService(account);
+  service.sendVerification = async () => {
+    throw new Error("mail provider unavailable");
+  };
+  service.logger = { error: () => undefined };
+
+  await assert.rejects(
+    service.resendVerification(account.email),
+    /mail provider unavailable/,
+  );
 });
 
 test("phone number changes take effect only after the new number is verified", async () => {

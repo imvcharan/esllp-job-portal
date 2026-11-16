@@ -174,12 +174,12 @@ security; the dashboard signs out after a successful change.
 
 Authentication routes:
 
-- `POST /api/auth/register` — public candidate registration; requires an 8-character minimum password and an E.164 mobile number
+- `POST /api/auth/register` — public candidate registration; requires an 8-character minimum password and an E.164 mobile number; email verification must precede the SMS verification step
 - `GET /api/auth/config` — public sign-in configuration, including the Google web client ID when configured
 - `POST /api/auth/email-otp/request` and `POST /api/auth/email-otp/verify` — request and exchange a short-lived sign-in code for a verified candidate account
 - `POST /api/auth/google` — link/sign in to an existing candidate account using a Google Identity Services ID token; new accounts must complete email/mobile registration
 - `GET /api/auth/bootstrap-superadmin/status` and `POST /api/auth/bootstrap-superadmin` — one-time first-superadmin setup; checks the configured superadmin name, email, and password and is disabled after a superadmin exists
-- `POST /api/auth/register/employer` — employer registration request with company name/website and E.164 mobile; email/mobile verification is required before sign-in, and administrator approval is required before write access
+- `POST /api/auth/register/employer` — employer registration request with company name/website and E.164 mobile; email verification must precede SMS verification before sign-in, and administrator approval is required before write access
 - `POST /api/auth/login` — issues a short-lived bearer access token and an HttpOnly, SameSite=Strict refresh cookie
 - `POST /api/auth/refresh` — rotates the refresh token and issues a new access token
 - `POST /api/auth/logout` — revokes the refresh session
@@ -216,11 +216,11 @@ Authentication routes:
 - `GET|POST /api/candidate/applications/records/:applicationId/messages` — read or send text messages on an owned application
 - `GET /api/candidate/notifications?page=1` and `PATCH /api/candidate/notifications/:notificationId/read` — review and mark application, offer, message, and interview notifications read
 
-Candidate profile routes require a candidate access token; profile data and files are private by default. Password-based candidate and employer registrations require both email-link
-verification and a phone OTP before password sign-in. Phone numbers use
+Candidate profile routes require a candidate access token; profile data and files are private by default. Password-based candidate and employer registrations require email-link
+verification first, followed by a phone OTP, before password sign-in. Phone numbers use
 international E.164 format, are unique per account, and verification codes
-expire after ten minutes with a five-attempt limit. Configure SMTP and the
-server-only `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
+expire after ten minutes with a five-attempt limit. Configure SMTP to deliver
+email links and configure the server-only `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
 `TWILIO_FROM_NUMBER` variables before accepting registrations, or configure
 Twilio from the superadmin SMS settings at `/admin/#twilio-config`.
 Database-stored auth tokens are encrypted with
