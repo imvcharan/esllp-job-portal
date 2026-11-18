@@ -120,6 +120,24 @@ test("email OTP request does not reveal whether an account exists", async () => 
   assert.equal(sentCodes.length, 0);
 });
 
+test("candidate email OTP sign-in works with an unverified phone", async () => {
+  const account = {
+    ...candidate,
+    isActive: true,
+    emailVerified: true,
+    phoneE164: "+919876543210",
+    phoneVerified: false,
+  };
+  const { service, sentCodes, sessions } = createService(account);
+
+  await service.requestEmailOtp(account.email);
+  const session = await service.verifyEmailOtp(account.email, sentCodes[0]);
+
+  assert.equal(session.accessToken, "access-token");
+  assert.equal(session.user.id, account.id);
+  assert.equal(sessions.length, 1);
+});
+
 test("email OTP is invalidated after five incorrect attempts", async () => {
   const { service, sentCodes } = createService(candidate);
   await service.requestEmailOtp(candidate.email);
@@ -188,7 +206,7 @@ test("email-link confirmation relies on the one-time token instead of CAPTCHA", 
   assert.deepEqual(result, { emailVerified: true });
 });
 
-test("valid password login resumes at mobile verification without issuing a session", async () => {
+test("candidate can sign in after email verification without verifying their phone", async () => {
   const account = {
     ...candidate,
     isActive: true,
@@ -212,10 +230,38 @@ test("valid password login resumes at mobile verification without issuing a sess
     password: "correct horse battery",
   });
 
+  assert.equal(result.accessToken, "access-token");
+  assert.equal(result.user.id, account.id);
+  assert.equal(sessions.length, 1);
+});
+
+test("employer password login still requires phone verification", async () => {
+  const account = {
+    ...candidate,
+    role: UserRole.EMPLOYER,
+    isActive: true,
+    emailVerified: true,
+    phoneE164: "+919876543210",
+    phoneVerified: false,
+    passwordHash: await hash("correct horse battery", 4),
+  };
+  const { service, sessions } = createService(account);
+  service.usersRepository.createQueryBuilder = () => {
+    const query = {
+      addSelect: () => query,
+      where: () => query,
+      getOne: async () => account,
+    };
+    return query;
+  };
+
+  const result = await service.login({
+    email: account.email,
+    password: "correct horse battery",
+  });
+
   assert.equal(result.verificationRequired, true);
-  assert.equal(result.email, account.email);
-  assert.equal(result.emailVerified, true);
-  assert.equal(result.phoneVerified, false);
+  assert.equal(result.phoneVerificationRequired, true);
   assert.equal(sessions.length, 0);
 });
 
@@ -284,7 +330,7 @@ test("login controller returns verification status without issuing a refresh coo
   assert.equal(issuedCookie, false);
 });
 
-test("Google sign-in cannot bypass required phone verification", async () => {
+test("Google sign-in allows an email-verified candidate with an unverified phone", async () => {
   const account = {
     ...candidate,
     isActive: true,
@@ -310,12 +356,11 @@ test("Google sign-in cannot bypass required phone verification", async () => {
   process.env.GOOGLE_OAUTH_CLIENT_ID = "test-client-id";
 
   try {
-    await assert.rejects(
-      service.googleSignIn("valid-id-token"),
-      /Verify your mobile number/,
-    );
-    assert.equal(account.googleSubject, null);
-    assert.equal(sessions.length, 0);
+    const session = await service.googleSignIn("valid-id-token");
+    assert.equal(session.accessToken, "access-token");
+    assert.equal(session.user.id, account.id);
+    assert.equal(account.googleSubject, "google-subject");
+    assert.equal(sessions.length, 1);
   } finally {
     if (previousClientId === undefined) {
       delete process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -345,7 +390,7 @@ test("registration phone OTP verifies the number before sign-in", async () => {
 
   service.consumeEmailToken = async () => account.id;
   const emailResult = await service.verifyEmail("valid-email-token");
-  assert.match(emailResult.message, /mobile verification code was sent/i);
+  assert.match(emailResult.message, /mobile verification is optional/i);
   assert.match(sentSmsCodes[0], /^\d{6}$/);
   assert.equal(sentSms[0].phone, account.phoneE164);
   const result = await service.verifyRegistrationPhone(
@@ -381,6 +426,7 @@ test("email verification reports both account verification states", async () => 
   assert.equal(result.emailVerified, true);
   assert.equal(result.phoneVerified, false);
   assert.equal(result.phoneCodeSent, true);
+  assert.equal(result.phoneVerificationRequired, false);
   assert.equal(account.emailVerified, true);
 });
 
@@ -403,9 +449,10 @@ test("email verification keeps the account verified and offers SMS resend when d
 
   assert.equal(result.emailVerified, true);
   assert.equal(result.phoneCodeSent, false);
+  assert.equal(result.phoneVerificationRequired, false);
   assert.equal(account.emailVerified, true);
-  assert.match(result.message, /mobile verification code could not be sent/);
-  assert.match(result.message, /resend SMS code/);
+  assert.match(result.message, /mobile verification is optional/i);
+  assert.match(result.message, /request it later/i);
 });
 
 test("registration phone can be corrected after email ownership is verified", async () => {
@@ -589,6 +636,24 @@ test("phone number changes take effect only after the new number is verified", a
   assert.ok(
     rawQueries.some(([sql]) => sql.includes("whatsapp_notification_outbox")),
   );
+});
+
+test("candidate can verify their existing unverified number after signing in", async () => {
+  const account = {
+    ...candidate,
+    phoneE164: "+919876543210",
+    pendingPhoneE164: null,
+    phoneVerified: false,
+  };
+  const { service, sentSmsCodes } = createService(account);
+
+  await service.requestPhoneChange(account.id, account.phoneE164);
+  assert.equal(sentSmsCodes.length, 1);
+  await service.verifyPhoneChange(account.id, sentSmsCodes[0]);
+
+  assert.equal(account.phoneE164, "+919876543210");
+  assert.equal(account.pendingPhoneE164, null);
+  assert.equal(account.phoneVerified, true);
 });
 
 test("username updates normalize case and reject usernames owned by another user", async () => {

@@ -73,7 +73,7 @@ test("verification resend actions reuse the account email and offer recovery", (
   );
 });
 
-test("registration opens mobile verification only after email verification", () => {
+test("registration offers optional mobile verification after email verification", () => {
   const html = readFileSync("public/index.html", "utf8");
 
   assert.match(html, /Step 1 of 2: Verify your email/);
@@ -84,7 +84,7 @@ test("registration opens mobile verification only after email verification", () 
   assert.match(html, /Open the verification link sent to/);
   assert.match(
     html,
-    /After you confirm your email, we’ll send a 6-digit code to the mobile number on your account/,
+    /After you confirm your email, you can optionally verify your mobile number with a 6-digit code/,
   );
   assert.match(
     html,

@@ -6776,7 +6776,7 @@
             authCard.innerHTML = `<h2>Verify your email first</h2>
             <p class="auth-card-copy">To safely change the mobile number on this account, verify the email address first.</p>
             <p class="auth-notice" role="status">Open the verification link we sent to your email, then return here to update your mobile number.</p>
-            <p class="auth-switch"><a href="#registration-verification?email=${encodeURIComponent(email)}">Return to verification</a></p>`;
+            <p class="auth-switch"><a href="#registration-verification?email=${encodeURIComponent(email)}&phoneRequired=${authParams.get("phoneRequired") === "0" ? "0" : "1"}">Return to verification</a></p>`;
             return;
           }
           authCard.innerHTML = `<h2>Change mobile number</h2>
@@ -6789,7 +6789,7 @@
             <div class="auth-captcha" data-recaptcha-container></div>
             <button class="button button-dark" type="submit">Send code to new number</button>
           </form>
-          <p class="auth-switch"><a href="#registration-verification?email=${encodeURIComponent(email)}&emailVerified=1">Return to verification</a></p>`;
+          <p class="auth-switch"><a href="#registration-verification?email=${encodeURIComponent(email)}&emailVerified=1&phoneRequired=${authParams.get("phoneRequired") === "0" ? "0" : "1"}">Return to verification</a></p>`;
           void mountCaptchaWidgets();
           return;
         }
@@ -6809,24 +6809,38 @@
           const emailVerified = authParams.get("emailVerified") === "1";
           const phoneVerified = authParams.get("phoneVerified") === "1";
           const phoneCodeSent = authParams.get("phoneCodeSent");
+          const phoneVerificationRequired =
+            authParams.get("phoneRequired") !== "0";
+          const signInReady =
+            emailVerified && (phoneVerified || !phoneVerificationRequired);
           document.title =
-            emailVerified && phoneVerified
-              ? "Account verified — esllp"
+            signInReady
+              ? phoneVerified
+                ? "Account verified — esllp"
+                : "Sign-in ready — esllp"
               : emailVerified
                 ? "Verify your mobile — esllp"
                 : "Verify your email — esllp";
           const verificationHeading =
-            emailVerified && phoneVerified
-              ? "Account verified"
+            signInReady
+              ? phoneVerified
+                ? "Account verified"
+                : "Email verified — sign-in ready"
               : emailVerified
                 ? "Step 2 of 2: Verify your mobile"
-                : "Step 1 of 2: Verify your email";
+                : phoneVerificationRequired
+                  ? "Step 1 of 2: Verify your email"
+                  : "Verify your email";
           const verificationCopy =
-            emailVerified && phoneVerified
-              ? "Both checks are complete. You can now sign in."
+            signInReady
+              ? phoneVerified
+                ? "Your email and mobile number are verified. You can now sign in."
+                : "Your email is verified. You can sign in now; mobile verification is optional and can be completed now or later."
               : emailVerified
                 ? "Your email is confirmed. Next, verify the mobile number on your account with a one-time SMS code."
-                : "First confirm that you own this email address. We’ll send the mobile verification code only after this step is complete.";
+                : phoneVerificationRequired
+                  ? "First confirm that you own this email address. We’ll send the mobile verification code only after this step is complete."
+                  : "First confirm that you own this email address. After that, you can optionally verify your mobile number with a one-time SMS code.";
           document.querySelector("#auth-description").textContent =
             verificationCopy;
           const resendReturnParams = new URLSearchParams({
@@ -6834,6 +6848,7 @@
             returnToRegistration: "1",
             ...(emailVerified ? { emailVerified: "1" } : {}),
             ...(phoneVerified ? { phoneVerified: "1" } : {}),
+            phoneRequired: phoneVerificationRequired ? "1" : "0",
             ...(phoneCodeSent ? { phoneCodeSent } : {}),
           });
           const resendEmailHref = email
@@ -6848,10 +6863,10 @@
               <p>${emailVerified ? `Confirmed: ${escapeHtml(email)}` : `Open the verification link sent to ${escapeHtml(email || "your email address")}. The link expires after 24 hours.`}</p>
               ${emailVerified ? "" : `<a href="${resendEmailHref}">Resend email link</a>`}
             </section>
-            <section class="verification-step${phoneVerified ? " is-verified" : emailVerified ? " is-current" : ""}" aria-current="${emailVerified && !phoneVerified ? "step" : "false"}">
-              <div class="verification-step-header"><strong><span class="verification-step-number" aria-hidden="true">${phoneVerified ? "✓" : "2"}</span>Mobile number</strong><span class="verification-step-status">${phoneVerified ? "Verified" : !emailVerified ? "Locked until step 1" : phoneCodeSent === "1" ? "Code sent" : phoneCodeSent === "0" ? "SMS not sent" : "Step 2 — Action needed"}</span></div>
-              <p>${phoneVerified ? "Your mobile number is verified." : !emailVerified ? "After you confirm your email, we’ll send a 6-digit code to the mobile number on your account." : phoneCodeSent === "0" ? "We couldn’t send the SMS code. Choose Resend SMS code below to try again." : phoneCodeSent === "1" ? "We sent a 6-digit code to your registered mobile number. It expires in 10 minutes. If it hasn’t arrived, choose Resend SMS code." : "Enter the 6-digit code if you received it. If not, choose Resend SMS code below. Codes expire in 10 minutes."}</p>
-              ${emailVerified && !phoneVerified ? `<a href="#registration-phone-change?email=${encodeURIComponent(email)}&emailVerified=1">Wrong number? Change it</a>` : ""}
+            <section class="verification-step${phoneVerified ? " is-verified" : emailVerified && phoneVerificationRequired ? " is-current" : ""}" aria-current="${emailVerified && !phoneVerified && phoneVerificationRequired ? "step" : "false"}">
+              <div class="verification-step-header"><strong><span class="verification-step-number" aria-hidden="true">${phoneVerified ? "✓" : "2"}</span>Mobile number</strong><span class="verification-step-status">${phoneVerified ? "Verified" : !phoneVerificationRequired ? "Optional" : !emailVerified ? "Locked until step 1" : phoneCodeSent === "1" ? "Code sent" : phoneCodeSent === "0" ? "SMS not sent" : "Step 2 — Action needed"}</span></div>
+              <p>${phoneVerified ? "Your mobile number is verified." : !emailVerified ? "After you confirm your email, you can optionally verify your mobile number with a 6-digit code." : !phoneVerificationRequired ? phoneCodeSent === "0" ? "We couldn’t send the optional SMS code. You can sign in now and request a code later." : phoneCodeSent === "1" ? "We sent a 6-digit code to your registered mobile number. It expires in 10 minutes. Verification is optional; you can sign in now." : "Verify your mobile number with a 6-digit code if you like. This step is optional, and you can sign in now." : phoneCodeSent === "0" ? "We couldn’t send the SMS code. Choose Resend SMS code below to try again." : phoneCodeSent === "1" ? "We sent a 6-digit code to your registered mobile number. It expires in 10 minutes. If it hasn’t arrived, choose Resend SMS code." : "Enter the 6-digit code if you received it. If not, choose Resend SMS code below. Codes expire in 10 minutes."}</p>
+              ${emailVerified && !phoneVerified ? `<a href="#registration-phone-change?email=${encodeURIComponent(email)}&emailVerified=1&phoneRequired=${phoneVerificationRequired ? "1" : "0"}">Wrong number? Change it</a>` : ""}
             </section>
           </div>
           ${!emailVerified || phoneVerified ? "" : `<form class="auth-form" id="phone-verification-verify-form" data-action="phone-verification" novalidate>
@@ -6860,7 +6875,7 @@
             <div class="auth-captcha" data-recaptcha-container></div>
             <div class="verification-form-actions"><button class="button button-dark" type="submit" name="intent" value="verify">Verify mobile number</button><button class="button button-light" type="submit" name="intent" value="resend">Resend SMS code</button></div>
           </form>`}
-          ${emailVerified && phoneVerified ? `<div class="account-actions"><a class="button button-dark" href="#sign-in?email=${encodeURIComponent(email)}">Continue to sign in</a></div>` : `<p class="auth-switch"><a href="#sign-in">Return to sign in</a></p>`}`;
+          ${signInReady ? `<div class="account-actions"><a class="button button-dark" href="#sign-in?email=${encodeURIComponent(email)}">Continue to sign in</a></div>` : `<p class="auth-switch"><a href="#sign-in">Return to sign in</a></p>`}`;
           void mountCaptchaWidgets();
           authCard
             .querySelector('#phone-verification-verify-form [name="code"]')
@@ -6930,7 +6945,7 @@
           const copy = isReset
             ? "Use a strong password you do not reuse elsewhere."
             : isVerification
-              ? "Step 1 of 2: confirm this email address. Select Confirm email address to finish this step. We’ll then send a one-time code to the mobile number on your account."
+              ? "Confirm this email address to activate your account. Candidates can optionally verify a mobile number; employer accounts may require it."
               : isResend
                 ? "Enter the address used for your candidate or employer account."
                 : "If an account exists for this address, we will send a one-time reset link.";
@@ -6962,7 +6977,7 @@
             ${isVerification ? "" : '<div class="auth-captcha" data-recaptcha-container></div>'}
             <button class="button button-dark" type="submit">${button}</button>
           </form>
-          <p class="auth-switch">${isVerification ? `<a href="#resend-verification?email=${encodeURIComponent(authParams.get("email") || "")}">Request a new verification link</a> · ` : ""}${returnToVerification ? `<a href="#registration-verification?email=${encodeURIComponent(authParams.get("email") || "")}${authParams.get("emailVerified") === "1" ? "&emailVerified=1" : ""}${authParams.get("phoneVerified") === "1" ? "&phoneVerified=1" : ""}">Return to account verification</a>` : '<a href="#sign-in">Return to sign in</a>'}</p>`;
+          <p class="auth-switch">${isVerification ? `<a href="#resend-verification?email=${encodeURIComponent(authParams.get("email") || "")}">Request a new verification link</a> · ` : ""}${returnToVerification ? `<a href="#registration-verification?email=${encodeURIComponent(authParams.get("email") || "")}${authParams.get("emailVerified") === "1" ? "&emailVerified=1" : ""}${authParams.get("phoneVerified") === "1" ? "&phoneVerified=1" : ""}${authParams.has("phoneRequired") ? `&phoneRequired=${authParams.get("phoneRequired")}` : ""}">Return to account verification</a>` : '<a href="#sign-in">Return to sign in</a>'}</p>`;
           void mountCaptchaWidgets();
           return;
         }
@@ -7036,7 +7051,7 @@
           <label class="auth-field" for="auth-password">Password
             <span class="auth-password"><input id="auth-password" name="password" type="password" autocomplete="${isSignup ? "new-password" : "current-password"}" ${isSignup ? 'minlength="8"' : ""} maxlength="72" required>${passwordVisibilityButton()}</span>
           </label>
-          ${isSignup ? `<p class="auth-card-copy">${accountType === "employer" ? "Use at least 8 characters. Verify both your email and mobile number; employer publishing also requires administrator approval." : "Use at least 8 characters. Verify both your email and mobile number before signing in."}</p>` : ""}
+          ${isSignup ? `<p class="auth-card-copy">${accountType === "employer" ? "Use at least 8 characters. Verify both your email and mobile number; employer publishing also requires administrator approval." : "Use at least 8 characters. Verify your email before signing in. Mobile verification is optional and can be completed later."}</p>` : ""}
           <div class="auth-captcha" data-recaptcha-container></div>
           <button class="button button-dark" type="submit">${isSignup ? (accountType === "employer" ? (inviteToken ? "Create account" : "Submit for approval") : "Create candidate account") : "Log in"} <span aria-hidden="true">→</span></button>
         </form>
@@ -7441,6 +7456,8 @@
                 email,
                 emailVerified: "1",
                 phoneCodeSent: "1",
+                phoneRequired:
+                  actionParams.get("phoneRequired") === "0" ? "0" : "1",
               });
               navigate(`#registration-verification?${verificationParams.toString()}`);
             } catch (error) {
@@ -7485,11 +7502,21 @@
                 authState.notice = result.message;
                 authState.noticeType = "";
                 const verificationParams = new URLSearchParams({ email });
+                verificationParams.set(
+                  "phoneRequired",
+                  actionParams.get("phoneRequired") === "0" ? "0" : "1",
+                );
                 if (result.emailVerified) {
                   verificationParams.set("emailVerified", "1");
                 }
                 if (result.phoneVerified) {
                   verificationParams.set("phoneVerified", "1");
+                }
+                if (typeof result.phoneVerificationRequired === "boolean") {
+                  verificationParams.set(
+                    "phoneRequired",
+                    result.phoneVerificationRequired ? "1" : "0",
+                  );
                 }
                 if (typeof result.phoneCodeSent === "boolean") {
                   verificationParams.set(
@@ -7548,6 +7575,12 @@
                 if (result.phoneVerified) {
                   verificationParams.set("phoneVerified", "1");
                 }
+                if (typeof result.phoneVerificationRequired === "boolean") {
+                  verificationParams.set(
+                    "phoneRequired",
+                    result.phoneVerificationRequired ? "1" : "0",
+                  );
+                }
                 navigate(
                   `#registration-verification?${verificationParams.toString()}`,
                 );
@@ -7569,6 +7602,12 @@
               }
               if (actionParams.get("phoneVerified") === "1") {
                 verificationParams.set("phoneVerified", "1");
+              }
+              if (actionParams.has("phoneRequired")) {
+                verificationParams.set(
+                  "phoneRequired",
+                  actionParams.get("phoneRequired"),
+                );
               }
               navigate(
                 `#registration-verification?${verificationParams.toString()}`,
@@ -7683,10 +7722,10 @@
           if (isSignup) {
             authState.notice =
               payload.message ||
-              "Account created. Verify your email and mobile before signing in.";
+              "Account created. Verify your email before signing in. Mobile verification is optional.";
             authState.noticeType = "";
             navigate(
-              `#registration-verification?email=${encodeURIComponent(payload.email)}`,
+              `#registration-verification?email=${encodeURIComponent(payload.email)}&phoneRequired=${accountType === "employer" ? "1" : "0"}`,
             );
             return;
           }
@@ -7701,6 +7740,12 @@
             }
             if (payload.phoneVerified) {
               verificationParams.set("phoneVerified", "1");
+            }
+            if (typeof payload.phoneVerificationRequired === "boolean") {
+              verificationParams.set(
+                "phoneRequired",
+                payload.phoneVerificationRequired ? "1" : "0",
+              );
             }
             navigate(
               `#registration-verification?${verificationParams.toString()}`,
@@ -8193,11 +8238,12 @@
           <p class="workspace-notice">Your public link is off until you enable it below. Resume files, contact details, and application information are never shown on the public profile.</p>
         </section>
         <section class="profile-resource-card">
-          <div class="profile-section-heading"><div><h2>Verified mobile number</h2><p>Used for account verification and security notices.</p></div></div>
+          <div class="profile-section-heading"><div><h2>${profile.phoneVerified ? "Verified mobile number" : "Mobile number verification (optional)"}</h2><p>Verify your number by SMS to share it as a trusted contact and enable WhatsApp reminders.</p></div></div>
           <p>${profile.phoneNumber ? `${escapeHtml(profile.phoneNumber)} · ${profile.phoneVerified ? "Verified" : "Not verified"}` : "No mobile number added."}</p>
           <form class="profile-fields" id="phone-change-request" novalidate>
-            <label class="profile-field">New mobile number
-              <input name="phoneNumber" type="tel" inputmode="tel" pattern="\\+[1-9][0-9]{7,14}" placeholder="+919876543210" maxlength="16" required>
+            <label class="profile-field">Mobile number to verify or update
+              <input name="phoneNumber" type="tel" inputmode="tel" autocomplete="tel" pattern="\\+[1-9][0-9]{7,14}" placeholder="+919876543210" maxlength="16" value="${escapeHtml(profile.pendingPhoneNumber || profile.phoneNumber || "")}" required>
+              <small>Leave your current number unchanged to verify it, or enter a new number to update it.</small>
             </label>
             <div class="profile-form-actions full"><button class="button button-light" type="submit">Send verification code</button></div>
           </form>
@@ -8205,7 +8251,7 @@
             <label class="profile-field">Code sent to ${escapeHtml(profile.pendingPhoneNumber || "")}
               <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
             </label>
-            <div class="profile-form-actions full"><button class="button button-light" type="submit">Verify and update mobile</button></div>
+            <div class="profile-form-actions full"><button class="button button-light" type="submit">${profile.phoneVerified ? "Verify and update mobile" : "Verify mobile number"}</button></div>
           </form>
         </section>
         <form id="profile-form" novalidate>

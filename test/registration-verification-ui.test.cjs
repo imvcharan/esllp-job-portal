@@ -45,6 +45,17 @@ test("verification progress makes the email-first order and SMS delivery state e
   );
 });
 
+test("candidate verification makes phone OTP optional and keeps the sign-in action available", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(html, /authParams\.get\("phoneRequired"\) !== "0"/);
+  assert.match(html, /emailVerified && \(phoneVerified \|\| !phoneVerificationRequired\)/);
+  assert.match(html, /Verification is optional; you can sign in now/);
+  assert.match(html, /phoneRequired=\$\{accountType === "employer" \? "1" : "0"\}/);
+  assert.match(html, /payload\.phoneVerificationRequired/);
+  assert.match(html, /Leave your current number unchanged to verify it/);
+});
+
 test("email-link confirmation does not add another CAPTCHA challenge", () => {
   const html = readFileSync("public/index.html", "utf8");
 

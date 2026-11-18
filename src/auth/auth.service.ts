@@ -135,7 +135,7 @@ export class AuthService {
       phoneNumber,
       message:
         emailLinkSent
-          ? "Account created. Verify your email using the link we sent. We’ll send your mobile verification code after your email is verified."
+          ? "Account created. Verify your email using the link we sent. After that, you can sign in; mobile verification is optional and available now or later."
           : "Account created, but the verification email could not be sent. Use the resend email verification option before signing in.",
     };
   }
@@ -387,6 +387,7 @@ export class AuthService {
         email: string;
         emailVerified: boolean;
         phoneVerified: boolean;
+        phoneVerificationRequired: boolean;
         message: string;
       }
     | { mfaRequired: true }
@@ -417,17 +418,24 @@ export class AuthService {
         email: user.email,
         emailVerified: false,
         phoneVerified: Boolean(user.phoneVerified),
+        phoneVerificationRequired:
+          user.role !== UserRole.CANDIDATE && Boolean(user.phoneE164),
         message:
-          "Your email still needs verification. Complete Step 1; then we’ll guide you through mobile verification.",
+          "Your email still needs verification. Complete Step 1 to sign in.",
       };
     }
-    if (user.phoneE164 && !user.phoneVerified) {
+    if (
+      user.role !== UserRole.CANDIDATE &&
+      user.phoneE164 &&
+      !user.phoneVerified
+    ) {
       await this.recordLoginFailure(user.id, "phone_not_verified");
       return {
         verificationRequired: true,
         email: user.email,
         emailVerified: true,
         phoneVerified: false,
+        phoneVerificationRequired: true,
         message:
           "Your email is already verified. Complete mobile verification to finish signing in.",
       };
@@ -490,7 +498,7 @@ export class AuthService {
       role: UserRole.CANDIDATE,
       emailVerified: true,
     });
-    if (user && (!user.phoneE164 || user.phoneVerified)) {
+    if (user) {
       const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
       await this.issueOtp(user, code, "email_otp", user.email);
       try {
@@ -527,7 +535,6 @@ export class AuthService {
     });
     if (
       !user ||
-      (user.phoneE164 && !user.phoneVerified) ||
       !(await this.consumeOtp(user.id, code, "email_otp", user.email))
     ) {
       await this.recordLoginFailure(user?.id ?? null, "invalid_email_otp");
@@ -589,11 +596,6 @@ export class AuthService {
           "This Google account is not linked to an available candidate account.",
         );
       }
-      if (user.phoneE164 && !user.phoneVerified) {
-        throw new UnauthorizedException(
-          "Verify your mobile number before signing in. Request a new SMS code from the registration verification page.",
-        );
-      }
     } else {
       user = await this.usersRepository.findOneBy({ email });
       if (user && !user.isActive) {
@@ -609,14 +611,9 @@ export class AuthService {
           "This candidate account is linked to a different Google account.",
         );
       }
-      if (user?.phoneE164 && !user.phoneVerified) {
-        throw new UnauthorizedException(
-          "Verify your mobile number before signing in. Request a new SMS code from the registration verification page.",
-        );
-      }
       if (!user) {
         throw new BadRequestException(
-          "To create a new account, register with your email and mobile number so both can be verified. You can link Google after signing in.",
+          "To create an account, register with your email and mobile number, then verify your email. Mobile verification is optional. You can link Google after signing in.",
         );
       } else {
         user.googleSubject = payload.sub;
@@ -984,6 +981,7 @@ export class AuthService {
     emailVerified: true;
     phoneVerified: boolean;
     phoneCodeSent: boolean;
+    phoneVerificationRequired: boolean;
   }> {
     const userId = await this.consumeEmailToken(rawToken, "email_verification");
     await this.usersRepository.update(
@@ -1003,6 +1001,8 @@ export class AuthService {
       targetId: user.id,
     });
     let phoneCodeSent = false;
+    const phoneVerificationRequired =
+      user.role !== UserRole.CANDIDATE && Boolean(user.phoneE164);
     if (user.phoneE164 && !user.phoneVerified) {
       const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
       await this.issueOtp(user, code, "phone_verification", user.phoneE164);
@@ -1023,7 +1023,7 @@ export class AuthService {
     ) {
       return {
         message:
-          user.phoneE164 && !user.phoneVerified
+          phoneVerificationRequired && user.phoneE164 && !user.phoneVerified
             ? phoneCodeSent
               ? "Email address verified. A mobile verification code was sent; enter it before signing in. Employer publishing also requires administrator approval."
               : "Email address verified, but a mobile verification code could not be sent. Use the resend SMS code option before signing in; employer publishing also requires administrator approval."
@@ -1031,18 +1031,24 @@ export class AuthService {
         emailVerified: true,
         phoneVerified: Boolean(user.phoneVerified),
         phoneCodeSent,
+        phoneVerificationRequired,
       };
     }
     return {
       message:
-        user.phoneE164 && !user.phoneVerified
+        phoneVerificationRequired && user.phoneE164 && !user.phoneVerified
           ? phoneCodeSent
             ? "Email address verified. A mobile verification code was sent; enter it before signing in."
             : "Email address verified, but a mobile verification code could not be sent. Use the resend SMS code option before signing in."
-          : "Email address verified. You can now sign in.",
+          : user.role === UserRole.CANDIDATE && user.phoneE164 && !user.phoneVerified
+            ? phoneCodeSent
+              ? "Email address verified. You can sign in now; mobile verification is optional and the SMS code can be used now or later."
+              : "Email address verified. You can sign in now; mobile verification is optional. The SMS code could not be sent, but you can request it later."
+            : "Email address verified. You can now sign in.",
       emailVerified: true,
       phoneVerified: Boolean(user.phoneVerified),
       phoneCodeSent,
+      phoneVerificationRequired,
     };
   }
 
