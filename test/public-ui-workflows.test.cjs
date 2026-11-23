@@ -145,6 +145,11 @@ test("public SPA routes use clean paths and restore navigation with browser hist
   assert.doesNotMatch(html, /window\.addEventListener\("hashchange"/);
 });
 
+test("company profile requests bypass the public SPA fallback", () => {
+  const source = readFileSync("src/main.ts", "utf8");
+  assert.match(source, /path\.startsWith\("\/companies\/"\)/);
+});
+
 test("employer account CTA stays visible across desktop, tablet, and mobile layouts", () => {
   const html = readFileSync("public/index.html", "utf8");
 
@@ -290,6 +295,36 @@ test("admin SMS settings use clear field labels, switch cards, and responsive la
   assert.match(html, /"Enter the Twilio Auth Token"/);
 });
 
+test("SMS settings reload bypasses cache and clears stale save feedback", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  const loaderStart = html.indexOf("async function loadTwilioConfiguration()");
+  const loaderEnd = html.indexOf("async function loadNotificationTemplates()", loaderStart);
+  const refreshStart = html.indexOf('document.querySelector("[data-refresh-twilio-config]")');
+  const refreshEnd = html.indexOf('document.querySelector("[data-refresh-notification-templates]")', refreshStart);
+  assert.notEqual(loaderStart, -1, "SMS settings loader exists");
+  assert.notEqual(refreshStart, -1, "SMS settings reload handler exists");
+
+  const loader = html.slice(loaderStart, loaderEnd);
+  const refresh = html.slice(refreshStart, refreshEnd);
+
+  assert.match(loader, /setInlineFeedback\("#twilio-config-feedback", ""\)/);
+  assert.match(loader, /authRequest\("\/api\/admin\/twilio-config",\s*\{\s*cache:\s*"no-store"/);
+  assert.match(refresh, /await loadTwilioConfiguration\(\)/);
+  assert.match(refresh, /Messaging settings reloaded\./);
+  assert.match(refresh, /Unable to reload SMS settings:/);
+});
+
+test("SMS save distinguishes a saved update from a failed settings reload", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  const saveStart = html.indexOf('#twilio-config-form").addEventListener("submit"');
+  const saveEnd = html.indexOf('#platform-configuration-reset").addEventListener("click"', saveStart);
+  assert.notEqual(saveStart, -1, "SMS settings submit handler exists");
+  const handler = html.slice(saveStart, saveEnd);
+
+  assert.match(handler, /Messaging settings saved and audited\./);
+  assert.match(handler, /Settings were saved, but could not be reloaded:[\s\S]*Use Reload to verify\./);
+});
+
 test("admin API requests renew an expired access token and retry once", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
   const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
@@ -404,5 +439,10 @@ test("failed job searches can retry the same query and filters", () => {
     html,
     /const terms = parseSearchHash\(state\.searchHash\);\s+void searchJobs\(terms\.query, terms\.location, state\.page\)/,
   );
-  assert.match(html, /aria-live="polite">\s*Illustrative preview listings/);
+  assert.match(html, /No published roles yet/);
+  assert.doesNotMatch(html, /renderHomepageJobs\(\s*previewJobs/);
+  assert.doesNotMatch(html, /state\.jobs\s*=\s*previewJobs/);
+  assert.doesNotMatch(html, /Preview only: no published jobs/);
+  assert.doesNotMatch(html, /Senior Product Designer<\/h3>/);
+  assert.doesNotMatch(html, /data-keywords="product design/);
 });

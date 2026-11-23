@@ -2986,7 +2986,21 @@
     }
 
     async function loadTwilioConfiguration() {
-      const configuration = await authRequest("/api/admin/twilio-config");
+      setInlineFeedback("#twilio-config-feedback", "");
+      const smsStatus = document.querySelector("#twilio-config-status");
+      const whatsappStatus = document.querySelector("#twilio-whatsapp-status");
+      smsStatus.textContent = "Loading settings…";
+      whatsappStatus.textContent = "Loading settings…";
+      let configuration;
+      try {
+        configuration = await authRequest("/api/admin/twilio-config", {
+          cache: "no-store",
+        });
+      } catch (error) {
+        smsStatus.textContent = "Unable to load";
+        whatsappStatus.textContent = "Unable to load";
+        throw error;
+      }
       const form = document.querySelector("#twilio-config-form");
       form.elements.enabled.checked = configuration.enabled;
       form.elements.accountSid.value = configuration.accountSid;
@@ -3695,8 +3709,28 @@
     document.querySelector("[data-refresh-platform-configuration]").addEventListener("click", () => {
       loadPlatformConfiguration().catch((error) => showToast(`Unable to load platform controls: ${error.message}`, "error"));
     });
-    document.querySelector("[data-refresh-twilio-config]").addEventListener("click", () => {
-      loadTwilioConfiguration().catch((error) => showToast(`Unable to load SMS settings: ${error.message}`, "error"));
+    document.querySelector("[data-refresh-twilio-config]").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const form = document.querySelector("#twilio-config-form");
+      const submit = form.querySelector('[type="submit"]');
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      submit.disabled = true;
+      button.textContent = "Reloading…";
+      try {
+        await loadTwilioConfiguration();
+        setInlineFeedback("#twilio-config-feedback", "Messaging settings reloaded.");
+      } catch (error) {
+        setInlineFeedback(
+          "#twilio-config-feedback",
+          `Unable to reload SMS settings: ${error instanceof Error ? error.message : "Unexpected error."}`,
+          "error",
+        );
+      } finally {
+        button.textContent = originalLabel;
+        button.disabled = false;
+        submit.disabled = false;
+      }
     });
     document.querySelector("[data-refresh-notification-templates]").addEventListener("click", () => {
       loadNotificationTemplates().catch((error) => showToast(`Unable to load email templates: ${error.message}`, "error"));
@@ -3745,13 +3779,20 @@
       const reason = String(form.elements.reason.value || "").trim();
       const feedback = document.querySelector("#twilio-config-feedback");
       if (reason.length < 3) {
-        feedback.textContent = "Enter a reason of at least three characters.";
-        feedback.dataset.state = "error";
+        setInlineFeedback(
+          "#twilio-config-feedback",
+          "Enter a reason of at least three characters.",
+          "error",
+        );
         return;
       }
       const submit = form.querySelector('[type="submit"]');
+      const refreshButton = document.querySelector("[data-refresh-twilio-config]");
+      const originalLabel = submit.textContent;
       submit.disabled = true;
-      feedback.textContent = "";
+      refreshButton.disabled = true;
+      submit.textContent = "Saving…";
+      setInlineFeedback("#twilio-config-feedback", "");
       try {
         await authRequest("/api/admin/twilio-config", {
           method: "PATCH",
@@ -3768,14 +3809,30 @@
           }),
         });
         form.elements.reason.value = "";
-        await loadTwilioConfiguration();
-        feedback.textContent = "Messaging settings saved and audited.";
-        feedback.dataset.state = "success";
+        try {
+          await loadTwilioConfiguration();
+        } catch (error) {
+          setInlineFeedback(
+            "#twilio-config-feedback",
+            `Settings were saved, but could not be reloaded: ${error instanceof Error ? error.message : "Unexpected error."} Use Reload to verify.`,
+            "error",
+          );
+          return;
+        }
+        setInlineFeedback(
+          "#twilio-config-feedback",
+          "Messaging settings saved and audited.",
+        );
       } catch (error) {
-        feedback.textContent = error instanceof Error ? error.message : "Unable to save SMS settings.";
-        feedback.dataset.state = "error";
+        setInlineFeedback(
+          "#twilio-config-feedback",
+          error instanceof Error ? error.message : "Unable to save SMS settings.",
+          "error",
+        );
       } finally {
+        submit.textContent = originalLabel;
         submit.disabled = false;
+        refreshButton.disabled = false;
       }
     });
     document.querySelector("#platform-configuration-reset").addEventListener("click", async (event) => {

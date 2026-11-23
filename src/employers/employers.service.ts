@@ -71,6 +71,8 @@ import {
   currentJobDeadlineDate,
   jobPublicationError,
 } from "../jobs/job.constants";
+import { FeaturedJobPlacement } from "./featured-job-placement.entity";
+import { GoogleCalendarService } from "./google-calendar.service";
 
 const PLAN_LIMITS = {
   free: { activeJobs: 1, seats: 1, resumeCredits: 0 },
@@ -157,6 +159,7 @@ export class EmployersService {
     private readonly jobsService: JobsService,
     private readonly razorpayConfiguration: RazorpayConfigurationService,
     private readonly platformConfiguration: PlatformConfigurationService,
+    private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
   async listOrganizations(user: AuthenticatedUser) {
@@ -1860,6 +1863,21 @@ export class EmployersService {
         return { application, interview };
       },
     );
+    let googleCalendarStatus: "created" | "disabled" | "failed" = "disabled";
+    if (!interview.meetingUrl) {
+      const calendar = await this.googleCalendar.createInterviewEvent({
+        title: `${context.organization.name}: ${application.job.title} interview`,
+        description: `Interview for ${application.job.title} at ${context.organization.name}.`,
+        attendeeEmail: application.user.email,
+        startsAt,
+        durationMinutes: dto.durationMinutes ?? 30,
+      });
+      googleCalendarStatus = calendar.calendarStatus;
+      if (calendar.meetingUrl) {
+        interview.meetingUrl = calendar.meetingUrl;
+        await this.interviews.save(interview);
+      }
+    }
     let notificationStatus: "queued" | "disabled" | "failed" = "disabled";
     const candidateProfile = await this.dataSource
       .getRepository(CandidateProfile)
@@ -1908,6 +1926,7 @@ export class EmployersService {
         startsAt: startsAt.toISOString(),
         durationMinutes: interview.durationMinutes,
         notificationStatus,
+        googleCalendarStatus,
       },
     });
     return { ...interview, notificationStatus };

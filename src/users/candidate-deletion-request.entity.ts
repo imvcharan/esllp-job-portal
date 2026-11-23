@@ -11,6 +11,10 @@ export enum CandidateDeletionRequestStatus {
   OPEN = "open",
   REVIEWING = "reviewing",
   DEFERRED = "deferred",
+  APPROVED = "approved",
+  SCHEDULED = "scheduled",
+  COMPLETED = "completed",
+  CANCELLED = "cancelled",
 }
 
 @Entity({ name: "candidate_deletion_requests" })
@@ -51,4 +55,10 @@ export class CandidateDeletionRequest {
 
   @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
   updatedAt!: Date;
+
+  @Column({ name: "scheduled_for", type: "timestamptz", nullable: true })
+  scheduledFor!: Date | null;
+
+  @Column({ name: "completed_at", type: "timestamptz", nullable: true })
+  completedAt!: Date | null;
 }

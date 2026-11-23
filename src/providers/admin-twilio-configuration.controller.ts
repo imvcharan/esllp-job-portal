@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Patch, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Patch,
+  UseGuards,
+} from "@nestjs/common";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -15,6 +22,7 @@ export class AdminTwilioConfigurationController {
   constructor(private readonly configuration: TwilioConfigurationService) {}
 
   @Get()
+  @Header("Cache-Control", "private, no-store")
   get() {
     return this.configuration.adminView();
   }

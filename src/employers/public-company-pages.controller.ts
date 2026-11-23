@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Res,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Response } from "express";
@@ -29,6 +30,29 @@ const escapeHtml = (value: string): string =>
     return entities[character];
   });
 
+const publicOrigin = (): string => {
+  const configured = process.env.PUBLIC_APP_URL?.trim();
+  if (!configured) {
+    throw new ServiceUnavailableException(
+      "PUBLIC_APP_URL must be configured to serve canonical company pages.",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new ServiceUnavailableException(
+      "PUBLIC_APP_URL must be a valid absolute URL.",
+    );
+  }
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new ServiceUnavailableException(
+      "PUBLIC_APP_URL must use HTTP or HTTPS.",
+    );
+  }
+  return url.origin;
+};
+
 @Controller("companies")
 export class PublicCompanyPagesController {
   constructor(
@@ -43,17 +67,16 @@ export class PublicCompanyPagesController {
   @Get(":slug")
   async bySlug(@Param("slug") slug: string, @Res() response: Response) {
     const organization = await this.organizations.findOneBy({ slug });
-    if (!organization) throw new NotFoundException("Company page was not found.");
+    if (!organization)
+      throw new NotFoundException("Company page was not found.");
     return this.render(organization, response);
   }
 
   @Get("id/:id")
-  async byId(
-    @Param("id", ParseIntPipe) id: number,
-    @Res() response: Response,
-  ) {
+  async byId(@Param("id", ParseIntPipe) id: number, @Res() response: Response) {
     const organization = await this.organizations.findOneBy({ id });
-    if (!organization) throw new NotFoundException("Company page was not found.");
+    if (!organization)
+      throw new NotFoundException("Company page was not found.");
     return this.render(organization, response);
   }
 
@@ -89,7 +112,7 @@ export class PublicCompanyPagesController {
         member.user.emailVerified &&
         member.user.employerApprovalStatus === EmployerApprovalStatus.APPROVED,
     );
-    const origin = process.env.PUBLIC_APP_URL?.trim().replace(/\/+$/, "") ?? "";
+    const origin = publicOrigin();
     const canonical = `${origin}/companies/${encodeURIComponent(organization.slug)}`;
     const title = `${organization.name} · Company and open jobs`;
     const description =
@@ -105,7 +128,8 @@ export class PublicCompanyPagesController {
     const jobCards = jobs.length
       ? jobs
           .map(
-            (job) => `<article class="job"><h2><a href="/#job/${job.id}">${escapeHtml(job.title)}</a></h2><p>${escapeHtml(job.location)} · ${escapeHtml(job.workplaceType)} · ${escapeHtml(job.employmentType)}</p>${job.description ? `<p>${escapeHtml(job.description.slice(0, 800))}</p>` : ""}</article>`,
+            (job) =>
+              `<article class="job"><h2><a href="/#job/${job.id}">${escapeHtml(job.title)}</a></h2><p>${escapeHtml(job.location)} · ${escapeHtml(job.workplaceType)} · ${escapeHtml(job.employmentType)}</p>${job.description ? `<p>${escapeHtml(job.description.slice(0, 800))}</p>` : ""}</article>`,
           )
           .join("")
       : "<p>There are no current public openings at this company.</p>";

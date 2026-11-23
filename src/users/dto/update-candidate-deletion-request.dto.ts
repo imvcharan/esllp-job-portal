@@ -5,6 +5,10 @@ export class UpdateCandidateDeletionRequestDto {
   @IsIn([
     CandidateDeletionRequestStatus.REVIEWING,
     CandidateDeletionRequestStatus.DEFERRED,
+    CandidateDeletionRequestStatus.APPROVED,
+    CandidateDeletionRequestStatus.SCHEDULED,
+    CandidateDeletionRequestStatus.COMPLETED,
+    CandidateDeletionRequestStatus.CANCELLED,
   ])
   status!: CandidateDeletionRequestStatus;
 

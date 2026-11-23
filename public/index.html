@@ -4658,87 +4658,11 @@
               >See all jobs <span aria-hidden="true">→</span></a
             >
           </div>
-          <p class="source-note" id="featured-source-note" role="status" aria-live="polite">
-            Illustrative preview listings. Live roles will appear here when
-            available.
-          </p>
+          <p class="source-note" id="featured-source-note" role="status" aria-live="polite" hidden></p>
           <div class="job-grid" id="job-list">
-            <article
-              class="job-card"
-              data-keywords="product design designer bengaluru hybrid goodspace"
-            >
-              <div class="job-card-top">
-                <span class="company-icon co-1" aria-label="A company">g</span
-                ><button
-                  class="save-button"
-                  type="button"
-                  aria-label="Save Product Designer job"
-                  aria-pressed="false"
-                >
-                  ♡
-                </button>
-              </div>
-              <h3>Senior Product Designer</h3>
-              <p class="job-company">goodspace · Bengaluru</p>
-              <div class="job-meta">
-                <span>Full-time</span><span>Hybrid</span><span>5+ years</span>
-              </div>
-              <div class="job-footer">
-                <span><strong>₹18–24 LPA</strong><br />Salary range</span
-                ><span class="fresh">Posted 2d ago</span>
-              </div>
-            </article>
-            <article
-              class="job-card"
-              data-keywords="engineering software backend developer pune remote northstar"
-            >
-              <div class="job-card-top">
-                <span class="company-icon co-2" aria-label="A company">n</span
-                ><button
-                  class="save-button"
-                  type="button"
-                  aria-label="Save Backend Engineer job"
-                  aria-pressed="false"
-                >
-                  ♡
-                </button>
-              </div>
-              <h3>Backend Engineer</h3>
-              <p class="job-company">Northstar · Pune / Remote</p>
-              <div class="job-meta">
-                <span>Full-time</span><span>Remote</span><span>3–6 years</span>
-              </div>
-              <div class="job-footer">
-                <span><strong>₹22–30 LPA</strong><br />Salary range</span
-                ><span class="fresh">Posted 1d ago</span>
-              </div>
-            </article>
-            <article
-              class="job-card"
-              data-keywords="marketing growth content lead mumbai brightloop"
-            >
-              <div class="job-card-top">
-                <span class="company-icon co-3" aria-label="A company">b</span
-                ><button
-                  class="save-button"
-                  type="button"
-                  aria-label="Save Growth Marketing Lead job"
-                  aria-pressed="false"
-                >
-                  ♡
-                </button>
-              </div>
-              <h3>Growth Marketing Lead</h3>
-              <p class="job-company">Brightloop · Mumbai</p>
-              <div class="job-meta">
-                <span>Full-time</span><span>In-office</span
-                ><span>4+ years</span>
-              </div>
-              <div class="job-footer">
-                <span><strong>₹16–22 LPA</strong><br />Salary range</span
-                ><span class="fresh">Posted 3d ago</span>
-              </div>
-            </article>
+            <div class="empty-state" role="status" aria-live="polite">
+              <p>Loading published roles…</p>
+            </div>
           </div>
         </div>
       </section>
@@ -5282,62 +5206,6 @@
 
     <script src="/employer-job-csv.js"></script>
     <script>
-      const previewJobs = [
-        {
-          id: "preview-designer",
-          title: "Senior Product Designer",
-          company: "goodspace",
-          location: "Bengaluru",
-          workplaceType: "hybrid",
-          employmentType: "full-time",
-          salaryMin: 1800000,
-          salaryMax: 2400000,
-          salaryLabel: "₹18–24 LPA",
-          experience: "5+ years",
-          description:
-            "Example listing for preview only. Real job details will be supplied by the hiring company.",
-          createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-          isPreview: true,
-          mark: "g",
-          color: "co-1",
-        },
-        {
-          id: "preview-engineer",
-          title: "Backend Engineer",
-          company: "Northstar",
-          location: "Pune / Remote",
-          workplaceType: "remote",
-          employmentType: "full-time",
-          salaryMin: 2200000,
-          salaryMax: 3000000,
-          salaryLabel: "₹22–30 LPA",
-          experience: "3–6 years",
-          description:
-            "Example listing for preview only. Real job details will be supplied by the hiring company.",
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          isPreview: true,
-          mark: "n",
-          color: "co-2",
-        },
-        {
-          id: "preview-marketing",
-          title: "Growth Marketing Lead",
-          company: "Brightloop",
-          location: "Mumbai",
-          workplaceType: "onsite",
-          employmentType: "full-time",
-          salaryMin: 1600000,
-          salaryMax: 2200000,
-          salaryLabel: "₹16–22 LPA",
-          experience: "4+ years",
-          description:
-            "Example listing for preview only. Real job details will be supplied by the hiring company.",
-          createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-          isPreview: true,
-          mark: "b",
-          color: "co-3",
-        },
-      ];
       const savedJobsKey = "esllp-saved-jobs";
       const savedDashboardReturn = sessionStorage.getItem(
         "esllp-dashboard-job-return",
@@ -5825,12 +5693,8 @@
         const note = document.querySelector("#featured-source-note");
         note.hidden = !isPreview;
         note.classList.remove("error");
-        if (isPreview)
-          note.textContent =
-            "Preview only: these illustrative listings are not live vacancies.";
-        document.querySelector("#search-status").textContent = isPreview
-          ? "Explore illustrative sample listings while live roles are not available."
-          : `${total} published job${total === 1 ? "" : "s"} available.`;
+        document.querySelector("#search-status").textContent =
+          `${total} published job${total === 1 ? "" : "s"} available.`;
       }
 
       async function loadFeaturedJobs() {
@@ -5844,18 +5708,25 @@
             throw new Error("The job service returned an unexpected response.");
           if (request !== state.featuredRequest) return;
           const jobs = result.items;
-          renderHomepageJobs(
-            jobs.length ? jobs : previewJobs,
-            jobs.length === 0,
-            result.total,
-          );
+          if (jobs.length) {
+            renderHomepageJobs(jobs, false, result.total);
+          } else {
+            document.querySelector("#job-list").innerHTML =
+              '<div class="empty-state"><h2>No published roles yet</h2><p>Approved live vacancies will appear here as soon as employers publish them.</p></div>';
+            document.querySelector("#featured-source-note").hidden = true;
+            document.querySelector("#search-status").textContent =
+              "0 published jobs available.";
+          }
         } catch (error) {
           if (request !== state.featuredRequest) return;
-          renderHomepageJobs(previewJobs, true);
+          document.querySelector("#job-list").innerHTML =
+            '<div class="empty-state"><h2>Published roles unavailable</h2><p>The live job service could not be reached. Please try again shortly.</p></div>';
           const note = document.querySelector("#featured-source-note");
           note.hidden = false;
           note.classList.add("error");
-          note.textContent = `Live job listings could not be loaded (${error instanceof Error ? error.message : "network error"}). Sample preview listings are shown instead.`;
+          note.textContent = `Live job listings could not be loaded (${error instanceof Error ? error.message : "network error"}).`;
+          document.querySelector("#search-status").textContent =
+            "Live role data unavailable.";
         }
       }
 
@@ -6058,10 +5929,10 @@
           state.noMatches =
             result.total === 0 && Boolean(query || locationValue || hasFilters);
           if (result.total === 0 && !query && !locationValue && !hasFilters) {
-            state.jobs = previewJobs;
-            state.searchTotal = previewJobs.length;
+            state.jobs = [];
+            state.searchTotal = 0;
             setSourceNote(
-              "Preview only: no published jobs are in the database yet. These sample listings are not live vacancies.",
+              "No published roles are available yet.",
             );
           } else {
             state.jobs = result.items.map((job) => ({
@@ -6229,21 +6100,6 @@
         note.hidden = true;
         detail.innerHTML =
           '<div class="empty-state"><p>Loading job details…</p></div>';
-        if (jobId.startsWith("preview-")) {
-          const job = previewJobs.find((item) => item.id === jobId);
-          if (job) {
-            detail.innerHTML = detailMarkup(job);
-            detail.querySelector("#detail-description-text").textContent =
-              job.description;
-            note.hidden = false;
-            note.textContent =
-              "Preview only: this sample is not a live vacancy.";
-          } else {
-            detail.innerHTML =
-              '<div class="empty-state"><h2>Preview listing not found</h2><p>Return to the results to choose another role.</p></div>';
-          }
-          return;
-        }
         if (!/^\d+$/.test(jobId)) {
           detail.innerHTML =
             '<div class="empty-state"><h2>Job not found</h2><p>This job link is not valid. Return to the results to choose another role.</p></div>';
@@ -10246,7 +10102,7 @@
 
       async function loadWorkspaceSavedJobs() {
         profileContent.innerHTML = `${workspaceHeading("Candidate workspace", "Saved jobs", "Revisit roles saved to your account from any device.")}
-        <section class="workspace-panel"><div class="workspace-notice">Your published-job saves are linked to your account. Preview examples and older guest saves may remain only in this browser.</div>
+        <section class="workspace-panel"><div class="workspace-notice">Your published-job saves are linked to your account.</div>
           <div id="workspace-saved-jobs" class="results-list" aria-live="polite"></div></section>`;
         const results = document.querySelector("#workspace-saved-jobs");
         results.innerHTML =
@@ -10257,19 +10113,11 @@
           const unsyncedIds = localIds.filter(
             (id) => !state.serverSavedJobs.has(id),
           );
-          const previewJobsById = new Map(
-            previewJobs.map((job) => [String(job.id), job]),
-          );
-          const locallySavedPreviews = unsyncedIds
-            .map((id) => previewJobsById.get(id))
-            .filter(Boolean);
-          const staleLocalIds = unsyncedIds.filter(
-            (id) => !previewJobsById.has(id),
-          );
-          const savedListings = [
-            ...serverJobs.map((job) => ({ ...job, isPreview: false })),
-            ...locallySavedPreviews,
-          ];
+          const staleLocalIds = unsyncedIds;
+          const savedListings = serverJobs.map((job) => ({
+            ...job,
+            isPreview: false,
+          }));
           const cards = savedListings.map((job) =>
             job.isActive === false
               ? `<article class="result-card"><div class="result-card-copy"><h2>Listing no longer available</h2><p class="result-company">${escapeHtml(job.title)} · This job is no longer published.</p></div>
@@ -10636,24 +10484,6 @@
           profileContent.innerHTML =
             '<div class="empty-state"><p>Loading job details…</p></div>';
           try {
-            if (jobId.startsWith("preview-")) {
-              const previewJob = previewJobs.find((job) => job.id === jobId);
-              if (!previewJob)
-                throw new Error("This preview listing could not be found.");
-              const returnLabel =
-                state.dashboardJobReturn === "#dashboard/saved"
-                  ? "← Back to saved jobs"
-                  : state.dashboardJobReturn === "#dashboard/applications"
-                    ? "← Back to applications"
-                    : "← Back to jobs";
-              profileContent.innerHTML = `<div class="detail-topline"><a class="back-link" href="${state.dashboardJobReturn}">${returnLabel}</a></div>
-              <div class="workspace-notice" role="status">Preview only: this sample is not a live vacancy.</div>
-              <div class="detail-layout">${detailMarkup(previewJob)}</div>`;
-              profileContent.querySelector(
-                "#detail-description-text",
-              ).textContent = previewJob.description;
-              return;
-            }
             const response = await fetch(
               `/api/jobs/${encodeURIComponent(jobId)}`,
             );

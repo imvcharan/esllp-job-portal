@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Logger,
   NotFoundException,
   Param,
   ParseIntPipe,
@@ -90,6 +91,8 @@ const publicOrigin = (): string => {
 
 @Controller()
 export class PublicJobPagesController {
+  private readonly logger = new Logger(PublicJobPagesController.name);
+
   constructor(
     private readonly jobsService: JobsService,
     @InjectRepository(Job)
@@ -214,55 +217,68 @@ export class PublicJobPagesController {
   @Get("sitemap.xml")
   async sitemap(@Res() response: Response): Promise<void> {
     const origin = publicOrigin();
-    const jobs = await this.jobsRepository
-      .createQueryBuilder("job")
-      .select([
-        "job.id",
-        "job.createdAt",
-        "job.category",
-        "job.location",
-        "job.workplaceType",
-      ])
-      .where("job.isActive = :isActive", { isActive: true })
-      .andWhere(
-        "(job.applicationDeadline IS NULL OR job.applicationDeadline >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date)",
-      )
-      .orderBy("job.createdAt", "DESC")
-      .addOrderBy("job.id", "DESC")
-      .take(50_000)
-      .getMany();
-    const options = await this.jobsService.jobOptions();
-    const categoriesWithJobs = new Set(
-      jobs
-        .map((job) => job.category)
-        .filter((value): value is string => Boolean(value)),
-    );
-    const locationsWithJobs = new Set(
-      options.locations.filter((location) =>
-        jobs.some((job) =>
-          location.toLowerCase() === "remote"
-            ? job.workplaceType === "remote"
-            : job.location.toLowerCase().includes(location.toLowerCase()),
+    let jobs: Job[] = [];
+    let categoryLandings: string[] = [];
+    let locationLandings: string[] = [];
+    let content: ContentEntry[] = [];
+    try {
+      jobs = await this.jobsRepository
+        .createQueryBuilder("job")
+        .select([
+          "job.id",
+          "job.createdAt",
+          "job.category",
+          "job.location",
+          "job.workplaceType",
+        ])
+        .where("job.isActive = :isActive", { isActive: true })
+        .andWhere(
+          "(job.applicationDeadline IS NULL OR job.applicationDeadline >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date)",
+        )
+        .orderBy("job.createdAt", "DESC")
+        .addOrderBy("job.id", "DESC")
+        .take(50_000)
+        .getMany();
+      const options = await this.jobsService.jobOptions();
+      const categoriesWithJobs = new Set(
+        jobs
+          .map((job) => job.category)
+          .filter((value): value is string => Boolean(value)),
+      );
+      const locationsWithJobs = new Set(
+        options.locations.filter((location) =>
+          jobs.some((job) =>
+            location.toLowerCase() === "remote"
+              ? job.workplaceType === "remote"
+              : job.location.toLowerCase().includes(location.toLowerCase()),
+          ),
         ),
-      ),
-    );
-    const categoryLandings = uniqueLandingValues(options.categories).filter(
-      (category) => categoriesWithJobs.has(category),
-    );
-    const locationLandings = uniqueLandingValues([...locationsWithJobs]);
-    const content = await this.contentRepository
-      .createQueryBuilder("content")
-      .select(["content.slug", "content.updatedAt"])
-      .where("content.isPublished = :isPublished", { isPublished: true })
-      .andWhere(
-        "content.publishedAt IS NOT NULL AND content.publishedAt <= CURRENT_TIMESTAMP",
-      )
-      .andWhere("content.type IN (:...types)", {
-        types: [ContentType.PAGE, ContentType.BLOG],
-      })
-      .orderBy("content.updatedAt", "DESC")
-      .take(10_000)
-      .getMany();
+      );
+      categoryLandings = uniqueLandingValues(options.categories).filter(
+        (category) => categoriesWithJobs.has(category),
+      );
+      locationLandings = uniqueLandingValues([...locationsWithJobs]);
+      content = await this.contentRepository
+        .createQueryBuilder("content")
+        .select(["content.slug", "content.updatedAt"])
+        .where("content.isPublished = :isPublished", { isPublished: true })
+        .andWhere(
+          "content.publishedAt IS NOT NULL AND content.publishedAt <= CURRENT_TIMESTAMP",
+        )
+        .andWhere("content.type IN (:...types)", {
+          types: [ContentType.PAGE, ContentType.BLOG],
+        })
+        .orderBy("content.updatedAt", "DESC")
+        .take(10_000)
+        .getMany();
+    } catch (error) {
+      this.logger.error(
+        `Sitemap inventory query failed (${error instanceof Error ? error.name : "unknown error"}).`,
+      );
+      throw new ServiceUnavailableException(
+        "Sitemap data is temporarily unavailable.",
+      );
+    }
     const urls = [
       `<url><loc>${escapeXml(origin)}/</loc></url>`,
       ...jobs.map(

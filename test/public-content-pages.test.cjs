@@ -1,6 +1,9 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { NotFoundException } = require("@nestjs/common");
+const {
+  NotFoundException,
+  ServiceUnavailableException,
+} = require("@nestjs/common");
 const {
   PublicContentPagesController,
 } = require("../dist/content/public-content-pages.controller.js");
@@ -89,6 +92,46 @@ test("sitemap includes canonical URLs for published page and blog entries", asyn
       return this;
     },
     getMany: async () => items,
+  });
+
+  test("sitemap reports inventory failures instead of returning a partial sitemap", async () => {
+    const previousOrigin = process.env.PUBLIC_APP_URL;
+    process.env.PUBLIC_APP_URL = "https://example.test";
+    const controller = new PublicJobPagesController(
+      { jobOptions: async () => ({ categories: [], locations: [] }) },
+      {
+        createQueryBuilder: () => {
+          const query = {
+            select: () => query,
+            where: () => query,
+            andWhere: () => query,
+            orderBy: () => query,
+            addOrderBy: () => query,
+            take: () => query,
+            getMany: async () => {
+              throw new Error("database unavailable");
+            },
+          };
+          return query;
+        },
+      },
+      { createQueryBuilder: () => { throw new Error("must not be queried"); } },
+    );
+    const response = {
+      type: () => response,
+      set: () => response,
+      send: () => response,
+    };
+
+    try {
+      await assert.rejects(
+        controller.sitemap(response),
+        ServiceUnavailableException,
+      );
+    } finally {
+      if (previousOrigin === undefined) delete process.env.PUBLIC_APP_URL;
+      else process.env.PUBLIC_APP_URL = previousOrigin;
+    }
   });
   let sitemap = "";
   const controller = new PublicJobPagesController(

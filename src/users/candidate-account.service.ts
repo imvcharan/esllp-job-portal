@@ -412,6 +412,19 @@ export class CandidateAccountService {
       );
     }
     request.status = dto.status;
+    if (dto.status === CandidateDeletionRequestStatus.APPROVED) {
+      const retentionDays = Math.max(
+        1,
+        Math.min(
+          365,
+          Number(process.env.ACCOUNT_DELETION_RETENTION_DAYS ?? 30),
+        ),
+      );
+      request.status = CandidateDeletionRequestStatus.SCHEDULED;
+      request.scheduledFor = new Date(
+        Date.now() + retentionDays * 24 * 60 * 60 * 1000,
+      );
+    }
     request.reviewNote = dto.reviewNote?.trim() || null;
     request.reviewedByUserId = actor.id;
     const updated = await this.deletionRequestsRepository.save(request);

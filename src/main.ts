@@ -48,6 +48,7 @@ async function bootstrap(): Promise<void> {
       path === "/setup-superadmin" ||
       path.startsWith("/setup-superadmin/") ||
       path.startsWith("/share/") ||
+      path.startsWith("/companies/") ||
       path.startsWith("/pages/") ||
       path.startsWith("/jobs/categories/") ||
       path.startsWith("/jobs/locations/") ||

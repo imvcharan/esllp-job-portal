@@ -441,7 +441,11 @@ content snapshot; editors can inspect the recent 100 revisions and restore one
 without erasing newer history. Migrations
 `1729000000033-CreateContentEntries` and
 `1729000000035-CreateContentEntryRevisions` create the content and revision
-tables on application startup.
+tables on application startup. Migration
+`1729000000051-SeedDefaultFaqAndBlogContent` adds published starter FAQs and
+career/hiring articles when their slugs do not already exist. These entries are
+editable in the admin Website content page; the migration does not overwrite
+existing content.
 
 ## Production build
 

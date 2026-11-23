@@ -30,6 +30,8 @@ import { EmployerApplicationScorecard } from "./employer-application-scorecard.e
 import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
 import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
 import { InterviewReminderService } from "./interview-reminder.service";
+import { FeaturedJobPlacement } from "./featured-job-placement.entity";
+import { GoogleCalendarService } from "./google-calendar.service";
 
 @Module({
   imports: [
@@ -51,6 +53,7 @@ import { InterviewReminderService } from "./interview-reminder.service";
       EmployerSavedSearch,
       EmployerApplicationScorecard,
       CandidateApplicationDocument,
+      FeaturedJobPlacement,
     ]),
     AuthModule,
     AuditModule,
@@ -64,6 +67,6 @@ import { InterviewReminderService } from "./interview-reminder.service";
     RazorpayWebhookController,
     PublicCompanyPagesController,
   ],
-  providers: [EmployersService, EmployerApprovalGuard, InterviewReminderService],
+  providers: [EmployersService, EmployerApprovalGuard, InterviewReminderService, GoogleCalendarService],
 })
 export class EmployersModule {}
