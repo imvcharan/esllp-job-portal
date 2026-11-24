@@ -16,6 +16,13 @@ infrastructure have separate NestJS module boundaries, while deploying as one
 application. This keeps domain dependencies clearer without adding distributed
 service operations or changing API routes.
 
+## REST API versions
+
+Controller routes are available under `/api/v1` for versioned clients. Existing
+unversioned `/api` routes remain available as a compatibility alias, so current
+clients do not need to migrate immediately. New API changes should preserve the
+v1 contract or introduce a new explicit version before making breaking changes.
+
 ## One-host production deployment
 
 The repository includes Docker Compose for the application, PostgreSQL, Redis,

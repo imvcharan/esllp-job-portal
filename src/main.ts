@@ -9,6 +9,7 @@ import helmet from "helmet";
 import { RequestMethod } from "@nestjs/common";
 import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
+import { API_VERSIONING_OPTIONS } from "./api-versioning";
 import { createRequestContextMiddleware } from "./audit/request-context.middleware";
 
 async function bootstrap(): Promise<void> {
@@ -119,6 +120,7 @@ async function bootstrap(): Promise<void> {
       { path: "robots.txt", method: RequestMethod.GET },
     ],
   });
+  app.enableVersioning(API_VERSIONING_OPTIONS);
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
