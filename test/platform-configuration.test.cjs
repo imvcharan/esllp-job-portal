@@ -329,6 +329,7 @@ test("employer job publication follows the configured moderation gate", async ()
       },
       assertJobQuota: async () => undefined,
       jobsService: {
+        syncSearchIndex: async () => undefined,
         notifyMatchingCandidates: async () => ({ queued: 0, failed: 0 }),
       },
       auditService: { record: async () => undefined },

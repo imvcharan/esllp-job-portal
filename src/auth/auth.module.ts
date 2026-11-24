@@ -23,6 +23,7 @@ import {
   SuperadminMfaRecoveryCode,
 } from "./superadmin-mfa.entity";
 import { SuperadminMfaService } from "./superadmin-mfa.service";
+import { InfrastructureModule } from "../infrastructure/infrastructure.module";
 
 const localDevelopmentSecret =
   "local-development-only-secret-change-before-deploying-2026";
@@ -50,6 +51,7 @@ const localDevelopmentSecret =
     PlatformConfigurationModule,
     NotificationsModule,
     TwilioConfigurationModule,
+    InfrastructureModule,
   ],
   controllers: [AuthController],
   providers: [

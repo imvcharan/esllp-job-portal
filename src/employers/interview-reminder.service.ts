@@ -8,6 +8,7 @@ import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { EmailDeliveryService } from "../auth/email-delivery.service";
 import { WhatsAppDeliveryService } from "../providers/whatsapp-delivery.service";
+import { JobQueueService } from "../infrastructure/job-queue.service";
 
 interface UpcomingInterviewReminder {
   id: number;
@@ -34,17 +35,40 @@ export class InterviewReminderService implements OnModuleInit, OnModuleDestroy {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly emailDelivery: EmailDeliveryService,
     private readonly whatsappDelivery: WhatsAppDeliveryService,
+    private readonly queues: JobQueueService | null = null,
   ) {}
 
   onModuleInit(): void {
+    if (this.queues?.enabled) {
+      this.queues.registerWorker("interview-reminders", async () =>
+        this.enqueueUpcomingReminders(),
+      );
+      void this.queues?.add("interview-reminders", "scan-upcoming", {});
+    }
     this.worker = setInterval(() => {
-      void this.enqueueUpcomingReminders().catch((error: unknown) => {
-        this.logger.error(
-          `Interview reminder scan failed: ${
-            error instanceof Error ? error.message : "unknown database error"
-          }`,
-        );
-      });
+      if (this.queues?.ready) {
+        void this.queues
+          .add("interview-reminders", "scan-upcoming", {})
+          .then((queued) => {
+            if (!queued) return this.enqueueUpcomingReminders();
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            this.logger.error(
+              `Interview reminder queue failed: ${
+                error instanceof Error ? error.message : "unknown queue error"
+              }`,
+            );
+          });
+      } else {
+        void this.enqueueUpcomingReminders().catch((error: unknown) => {
+          this.logger.error(
+            `Interview reminder scan failed: ${
+              error instanceof Error ? error.message : "unknown database error"
+            }`,
+          );
+        });
+      }
     }, 60_000);
     this.worker.unref();
     void this.enqueueUpcomingReminders().catch((error: unknown) => {

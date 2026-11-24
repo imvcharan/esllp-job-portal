@@ -108,6 +108,7 @@ import { PaymentCoupon } from "./payments/payment-coupon.entity";
 import { PaymentRefund } from "./payments/payment-refund.entity";
 import { PaymentInvoice } from "./payments/payment-invoice.entity";
 import { FeaturedJobPlacement } from "./employers/featured-job-placement.entity";
+import { InfrastructureModule } from "./infrastructure/infrastructure.module";
 
 @Module({
   controllers: [HealthController],
@@ -224,6 +225,7 @@ import { FeaturedJobPlacement } from "./employers/featured-job-placement.entity"
     ReportsModule,
     PaymentsModule,
     ContentModule,
+    InfrastructureModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

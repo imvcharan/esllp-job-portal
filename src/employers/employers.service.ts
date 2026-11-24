@@ -638,6 +638,7 @@ export class EmployersService {
       if (readinessError) throw new BadRequestException(readinessError);
     }
     const saved = await this.jobs.save(job);
+    await this.jobsService.syncSearchIndex(saved);
     await this.auditService.record({
       actorUserId: user.id,
       action: "employer.job_updated",
@@ -703,6 +704,7 @@ export class EmployersService {
         reviewRequired: job.moderationStatus === "pending_review",
         alertResult: { queued: 0, failed: 0 },
       };
+    await this.jobsService.syncSearchIndex(job);
     const alertResult = await this.jobsService.notifyMatchingCandidates(job);
     await this.auditService.record({
       actorUserId: user.id,
@@ -725,6 +727,7 @@ export class EmployersService {
     job.isActive = false;
     job.moderationStatus = "closed";
     const saved = await this.jobs.save(job);
+    await this.jobsService.syncSearchIndex(saved);
     await this.auditService.record({
       actorUserId: user.id,
       action: "employer.job_closed",

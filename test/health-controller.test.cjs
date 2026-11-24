@@ -41,3 +41,15 @@ test("readiness returns service unavailable when the database probe fails", asyn
 
   await assert.rejects(controller.getReadiness(), ServiceUnavailableException);
 });
+
+test("metrics report process health without database or secret details", () => {
+  const controller = new HealthController({ isInitialized: false });
+  const metrics = controller.getMetrics();
+
+  assert.equal(metrics.status, "ok");
+  assert.equal(typeof metrics.uptimeSeconds, "number");
+  assert.equal(metrics.process.pid, process.pid);
+  assert.equal(metrics.process.node, process.version);
+  assert.equal(typeof metrics.memory.rssBytes, "number");
+  assert.equal(typeof metrics.memory.heapUsedBytes, "number");
+});

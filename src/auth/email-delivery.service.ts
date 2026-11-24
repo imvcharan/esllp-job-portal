@@ -13,6 +13,7 @@ import {
   NotificationEmailTemplateKey,
   NotificationTemplatesService,
 } from "../notifications/notification-templates.service";
+import { JobQueueService } from "../infrastructure/job-queue.service";
 
 @Injectable()
 export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
@@ -27,6 +28,7 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly templates: NotificationTemplatesService,
+    private readonly queues: JobQueueService | null = null,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -41,6 +43,14 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
     `);
     await this.purgeExpiredFailedNotifications();
     this.lastFailedNotificationRetentionSweepAt = Date.now();
+    if (this.queues?.enabled) {
+      this.queues.registerWorker("notifications", async () =>
+        this.processPendingNotifications(10),
+      );
+      await Promise.resolve(
+        this.queues?.add("notifications", "drain-outbox", {}),
+      ).catch(() => false);
+    }
     this.worker = setInterval(() => {
       void this.processPendingNotifications().catch((error: unknown) => {
         this.logger.error(
@@ -63,14 +73,26 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
     link: string,
   ): Promise<void> {
     const key =
-      action === "verify your email" ? "account_verification" : "password_reset";
+      action === "verify your email"
+        ? "account_verification"
+        : "password_reset";
     const template = await this.templates.render(key, { link });
-    await this.send(email, template.subject, template.body, this.textToHtml(template.body));
+    await this.send(
+      email,
+      template.subject,
+      template.body,
+      this.textToHtml(template.body),
+    );
   }
 
   async sendLoginCode(email: string, code: string): Promise<void> {
     const template = await this.templates.render("login_code", { code });
-    await this.send(email, template.subject, template.body, this.textToHtml(template.body));
+    await this.send(
+      email,
+      template.subject,
+      template.body,
+      this.textToHtml(template.body),
+    );
   }
 
   async sendNotification(
@@ -101,6 +123,7 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
        ON CONFLICT (deduplication_key) DO NOTHING`,
       [deduplicationKey, email.trim(), subject.trim(), message],
     );
+    await this.queues?.add("notifications", "drain-outbox", {});
     return "queued";
   }
 

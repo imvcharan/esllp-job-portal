@@ -117,6 +117,7 @@
     .heading-actions { display: flex; align-items: center; gap: 9px; }
     .button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; color: #526074; background: #fff; font-size: 10px; font-weight: 700; transition: .18s ease; }
     .button:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(30, 50, 70, .08); }
+    .button:disabled, .button[aria-busy="true"] { cursor: wait; opacity: .62; transform: none; box-shadow: none; }
     .button-primary { border-color: var(--teal); color: #fff; background: var(--teal); }
     .button-primary:hover { border-color: var(--teal-dark); background: var(--teal-dark); }
     .button-danger { border-color: #f0ccd2; color: #a93148; background: #fff6f7; }

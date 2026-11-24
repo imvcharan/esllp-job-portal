@@ -15,14 +15,56 @@ async function bootstrap(): Promise<void> {
   if (
     process.env.NODE_ENV === "production" &&
     (!process.env.JWT_ACCESS_SECRET ||
-      process.env.JWT_ACCESS_SECRET.length < 32)
+      process.env.JWT_ACCESS_SECRET.length < 32 ||
+      /replace|example|change.?me|your.?secret/i.test(
+        process.env.JWT_ACCESS_SECRET,
+      ))
   ) {
     throw new Error(
-      "JWT_ACCESS_SECRET must be configured with at least 32 characters in production.",
+      "JWT_ACCESS_SECRET must be a unique, non-placeholder value of at least 32 characters in production.",
     );
+  }
+  if (process.env.NODE_ENV === "production") {
+    const warnings: string[] = [];
+    if (!process.env.PUBLIC_APP_URL?.trim()) {
+      warnings.push("PUBLIC_APP_URL");
+    }
+    if (
+      !process.env.SUPABASE_URL?.trim() ||
+      !process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    ) {
+      warnings.push("SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY");
+    }
+    if (!process.env.CLAMAV_HOST?.trim()) {
+      warnings.push("CLAMAV_HOST");
+    }
+    if (!process.env.SMTP_HOST?.trim() || !process.env.SMTP_FROM?.trim()) {
+      warnings.push("SMTP_HOST/SMTP_FROM");
+    }
+    if (
+      !process.env.RECAPTCHA_SITE_KEY?.trim() ||
+      !process.env.RECAPTCHA_SECRET_KEY?.trim()
+    ) {
+      warnings.push("RECAPTCHA_SITE_KEY/RECAPTCHA_SECRET_KEY");
+    }
+    if (warnings.length) {
+      console.warn(
+        `[configuration] Production capabilities are disabled or incomplete: ${warnings.join(", ")}`,
+      );
+    }
   }
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
+  });
+  app.use((_request: Request, response: Response, next: NextFunction) => {
+    response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    response.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=()",
+    );
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    next();
   });
   const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
   if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
@@ -47,6 +89,7 @@ async function bootstrap(): Promise<void> {
       path.startsWith("/admin/") ||
       path === "/setup-superadmin" ||
       path.startsWith("/setup-superadmin/") ||
+      path === "/health/metrics" ||
       path.startsWith("/share/") ||
       path.startsWith("/companies/") ||
       path.startsWith("/pages/") ||

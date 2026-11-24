@@ -29,6 +29,8 @@ import { CandidateApplication } from "../users/candidate-application.entity";
 import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
 import { Report, ReportTargetType } from "../reports/report.entity";
 import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
+import { RedisCacheService } from "../infrastructure/redis-cache.service";
+import { OpenSearchService } from "../infrastructure/open-search.service";
 
 @Injectable()
 export class JobsService {
@@ -47,6 +49,8 @@ export class JobsService {
     private readonly emailDelivery: EmailDeliveryService,
     private readonly savedSearchesService: CandidateSavedSearchesService,
     private readonly platformConfiguration: PlatformConfigurationService,
+    private readonly cache: RedisCacheService | null = null,
+    private readonly search: OpenSearchService | null = null,
   ) {}
 
   jobOptions() {
@@ -70,9 +74,31 @@ export class JobsService {
     freshnessDays?: number;
     sort?: string;
     skill?: string;
-  }) {
+  }): Promise<{
+    items: Job[];
+    total: number;
+    page: number;
+    limit: number;
+    companies: string[];
+  }> {
     const page = Math.min(1_000_000, Math.max(1, filters.page ?? 1));
     const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
+    const cacheKey = `public-jobs:${Buffer.from(JSON.stringify({ ...filters, page, limit })).toString("base64url")}`;
+    const cached = await this.cache?.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        await this.cache?.deleteByPrefix(cacheKey);
+      }
+    }
+    const searchIds =
+      filters.query || filters.location
+        ? ((await this.search?.searchIds({
+            query: filters.query,
+            location: filters.location,
+          })) ?? null)
+        : null;
     const queryBuilder = this.jobsRepository
       .createQueryBuilder("job")
       .where("job.isActive = :isActive", { isActive: true })
@@ -82,8 +108,20 @@ export class JobsService {
       .take(limit)
       .skip((page - 1) * limit);
 
+    if (searchIds !== null) {
+      if (!searchIds.length) {
+        const empty = { items: [], total: 0, page, limit, companies: [] };
+        await this.cache?.set(cacheKey, JSON.stringify(empty), 30);
+        return empty;
+      }
+      queryBuilder.andWhere("job.id IN (:...searchIds)", { searchIds });
+      queryBuilder.orderBy(
+        `array_position(ARRAY[${searchIds.join(",")}]::integer[], job.id)`,
+      );
+    }
+
     const query = filters.query?.trim();
-    if (query) {
+    if (query && searchIds === null) {
       queryBuilder.andWhere(
         new Brackets((where) => {
           where
@@ -103,7 +141,7 @@ export class JobsService {
     }
 
     const location = filters.location?.trim();
-    if (location) {
+    if (location && searchIds === null) {
       queryBuilder.andWhere("job.location ILIKE :location", {
         location: `%${location}%`,
       });
@@ -213,7 +251,7 @@ export class JobsService {
       queryBuilder
         .orderBy("job.title", "ASC")
         .addOrderBy("job.createdAt", "DESC");
-    } else {
+    } else if (searchIds === null) {
       queryBuilder.orderBy("job.createdAt", "DESC");
     }
 
@@ -227,13 +265,41 @@ export class JobsService {
       )
       .orderBy("job.company", "ASC")
       .getRawMany<{ company: string }>();
-    return {
+    const response = {
       items,
       total,
       page,
       limit,
       companies: companies.map(({ company }) => company),
     };
+    await this.cache?.set(cacheKey, JSON.stringify(response), 30);
+    return response;
+  }
+
+  private async refreshSearchInfrastructure(job: Job): Promise<void> {
+    await Promise.all([
+      Promise.resolve(this.search?.indexJob(job)).catch((error) =>
+        this.logger.warn(
+          `OpenSearch indexing failed for job ${job.id}: ${error instanceof Error ? error.message : "unknown error"}`,
+        ),
+      ),
+      Promise.resolve(this.cache?.deleteByPrefix("public-jobs:")),
+    ]);
+  }
+
+  async syncSearchIndex(job: Job): Promise<void> {
+    await this.refreshSearchInfrastructure(job);
+  }
+
+  private async removeSearchInfrastructure(jobId: number): Promise<void> {
+    await Promise.all([
+      Promise.resolve(this.search?.removeJob(jobId)).catch((error) =>
+        this.logger.warn(
+          `OpenSearch removal failed for job ${jobId}: ${error instanceof Error ? error.message : "unknown error"}`,
+        ),
+      ),
+      Promise.resolve(this.cache?.deleteByPrefix("public-jobs:")),
+    ]);
   }
 
   findAllForAdministration(): Promise<Job[]> {
@@ -304,6 +370,7 @@ export class JobsService {
         organizationId: employerOrganizationId,
       }),
     );
+    await this.refreshSearchInfrastructure(job);
     await this.auditService.record({
       actorUserId: actor.id,
       action: "job.created",
@@ -432,6 +499,7 @@ export class JobsService {
     if (dto.description !== undefined)
       job.description = dto.description?.trim() || null;
     const saved = await this.jobsRepository.save(job);
+    await this.refreshSearchInfrastructure(saved);
     await this.auditService.record({
       actorUserId: actor.id,
       action: "job.updated",
@@ -461,6 +529,7 @@ export class JobsService {
     job.isActive = false;
     job.moderationStatus = "closed";
     const archived = await this.jobsRepository.save(job);
+    await this.refreshSearchInfrastructure(archived);
     await this.auditService.record({
       actorUserId: actor.id,
       action: "job.archived",
@@ -495,6 +564,7 @@ export class JobsService {
       );
     }
     const saved = await this.jobsRepository.save(job);
+    await this.refreshSearchInfrastructure(saved);
     await this.auditService.record({
       actorUserId: actor.id,
       action: `job.moderation_${status}`,
@@ -558,6 +628,7 @@ export class JobsService {
         return deletedJob;
       },
     );
+    await this.removeSearchInfrastructure(id);
     return { success: true };
   }
 

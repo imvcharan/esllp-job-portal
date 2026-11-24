@@ -6,6 +6,98 @@ NestJS serves the homepage from `public/index.html`, the admin dashboard from `p
 
 - Node.js 20.9 or newer (Node.js 24.x is supported)
 - npm
+- Docker Engine with Docker Compose v2 for the bundled production stack
+
+## One-host production deployment
+
+The repository includes Docker Compose for the application, PostgreSQL, Redis,
+OpenSearch, ClamAV and Caddy HTTPS reverse proxy. This stack requires a
+Hostinger VPS (or another VPS with Docker and at least 8 GB RAM recommended).
+Hostinger shared/managed Node.js hosting cannot run this Compose stack; use
+separate managed Redis/OpenSearch services there and configure the application
+environment variables instead.
+
+1. Point the domain's DNS A record to the VPS IPv4 address. Allow inbound ports
+   80 and 443 in the VPS firewall.
+2. Install Docker Engine and Compose v2 on the VPS. Set
+   `vm.max_map_count=262144` on the host for OpenSearch.
+3. Clone the repository and create the private deployment file:
+
+   ```sh
+   cp .env.example .env
+   ```
+
+4. Edit `.env`: set `NODE_ENV=production`, `PUBLIC_APP_HOST`, `PUBLIC_APP_URL`,
+   strong unique PostgreSQL credentials, a random `JWT_ACCESS_SECRET` of at
+   least 32 characters, and the superadmin bootstrap credentials. Configure
+   SMTP, Supabase private storage and reCAPTCHA before public launch. Add any
+   Google, Razorpay and Twilio secrets needed by enabled features. Do not commit
+   `.env`.
+5. Validate and start the services:
+
+   ```sh
+   docker compose config --quiet
+   docker compose up -d --build
+   docker compose ps
+   docker compose logs --tail=100 app caddy
+   ```
+
+   Caddy obtains and renews HTTPS certificates automatically when public DNS
+   resolves to this VPS. The app runs schema migrations at startup. OpenSearch
+   creates its index and reindexes jobs on application startup.
+6. Configure encrypted/offsite backups. For a database dump:
+
+   ```sh
+   docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > esllp-postgres-backup.sql
+   ```
+
+   Store backups outside this VPS and test restores before launch. Also back up
+   candidate files from the private Supabase bucket; a database dump alone does
+   not include resumes or application documents.
+
+OpenSearch security is disabled only for the Compose deployment and its port is
+not published to the host; keep the Docker network private and do not publish
+Redis, PostgreSQL or OpenSearch ports. For separately hosted OpenSearch, enable
+provider authentication/TLS and set `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`,
+`OPENSEARCH_PASSWORD` and `OPENSEARCH_TLS_VERIFY=true`.
+
+## Production launch checklist
+
+Before exposing the service publicly, complete these checks. Optionally configure
+`REDIS_URL` for shared caching and BullMQ workers, and `OPENSEARCH_URL` for
+accelerated public job search. PostgreSQL remains the authoritative fallback.
+1. Set `NODE_ENV=production`, a unique `JWT_ACCESS_SECRET`, PostgreSQL SSL settings,
+   and `PUBLIC_APP_URL` to the canonical HTTPS origin.
+2. Configure private Supabase candidate storage and ClamAV. In production, resume
+   uploads intentionally fail closed until both are available.
+3. Configure SMTP for account verification and password recovery. SMTP failures
+   are retained in the notification outbox and can be retried from the admin
+   email-outbox screen.
+4. Configure reCAPTCHA and add all public hostnames to the Google reCAPTCHA
+   allowed-hostname list.
+5. Configure Google OAuth JavaScript origins for every deployed hostname.
+   Configure Google Calendar credentials separately for interview Meet events.
+6. Configure Razorpay live keys, webhook secrets and the live plan catalog. Verify
+   a real low-value payment and the corresponding webhook before launch.
+7. Configure Twilio only after validating SMS and WhatsApp consent flows.
+8. Configure `TRUST_PROXY_HOPS` to the exact reverse-proxy count, not an arbitrary
+   value. Keep it at `0` when the application is directly exposed.
+9. Configure database backups and object-storage lifecycle policies in the
+   provider. Perform and document a database restore plus a private-object restore
+   test before accepting production users.
+10. Monitor `/api/health/live`, `/api/health/ready`, and `/api/health/metrics`.
+   Alert on readiness failures, worker delivery failures, payment failures,
+   database growth and sustained memory/CPU pressure.
+11. Run `npm test` and perform a staged browser test for candidate registration,
+    employer approval, job publication, application submission, interview
+    scheduling and account deletion.
+
+The database notification and interview workers use PostgreSQL row locks and
+restart recovery as fallbacks. When `REDIS_URL` is configured, BullMQ workers
+drain notifications and interview-reminder schedules with retries and
+concurrency controls. Public job caching also uses Redis and OpenSearch when
+their environment variables are configured. PostgreSQL search and the database
+outboxes remain the authoritative fallbacks.
 
 ## Local PostgreSQL database (Windows)
 

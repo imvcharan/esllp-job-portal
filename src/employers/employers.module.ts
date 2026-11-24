@@ -32,6 +32,7 @@ import { PlatformConfigurationModule } from "../platform-config/platform-configu
 import { InterviewReminderService } from "./interview-reminder.service";
 import { FeaturedJobPlacement } from "./featured-job-placement.entity";
 import { GoogleCalendarService } from "./google-calendar.service";
+import { InfrastructureModule } from "../infrastructure/infrastructure.module";
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { GoogleCalendarService } from "./google-calendar.service";
     CandidateProfileModule,
     PaymentsModule,
     PlatformConfigurationModule,
+    InfrastructureModule,
   ],
   controllers: [
     EmployersController,
