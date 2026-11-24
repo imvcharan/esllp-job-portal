@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import mammoth from "mammoth";
@@ -21,6 +22,7 @@ import {
 } from "./dto/update-candidate-profile.dto";
 import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
 import { extractResumeSuggestions } from "./resume-suggestions";
+import { OpenSearchService } from "../infrastructure/open-search.service";
 
 @Injectable()
 export class CandidateProfileService {
@@ -37,6 +39,7 @@ export class CandidateProfileService {
     private readonly resumeVersionsRepository: Repository<CandidateResumeVersion>,
     private readonly auditService: AuditService,
     private readonly platformConfiguration: PlatformConfigurationService,
+    @Optional() private readonly search: OpenSearchService | null = null,
   ) {}
 
   async get(user: AuthenticatedUser) {
@@ -256,6 +259,7 @@ export class CandidateProfileService {
         profile.onboardingStep = dto.onboardingStep;
       }
       await profiles.save(profile);
+      await this.search?.indexCandidate(user.id, manager);
       if (dto.whatsappInterviewReminders === false)
         await manager.query(
           `UPDATE whatsapp_notification_outbox

@@ -5,8 +5,12 @@ const { test } = require("node:test");
 const { EmployersService } = require("../dist/employers/employers.service.js");
 const { CreateJobDto } = require("../dist/jobs/dto/create-job.dto.js");
 const { normalizeJobSkills } = require("../dist/jobs/job.constants.js");
-const { BulkCreateEmployerJobsDto } = require("../dist/employers/dto/employer-job.dto.js");
-const { OrganizationMemberRole } = require("../dist/employers/organization-member.entity.js");
+const {
+  BulkCreateEmployerJobsDto,
+} = require("../dist/employers/dto/employer-job.dto.js");
+const {
+  OrganizationMemberRole,
+} = require("../dist/employers/organization-member.entity.js");
 
 test("bulk job DTO validates nested jobs and enforces the 50-job limit", async () => {
   const valid = plainToInstance(BulkCreateEmployerJobsDto, {
@@ -20,7 +24,9 @@ test("bulk job DTO validates nested jobs and enforces the 50-job limit", async (
       location: "Remote",
     })),
   });
-  assert.ok((await validate(invalid)).some((error) => error.property === "jobs"));
+  assert.ok(
+    (await validate(invalid)).some((error) => error.property === "jobs"),
+  );
 
   const invalidNestedJob = plainToInstance(BulkCreateEmployerJobsDto, {
     jobs: [{ title: "Developer", location: "Remote", unexpected: true }],
@@ -62,7 +68,9 @@ test("job DTOs validate skill limits and normalization removes duplicates", asyn
     skills: Array.from({ length: 31 }, (_, index) => `Skill ${index}`),
   });
   assert.ok(
-    (await validate(tooManySkills)).some((error) => error.property === "skills"),
+    (await validate(tooManySkills)).some(
+      (error) => error.property === "skills",
+    ),
   );
   assert.deepEqual(
     normalizeJobSkills([" JavaScript ", "javascript", "", "SQL"]),
@@ -91,6 +99,7 @@ test("bulk job creation saves private tenant-owned drafts and audits each row tr
   service.getContext = async () => context;
   service.requireRole = () => {};
   service.platformConfiguration = { assertTaxonomyValue: async () => {} };
+  service.jobsService = { syncSearchIndex: async () => {} };
   service.dataSource = {
     transaction: async (callback) => callback(transactionManager),
   };

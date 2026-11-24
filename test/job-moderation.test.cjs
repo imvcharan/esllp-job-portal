@@ -6,9 +6,18 @@ const { JobsService } = require("../dist/jobs/jobs.service.js");
 function createService(job) {
   const audits = [];
   const service = Object.create(JobsService.prototype);
-  service.jobsRepository = {
+  const repository = {
     findOneBy: async () => job,
     save: async (value) => value,
+  };
+  const transactionManager = {
+    getRepository: () => repository,
+  };
+  service.jobsRepository = {
+    ...repository,
+    manager: {
+      transaction: async (callback) => callback(transactionManager),
+    },
   };
   service.auditService = {
     record: async (entry) => audits.push(entry),
@@ -39,7 +48,10 @@ test("admin approval activates a valid job, notifies once, and records the reaso
   assert.equal(job.moderationStatus, "approved");
   assert.deepEqual(result.notificationDelivery, { queued: 3, failed: 0 });
   assert.equal(audits[0].action, "job.moderation_approved");
-  assert.equal(audits[0].details.reason, "Employer and listing details reviewed.");
+  assert.equal(
+    audits[0].details.reason,
+    "Employer and listing details reviewed.",
+  );
 });
 
 test("rejection disables a job without notifying candidates", async () => {

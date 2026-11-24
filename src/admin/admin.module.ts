@@ -44,6 +44,7 @@ import { NotificationsModule } from "../notifications/notifications.module";
 import { AdminNotificationTemplatesController } from "./admin-notification-templates.controller";
 import { AdminTwilioConfigurationController } from "../providers/admin-twilio-configuration.controller";
 import { TwilioConfigurationModule } from "../providers/twilio-configuration.module";
+import { InfrastructureModule } from "../infrastructure/infrastructure.module";
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { TwilioConfigurationModule } from "../providers/twilio-configuration.mod
     PlatformConfigurationModule,
     NotificationsModule,
     TwilioConfigurationModule,
+    InfrastructureModule,
   ],
   controllers: [
     AdminUsersController,

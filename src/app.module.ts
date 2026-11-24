@@ -104,6 +104,7 @@ import { CandidateQuickApplyPreferences1729000000049 } from "./database/migratio
 import { WhatsAppInterviewReminders1729000000050 } from "./database/migrations/1729000000050-WhatsAppInterviewReminders";
 import { SeedDefaultFaqAndBlogContent1729000000051 } from "./database/migrations/1729000000051-SeedDefaultFaqAndBlogContent";
 import { CommercialControlsAndRetention1729000000052 } from "./database/migrations/1729000000052-CommercialControlsAndRetention";
+import { SearchIndexOutbox1729000000053 } from "./database/migrations/1729000000053-SearchIndexOutbox";
 import { PaymentCoupon } from "./payments/payment-coupon.entity";
 import { PaymentRefund } from "./payments/payment-refund.entity";
 import { PaymentInvoice } from "./payments/payment-invoice.entity";
@@ -213,6 +214,7 @@ import { InfrastructureModule } from "./infrastructure/infrastructure.module";
         WhatsAppInterviewReminders1729000000050,
         SeedDefaultFaqAndBlogContent1729000000051,
         CommercialControlsAndRetention1729000000052,
+        SearchIndexOutbox1729000000053,
       ],
       migrationsRun: true,
       synchronize: false,

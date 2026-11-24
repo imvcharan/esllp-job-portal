@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { IsNull, Repository } from "typeorm";
@@ -33,6 +34,7 @@ import {
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
 import { CreateManagedUserDto } from "./dto/create-managed-user.dto";
+import { OpenSearchService } from "../infrastructure/open-search.service";
 
 type SafeUser = Pick<
   User,
@@ -57,6 +59,7 @@ export class AdminUsersService {
     private readonly usersRepository: Repository<User>,
     private readonly auditService: AuditService,
     private readonly candidateFileStorage: CandidateFileStorageService,
+    @Optional() private readonly search: OpenSearchService | null = null,
   ) {}
 
   async list(
@@ -209,160 +212,161 @@ export class AdminUsersService {
       );
     }
 
-    const deletedUser = await this.usersRepository.manager.transaction(
-      async (manager) => {
-        const users = manager.getRepository(User);
-        const user = await users.findOne({
-          where: { id: targetUserId },
-          lock: { mode: "pessimistic_write" },
+    await this.usersRepository.manager.transaction(async (manager) => {
+      const users = manager.getRepository(User);
+      const user = await users.findOne({
+        where: { id: targetUserId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!user) {
+        throw new NotFoundException("User was not found");
+      }
+      if (user.role === UserRole.SUPERADMIN && user.isActive) {
+        const activeSuperadmins = await users.countBy({
+          role: UserRole.SUPERADMIN,
+          isActive: true,
         });
-        if (!user) {
-          throw new NotFoundException("User was not found");
-        }
-        if (user.role === UserRole.SUPERADMIN && user.isActive) {
-          const activeSuperadmins = await users.countBy({
-            role: UserRole.SUPERADMIN,
-            isActive: true,
-          });
-          if (activeSuperadmins <= 1) {
-            throw new BadRequestException(
-              "The last active superadmin cannot be permanently deleted.",
-            );
-          }
-        }
-
-        const [
-          applications,
-          applicationMessages,
-          applicationStatusHistory,
-          jobs,
-          savedJobs,
-          savedSearches,
-          candidateProfiles,
-          employerMemberships,
-          invitations,
-          interviews,
-          applicationNotes,
-          applicationTags,
-          notifications,
-          deletionRequests,
-          reports,
-          premiumOrders,
-        ] = await Promise.all([
-          manager
-            .getRepository(CandidateApplication)
-            .countBy({ userId: targetUserId }),
-          manager
-            .getRepository(CandidateApplicationMessage)
-            .countBy({ senderUserId: targetUserId }),
-          manager
-            .getRepository(CandidateApplicationStatus)
-            .countBy({ changedByUserId: targetUserId }),
-          manager.getRepository(Job).countBy({ employerUserId: targetUserId }),
-          manager
-            .getRepository(CandidateSavedJob)
-            .countBy({ userId: targetUserId }),
-          manager
-            .getRepository(CandidateSavedSearch)
-            .countBy({ userId: targetUserId }),
-          manager
-            .getRepository(CandidateProfile)
-            .countBy({ userId: targetUserId }),
-          manager
-            .getRepository(EmployerOrganizationMember)
-            .countBy({ userId: targetUserId }),
-          manager
-            .getRepository(EmployerOrganizationMember)
-            .countBy({ invitedByUserId: targetUserId }),
-          manager
-            .getRepository(EmployerInterview)
-            .countBy({ scheduledByUserId: targetUserId }),
-          manager
-            .getRepository(EmployerApplicationNote)
-            .countBy({ authorUserId: targetUserId }),
-          manager
-            .getRepository(EmployerApplicationTag)
-            .countBy({ createdByUserId: targetUserId }),
-          manager
-            .getRepository(UserNotification)
-            .countBy({ userId: targetUserId }),
-          manager.getRepository(CandidateDeletionRequest).findOne({
-            where: [
-              { requesterUserId: targetUserId },
-              { reviewedByUserId: targetUserId },
-            ],
-          }),
-          manager.getRepository(Report).findOne({
-            where: [
-              { reporterUserId: targetUserId },
-              { resolvedByUserId: targetUserId },
-              { targetType: ReportTargetType.USER, targetId: targetUserId },
-            ],
-          }),
-          manager
-            .getRepository(CandidatePremiumOrder)
-            .countBy({ userId: targetUserId }),
-        ]);
-        const linkedRecordLabels = [
-          applications && "candidate applications",
-          applicationMessages && "application messages",
-          applicationStatusHistory && "application status history",
-          jobs && "job listings",
-          savedJobs && "saved jobs",
-          savedSearches && "saved searches",
-          candidateProfiles && "candidate profile data",
-          employerMemberships && "employer organization memberships",
-          invitations && "employer invitations",
-          interviews && "interviews",
-          applicationNotes && "application notes",
-          applicationTags && "application tags",
-          notifications && "notifications",
-          deletionRequests && "privacy requests",
-          reports && "moderation reports",
-          premiumOrders && "candidate premium orders",
-        ].filter((label): label is string => Boolean(label));
-        if (linkedRecordLabels.length) {
-          throw new ConflictException(
-            `This account has linked ${linkedRecordLabels[0]} and cannot be permanently deleted. Deactivate it instead to preserve history.`,
+        if (activeSuperadmins <= 1) {
+          throw new BadRequestException(
+            "The last active superadmin cannot be permanently deleted.",
           );
         }
+      }
 
-        if (user.role === UserRole.CANDIDATE) {
-          const [applicationDocuments, resumeVersions] = await Promise.all([
-            manager.getRepository(CandidateApplicationDocument).find({
-              where: { userId: targetUserId },
-              select: { filePath: true },
-            }),
-            manager.getRepository(CandidateResumeVersion).find({
-              where: { userId: targetUserId },
-              select: { storagePath: true },
-            }),
-          ]);
-          const filePaths = [
-            ...new Set([
-              ...applicationDocuments.map(({ filePath }) => filePath),
-              ...resumeVersions.map(({ storagePath }) => storagePath),
-            ]),
-          ];
-          await this.candidateFileStorage.removeMany(filePaths);
-        }
-
-        const deletedUser = { email: user.email, role: user.role };
-        await this.auditService.record(
-          {
-            actorUserId,
-            action: "user.permanently_deleted",
-            targetType: "user",
-            targetId: targetUserId,
-            details: { ...deletedUser, reason: actionReason },
-            ipAddress,
-          },
-          manager,
+      const [
+        applications,
+        applicationMessages,
+        applicationStatusHistory,
+        jobs,
+        savedJobs,
+        savedSearches,
+        candidateProfiles,
+        employerMemberships,
+        invitations,
+        interviews,
+        applicationNotes,
+        applicationTags,
+        notifications,
+        deletionRequests,
+        reports,
+        premiumOrders,
+      ] = await Promise.all([
+        manager
+          .getRepository(CandidateApplication)
+          .countBy({ userId: targetUserId }),
+        manager
+          .getRepository(CandidateApplicationMessage)
+          .countBy({ senderUserId: targetUserId }),
+        manager
+          .getRepository(CandidateApplicationStatus)
+          .countBy({ changedByUserId: targetUserId }),
+        manager.getRepository(Job).countBy({ employerUserId: targetUserId }),
+        manager
+          .getRepository(CandidateSavedJob)
+          .countBy({ userId: targetUserId }),
+        manager
+          .getRepository(CandidateSavedSearch)
+          .countBy({ userId: targetUserId }),
+        manager
+          .getRepository(CandidateProfile)
+          .countBy({ userId: targetUserId }),
+        manager
+          .getRepository(EmployerOrganizationMember)
+          .countBy({ userId: targetUserId }),
+        manager
+          .getRepository(EmployerOrganizationMember)
+          .countBy({ invitedByUserId: targetUserId }),
+        manager
+          .getRepository(EmployerInterview)
+          .countBy({ scheduledByUserId: targetUserId }),
+        manager
+          .getRepository(EmployerApplicationNote)
+          .countBy({ authorUserId: targetUserId }),
+        manager
+          .getRepository(EmployerApplicationTag)
+          .countBy({ createdByUserId: targetUserId }),
+        manager
+          .getRepository(UserNotification)
+          .countBy({ userId: targetUserId }),
+        manager.getRepository(CandidateDeletionRequest).findOne({
+          where: [
+            { requesterUserId: targetUserId },
+            { reviewedByUserId: targetUserId },
+          ],
+        }),
+        manager.getRepository(Report).findOne({
+          where: [
+            { reporterUserId: targetUserId },
+            { resolvedByUserId: targetUserId },
+            { targetType: ReportTargetType.USER, targetId: targetUserId },
+          ],
+        }),
+        manager
+          .getRepository(CandidatePremiumOrder)
+          .countBy({ userId: targetUserId }),
+      ]);
+      const linkedRecordLabels = [
+        applications && "candidate applications",
+        applicationMessages && "application messages",
+        applicationStatusHistory && "application status history",
+        jobs && "job listings",
+        savedJobs && "saved jobs",
+        savedSearches && "saved searches",
+        candidateProfiles && "candidate profile data",
+        employerMemberships && "employer organization memberships",
+        invitations && "employer invitations",
+        interviews && "interviews",
+        applicationNotes && "application notes",
+        applicationTags && "application tags",
+        notifications && "notifications",
+        deletionRequests && "privacy requests",
+        reports && "moderation reports",
+        premiumOrders && "candidate premium orders",
+      ].filter((label): label is string => Boolean(label));
+      if (linkedRecordLabels.length) {
+        throw new ConflictException(
+          `This account has linked ${linkedRecordLabels[0]} and cannot be permanently deleted. Deactivate it instead to preserve history.`,
         );
-        await users.delete(targetUserId);
-        return deletedUser;
-      },
-    );
+      }
+
+      if (user.role === UserRole.CANDIDATE) {
+        const [applicationDocuments, resumeVersions] = await Promise.all([
+          manager.getRepository(CandidateApplicationDocument).find({
+            where: { userId: targetUserId },
+            select: { filePath: true },
+          }),
+          manager.getRepository(CandidateResumeVersion).find({
+            where: { userId: targetUserId },
+            select: { storagePath: true },
+          }),
+        ]);
+        const filePaths = [
+          ...new Set([
+            ...applicationDocuments.map(({ filePath }) => filePath),
+            ...resumeVersions.map(({ storagePath }) => storagePath),
+          ]),
+        ];
+        await this.candidateFileStorage.removeMany(filePaths);
+      }
+
+      const deletedUser = { email: user.email, role: user.role };
+      await this.auditService.record(
+        {
+          actorUserId,
+          action: "user.permanently_deleted",
+          targetType: "user",
+          targetId: targetUserId,
+          details: { ...deletedUser, reason: actionReason },
+          ipAddress,
+        },
+        manager,
+      );
+      if (user.role === UserRole.CANDIDATE) {
+        await this.search?.removeCandidate(targetUserId, manager);
+      }
+      await users.delete(targetUserId);
+      return deletedUser;
+    });
     return { success: true };
   }
 
@@ -417,7 +421,14 @@ export class AdminUsersService {
               { revokedAt: new Date() },
             );
         }
-        return { saved: await users.save(user), previousRole };
+        const saved = await users.save(user);
+        if (
+          previousRole === UserRole.CANDIDATE ||
+          role === UserRole.CANDIDATE
+        ) {
+          await this.search?.indexCandidate(targetUserId, manager);
+        }
+        return { saved, previousRole };
       });
     await this.auditService.record({
       actorUserId,
@@ -469,7 +480,11 @@ export class AdminUsersService {
               { revokedAt: new Date() },
             );
         }
-        return { saved: await users.save(user), previousStatus };
+        const saved = await users.save(user);
+        if (saved.role === UserRole.CANDIDATE && previousStatus !== isActive) {
+          await this.search?.indexCandidate(targetUserId, manager);
+        }
+        return { saved, previousStatus };
       });
     await this.auditService.record({
       actorUserId,

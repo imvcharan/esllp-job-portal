@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -17,6 +18,7 @@ import {
 } from "node:crypto";
 import {
   DataSource,
+  EntityManager,
   IsNull,
   MoreThan,
   QueryFailedError,
@@ -73,6 +75,7 @@ import {
 } from "../jobs/job.constants";
 import { FeaturedJobPlacement } from "./featured-job-placement.entity";
 import { GoogleCalendarService } from "./google-calendar.service";
+import { OpenSearchService } from "../infrastructure/open-search.service";
 
 const PLAN_LIMITS = {
   free: { activeJobs: 1, seats: 1, resumeCredits: 0 },
@@ -160,6 +163,7 @@ export class EmployersService {
     private readonly razorpayConfiguration: RazorpayConfigurationService,
     private readonly platformConfiguration: PlatformConfigurationService,
     private readonly googleCalendar: GoogleCalendarService,
+    @Optional() private readonly search: OpenSearchService | null = null,
   ) {}
 
   async listOrganizations(user: AuthenticatedUser) {
@@ -226,13 +230,26 @@ export class EmployersService {
       context.organization.companySize = dto.companySize || null;
     if (dto.description !== undefined)
       context.organization.description = dto.description?.trim() || null;
-    const saved = await this.organizations.save(context.organization);
-    if (dto.name !== undefined) {
-      await this.jobs.update(
-        { organizationId: saved.id },
-        { company: saved.name },
-      );
-    }
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const savedOrganization = await manager
+        .getRepository(EmployerOrganization)
+        .save(context.organization);
+      if (dto.name !== undefined) {
+        const jobs = manager.getRepository(Job);
+        const organizationJobs = await jobs.findBy({
+          organizationId: savedOrganization.id,
+        });
+        await jobs.update(
+          { organizationId: savedOrganization.id },
+          { company: savedOrganization.name },
+        );
+        for (const job of organizationJobs) {
+          job.company = savedOrganization.name;
+          await this.jobsService.syncSearchIndex(job, manager);
+        }
+      }
+      return savedOrganization;
+    });
     await this.auditService.record({
       actorUserId: user.id,
       action: "employer.company_updated",
@@ -249,9 +266,8 @@ export class EmployersService {
       organizationId,
       true,
     );
-    const employerApprovalRequired = (
-      await this.platformConfiguration.get()
-    ).employerApprovalRequired;
+    const employerApprovalRequired = (await this.platformConfiguration.get())
+      .employerApprovalRequired;
     const jobs = await this.jobs
       .createQueryBuilder("job")
       .where("job.organizationId = :organizationId", {
@@ -273,15 +289,16 @@ export class EmployersService {
         ) THEN 'offer_expired'
         ELSE application.status
       END`;
-    const stageCounts = canViewHiringPipeline && jobIds.length
-      ? await this.applications
-          .createQueryBuilder("application")
-          .select(pipelineStage, "status")
-          .addSelect("COUNT(*)", "count")
-          .where("application.jobId IN (:...jobIds)", { jobIds })
-          .groupBy(pipelineStage)
-          .getRawMany<{ status: string; count: string }>()
-      : [];
+    const stageCounts =
+      canViewHiringPipeline && jobIds.length
+        ? await this.applications
+            .createQueryBuilder("application")
+            .select(pipelineStage, "status")
+            .addSelect("COUNT(*)", "count")
+            .where("application.jobId IN (:...jobIds)", { jobIds })
+            .groupBy(pipelineStage)
+            .getRawMany<{ status: string; count: string }>()
+        : [];
     const recentApplications =
       canViewHiringPipeline &&
       jobIds.length &&
@@ -415,9 +432,14 @@ export class EmployersService {
       employmentType: dto.employmentType ?? "full-time",
       workplaceType: dto.workplaceType ?? "onsite",
     });
-    const job = await this.jobs.save(
-      this.createJobDraft(this.jobs, user, context, dto),
-    );
+    const job = await this.dataSource.transaction(async (manager) => {
+      const jobs = manager.getRepository(Job);
+      const created = await jobs.save(
+        this.createJobDraft(jobs, user, context, dto),
+      );
+      await this.jobsService.syncSearchIndex(created, manager);
+      return created;
+    });
     await this.auditService.record({
       actorUserId: user.id,
       action: "employer.job_created",
@@ -452,6 +474,7 @@ export class EmployersService {
         const job = await jobs.save(
           this.createJobDraft(jobs, user, context, dto),
         );
+        await this.jobsService.syncSearchIndex(job, manager);
         await this.auditService.record(
           {
             actorUserId: user.id,
@@ -593,12 +616,9 @@ export class EmployersService {
     );
     if (dto.title !== undefined) job.title = dto.title.trim();
     if (dto.location !== undefined) job.location = dto.location.trim();
-    if (dto.category !== undefined)
-      job.category = dto.category?.trim() || null;
-    if (dto.industry !== undefined)
-      job.industry = dto.industry?.trim() || null;
-    if (dto.skills !== undefined)
-      job.skills = normalizeJobSkills(dto.skills);
+    if (dto.category !== undefined) job.category = dto.category?.trim() || null;
+    if (dto.industry !== undefined) job.industry = dto.industry?.trim() || null;
+    if (dto.skills !== undefined) job.skills = normalizeJobSkills(dto.skills);
     if (dto.workplaceType !== undefined)
       job.workplaceType = dto.workplaceType.trim();
     if (dto.employmentType !== undefined)
@@ -637,8 +657,11 @@ export class EmployersService {
       const readinessError = jobPublicationError(job);
       if (readinessError) throw new BadRequestException(readinessError);
     }
-    const saved = await this.jobs.save(job);
-    await this.jobsService.syncSearchIndex(saved);
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const updated = await manager.getRepository(Job).save(job);
+      await this.jobsService.syncSearchIndex(updated, manager);
+      return updated;
+    });
     await this.auditService.record({
       actorUserId: user.id,
       action: "employer.job_updated",
@@ -695,7 +718,9 @@ export class EmployersService {
           job.moderationNote = null;
           job.isActive = false;
         }
-        return { job: await jobs.save(job), published: true };
+        const publishedJob = await jobs.save(job);
+        await this.jobsService.syncSearchIndex(publishedJob, manager);
+        return { job: publishedJob, published: true };
       },
     );
     if (!published || !job.isActive)
@@ -704,7 +729,6 @@ export class EmployersService {
         reviewRequired: job.moderationStatus === "pending_review",
         alertResult: { queued: 0, failed: 0 },
       };
-    await this.jobsService.syncSearchIndex(job);
     const alertResult = await this.jobsService.notifyMatchingCandidates(job);
     await this.auditService.record({
       actorUserId: user.id,
@@ -723,16 +747,25 @@ export class EmployersService {
   ) {
     const context = await this.getContext(user.id, organizationId);
     this.requireRole(context.membership, JOB_MANAGERS);
-    const job = await this.findOrganizationJob(jobId, context.organization.id);
-    job.isActive = false;
-    job.moderationStatus = "closed";
-    const saved = await this.jobs.save(job);
-    await this.jobsService.syncSearchIndex(saved);
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const jobs = manager.getRepository(Job);
+      const job = await jobs.findOneBy({
+        id: jobId,
+        organizationId: context.organization.id,
+      });
+      if (!job)
+        throw new NotFoundException("Job was not found in this company.");
+      job.isActive = false;
+      job.moderationStatus = "closed";
+      const closed = await jobs.save(job);
+      await this.jobsService.syncSearchIndex(closed, manager);
+      return closed;
+    });
     await this.auditService.record({
       actorUserId: user.id,
       action: "employer.job_closed",
       targetType: "job",
-      targetId: job.id,
+      targetId: saved.id,
       details: { organizationId: context.organization.id },
     });
     return saved;
@@ -1073,6 +1106,22 @@ export class EmployersService {
     this.requireRole(context.membership, APPLICATION_MANAGERS);
     const page = Math.min(1_000_000, Math.max(1, requestedPage));
     const limit = Math.min(50, Math.max(1, requestedLimit));
+    if (typeof query !== "string") {
+      throw new BadRequestException("Candidate search must be text.");
+    }
+    if (query.length > 500) {
+      throw new BadRequestException(
+        "Candidate search must be 500 characters or fewer.",
+      );
+    }
+    const searchTerm = query.trim();
+    const compiledSearch = searchTerm
+      ? compileCandidateSearchQuery(searchTerm)
+      : null;
+    const candidateSearchIds =
+      searchTerm && this.search
+        ? await this.search.searchCandidateIds(searchTerm)
+        : null;
     const builder = this.candidateProfiles
       .createQueryBuilder("profile")
       .innerJoinAndSelect("profile.user", "candidate")
@@ -1088,10 +1137,17 @@ export class EmployersService {
       )
       .addOrderBy("profile.premiumBoostUntil", "DESC", "NULLS LAST")
       .addOrderBy("profile.updatedAt", "DESC");
-    const searchTerm = query.trim().slice(0, 500);
-    if (searchTerm) {
-      const compiled = compileCandidateSearchQuery(searchTerm);
-      if (compiled) builder.andWhere(compiled.expression, compiled.parameters);
+    if (compiledSearch) {
+      builder.andWhere(compiledSearch.expression, compiledSearch.parameters);
+    }
+    if (candidateSearchIds !== null) {
+      if (candidateSearchIds.length) {
+        builder.andWhere("profile.userId IN (:...candidateSearchIds)", {
+          candidateSearchIds,
+        });
+      } else {
+        builder.andWhere("1 = 0");
+      }
     }
     const [profiles, total] = await builder
       .skip((page - 1) * limit)
@@ -1896,9 +1952,15 @@ export class EmployersService {
           {
             organizationName: context.organization.name,
             jobTitle: application.job.title,
-            startsAt: startsAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-            meetingUrl: interview.meetingUrl ? ` Join here: ${interview.meetingUrl}` : "",
-            location: interview.location ? ` Location: ${interview.location}` : "",
+            startsAt: startsAt.toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
+            }),
+            meetingUrl: interview.meetingUrl
+              ? ` Join here: ${interview.meetingUrl}`
+              : "",
+            location: interview.location
+              ? ` Location: ${interview.location}`
+              : "",
           },
         );
         notificationStatus = "queued";
@@ -2071,9 +2133,8 @@ export class EmployersService {
       throw new ServiceUnavailableException(
         "PUBLIC_APP_URL is required to send company invitations.",
       );
-    const employerApprovalRequired = (
-      await this.platformConfiguration.get()
-    ).employerApprovalRequired;
+    const employerApprovalRequired = (await this.platformConfiguration.get())
+      .employerApprovalRequired;
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const tokenHash = this.hashToken(token);
@@ -2189,9 +2250,8 @@ export class EmployersService {
       throw new ServiceUnavailableException(
         "PUBLIC_APP_URL is required to send company invitations.",
       );
-    const employerApprovalRequired = (
-      await this.platformConfiguration.get()
-    ).employerApprovalRequired;
+    const employerApprovalRequired = (await this.platformConfiguration.get())
+      .employerApprovalRequired;
     const current = await this.members.findOneBy({
       id: memberId,
       organizationId: context.organization.id,
@@ -2307,8 +2367,8 @@ export class EmployersService {
   ) {
     const roleName = role.replace(/_/g, " ");
     const nextStep = existingUser
-      ? existingUser.employerApprovalStatus === EmployerApprovalStatus.APPROVED ||
-        !employerApprovalRequired
+      ? existingUser.employerApprovalStatus ===
+          EmployerApprovalStatus.APPROVED || !employerApprovalRequired
         ? "Sign in with this email address and accept the invitation."
         : "Sign in with this email address to view a read-only workspace preview. The invitation becomes available after an administrator approves your employer account."
       : employerApprovalRequired
@@ -2684,7 +2744,11 @@ export class EmployersService {
           subscription.current_end,
         );
         await organizations.save(organization);
-        await this.enforceJobQuota(organization, manager.getRepository(Job));
+        await this.enforceJobQuota(
+          organization,
+          manager.getRepository(Job),
+          manager,
+        );
       }
       return {
         status: subscription.status,
@@ -2899,7 +2963,11 @@ export class EmployersService {
           break;
       }
       if (reconcileJobs)
-        await this.enforceJobQuota(organization, manager.getRepository(Job));
+        await this.enforceJobQuota(
+          organization,
+          manager.getRepository(Job),
+          manager,
+        );
       return { received: true };
     });
   }
@@ -2938,7 +3006,10 @@ export class EmployersService {
       role: UserRole.EMPLOYER,
       isActive: true,
     });
-    if (!user || user.employerApprovalStatus === EmployerApprovalStatus.REJECTED)
+    if (
+      !user ||
+      user.employerApprovalStatus === EmployerApprovalStatus.REJECTED
+    )
       throw new ForbiddenException(
         "An active employer account with the required approval is required.",
       );
@@ -3016,6 +3087,7 @@ export class EmployersService {
   private async enforceJobQuota(
     organization: EmployerOrganization,
     jobs: Repository<Job> = this.jobs,
+    manager?: EntityManager,
   ) {
     const limit = (await this.limitsFor(organization)).activeJobs;
     const activeJobs = await jobs.find({
@@ -3026,6 +3098,9 @@ export class EmployersService {
     if (excessJobs.length) {
       for (const job of excessJobs) job.isActive = false;
       await jobs.save(excessJobs);
+      for (const job of excessJobs) {
+        await this.jobsService.syncSearchIndex(job, manager);
+      }
     }
   }
 

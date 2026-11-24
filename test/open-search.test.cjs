@@ -65,3 +65,96 @@ test("OpenSearch delegates unsupported token lengths to PostgreSQL", async () =>
     null,
   );
 });
+
+test("candidate search only prefilters discoverable text fields", async () => {
+  let request;
+  const service = createSearchService(async (value) => {
+    request = value;
+    return {
+      body: {
+        hits: {
+          total: { value: 1 },
+          hits: [{ _id: "42" }],
+        },
+      },
+    };
+  });
+  service.candidateIndex = "esllp-candidates";
+  service.candidateIndexReady = true;
+
+  assert.deepEqual(await service.searchCandidateIds("react Bengaluru"), [42]);
+  assert.equal(request.index, "esllp-candidates");
+  assert.deepEqual(request.body.query.bool.must[0], {
+    term: { discoverable: true },
+  });
+  assert.deepEqual(request.body.query.bool.must[1].multi_match.fields, [
+    "displayName",
+    "headline",
+    "location",
+    "skills",
+  ]);
+});
+
+test("candidate search sends unsupported syntax to PostgreSQL", async () => {
+  const service = createSearchService(async () => {
+    throw new Error("query should not reach OpenSearch");
+  });
+  service.candidateIndexReady = true;
+
+  assert.equal(await service.searchCandidateIds("React OR Node"), null);
+  assert.equal(await service.searchCandidateIds("C++"), null);
+});
+
+test("existing indexes are reused and index updates are durably enqueued", async () => {
+  const statements = [];
+  const service = Object.create(OpenSearchService.prototype);
+  service.client = {
+    indices: { exists: async () => ({ body: true }) },
+  };
+  service.index = "esllp-jobs";
+  service.candidateIndex = "esllp-candidates";
+  service.dataSource = {
+    async query(sql, params) {
+      statements.push({ sql, params });
+      if (sql.includes("SELECT completed_at")) {
+        return [{ completedAt: new Date() }];
+      }
+      if (sql.includes("SELECT backfill.entity_type")) {
+        return [
+          { entityType: "job", completedAt: new Date(), hasPending: false },
+          {
+            entityType: "candidate",
+            completedAt: new Date(),
+            hasPending: false,
+          },
+        ];
+      }
+      return [];
+    },
+  };
+
+  await service.initializeIndex();
+  await service.enqueueJob(9);
+
+  assert.equal(service.indexReady, true);
+  assert.equal(service.candidateIndexReady, true);
+  assert.ok(
+    statements.some(({ sql }) =>
+      sql.includes("ON CONFLICT (entity_type, entity_id) DO UPDATE"),
+    ),
+  );
+  assert.equal(
+    statements.some(({ sql }) =>
+      sql.includes("DELETE FROM search_index_backfills"),
+    ),
+    false,
+  );
+  let transactionalQuery;
+  await service.indexCandidate(43, {
+    query: async (sql, params) => {
+      transactionalQuery = { sql, params };
+    },
+  });
+  assert.ok(transactionalQuery.sql.includes("search_index_outbox"));
+  assert.deepEqual(transactionalQuery.params, ["candidate", 43, "upsert"]);
+});

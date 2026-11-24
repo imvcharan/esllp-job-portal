@@ -8,7 +8,7 @@ import {
 import { AuditService } from "../audit/audit.service";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Brackets, Repository } from "typeorm";
+import { Brackets, EntityManager, Repository } from "typeorm";
 import { Job } from "./job.entity";
 import { EmployerApprovalStatus, User, UserRole } from "../users/user.entity";
 import { CreateJobDto } from "./dto/create-job.dto";
@@ -81,6 +81,7 @@ export class JobsService {
     limit: number;
     companies: string[];
   }> {
+    this.validateSearchFilters(filters);
     const page = Math.min(1_000_000, Math.max(1, filters.page ?? 1));
     const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
     const cacheKey = `public-jobs:${Buffer.from(JSON.stringify({ ...filters, page, limit })).toString("base64url")}`;
@@ -276,30 +277,75 @@ export class JobsService {
     return response;
   }
 
-  private async refreshSearchInfrastructure(job: Job): Promise<void> {
-    await Promise.all([
-      Promise.resolve(this.search?.indexJob(job)).catch((error) =>
-        this.logger.warn(
-          `OpenSearch indexing failed for job ${job.id}: ${error instanceof Error ? error.message : "unknown error"}`,
-        ),
-      ),
-      Promise.resolve(this.cache?.deleteByPrefix("public-jobs:")),
-    ]);
+  private validateSearchFilters(filters: {
+    query?: string;
+    location?: string;
+    workplaceType?: string;
+    employmentType?: string;
+    experience?: string;
+    company?: string;
+    category?: string;
+    industry?: string;
+    salaryCurrency?: string;
+    salaryPeriod?: string;
+    sort?: string;
+    skill?: string;
+    minimumSalary?: number;
+    freshnessDays?: number;
+  }): void {
+    const limits: Array<[string, unknown, number]> = [
+      ["Search text", filters.query, 120],
+      ["Location", filters.location, 120],
+      ["Workplace type", filters.workplaceType, 80],
+      ["Employment type", filters.employmentType, 80],
+      ["Experience", filters.experience, 40],
+      ["Company", filters.company, 120],
+      ["Category", filters.category, 120],
+      ["Industry", filters.industry, 120],
+      ["Salary currency", filters.salaryCurrency, 3],
+      ["Salary period", filters.salaryPeriod, 20],
+      ["Sort", filters.sort, 20],
+      ["Skill", filters.skill, 60],
+    ];
+    for (const [label, value, maxLength] of limits) {
+      if (value !== undefined && typeof value !== "string") {
+        throw new BadRequestException(`${label} filters must be text.`);
+      }
+      if (typeof value === "string" && value.length > maxLength) {
+        throw new BadRequestException(
+          `${label} filters must be ${maxLength} characters or fewer.`,
+        );
+      }
+    }
+    if (
+      filters.minimumSalary !== undefined &&
+      (!Number.isSafeInteger(filters.minimumSalary) ||
+        filters.minimumSalary < 0 ||
+        filters.minimumSalary > 2_000_000_000)
+    ) {
+      throw new BadRequestException(
+        "Minimum salary is outside the supported range.",
+      );
+    }
+    if (
+      filters.freshnessDays !== undefined &&
+      (!Number.isSafeInteger(filters.freshnessDays) ||
+        filters.freshnessDays < 0 ||
+        filters.freshnessDays > 3_650)
+    ) {
+      throw new BadRequestException(
+        "Freshness must be between 0 and 3650 days.",
+      );
+    }
   }
 
-  async syncSearchIndex(job: Job): Promise<void> {
-    await this.refreshSearchInfrastructure(job);
+  async syncSearchIndex(job: Job, manager?: EntityManager): Promise<void> {
+    await this.search?.enqueueJob(job.id, manager);
+    await this.cache?.deleteByPrefix("public-jobs:");
   }
 
-  private async removeSearchInfrastructure(jobId: number): Promise<void> {
-    await Promise.all([
-      Promise.resolve(this.search?.removeJob(jobId)).catch((error) =>
-        this.logger.warn(
-          `OpenSearch removal failed for job ${jobId}: ${error instanceof Error ? error.message : "unknown error"}`,
-        ),
-      ),
-      Promise.resolve(this.cache?.deleteByPrefix("public-jobs:")),
-    ]);
+  private async invalidatePublicJobCache(): Promise<void> {
+    await this.cache?.deleteByPrefix("public-jobs:");
   }
 
   findAllForAdministration(): Promise<Job[]> {
@@ -320,7 +366,10 @@ export class JobsService {
         "jobCategories",
         dto.category,
       ),
-      this.platformConfiguration.assertTaxonomyValue("industries", dto.industry),
+      this.platformConfiguration.assertTaxonomyValue(
+        "industries",
+        dto.industry,
+      ),
       this.platformConfiguration.assertTaxonomyValue(
         "employmentTypes",
         employmentType,
@@ -345,32 +394,38 @@ export class JobsService {
         "Minimum salary cannot exceed maximum salary",
       );
     }
-    const job = await this.jobsRepository.save(
-      this.jobsRepository.create({
-        ...dto,
-        title: dto.title.trim(),
-        company: dto.company.trim(),
-        location: dto.location.trim(),
-        category: dto.category?.trim() || null,
-        industry: dto.industry?.trim() || null,
-        skills: normalizeJobSkills(dto.skills),
-        workplaceType,
-        employmentType,
-        salaryMin,
-        salaryMax,
-        salaryCurrency: dto.salaryCurrency ?? "INR",
-        salaryPeriod: dto.salaryPeriod ?? "year",
-        applicationDeadline: dto.applicationDeadline ?? null,
-        numberOfOpenings: dto.numberOfOpenings ?? 1,
-        experience: dto.experience?.trim() || null,
-        description: dto.description?.trim() || null,
-        isActive: dto.isActive ?? false,
-        moderationStatus: dto.isActive ? "approved" : "draft",
-        moderationNote: null,
-        organizationId: employerOrganizationId,
-      }),
+    const job = await this.jobsRepository.manager.transaction(
+      async (manager) => {
+        const saved = await manager.getRepository(Job).save(
+          manager.getRepository(Job).create({
+            ...dto,
+            title: dto.title.trim(),
+            company: dto.company.trim(),
+            location: dto.location.trim(),
+            category: dto.category?.trim() || null,
+            industry: dto.industry?.trim() || null,
+            skills: normalizeJobSkills(dto.skills),
+            workplaceType,
+            employmentType,
+            salaryMin,
+            salaryMax,
+            salaryCurrency: dto.salaryCurrency ?? "INR",
+            salaryPeriod: dto.salaryPeriod ?? "year",
+            applicationDeadline: dto.applicationDeadline ?? null,
+            numberOfOpenings: dto.numberOfOpenings ?? 1,
+            experience: dto.experience?.trim() || null,
+            description: dto.description?.trim() || null,
+            isActive: dto.isActive ?? false,
+            moderationStatus: dto.isActive ? "approved" : "draft",
+            moderationNote: null,
+            organizationId: employerOrganizationId,
+          }),
+        );
+        await this.search?.enqueueJob(saved.id, manager);
+        return saved;
+      },
     );
-    await this.refreshSearchInfrastructure(job);
+    await this.invalidatePublicJobCache();
     await this.auditService.record({
       actorUserId: actor.id,
       action: "job.created",
@@ -400,15 +455,9 @@ export class JobsService {
     if (!job) {
       return null;
     }
-    if (
-      dto.workplaceType !== undefined &&
-      !dto.workplaceType.trim()
-    )
+    if (dto.workplaceType !== undefined && !dto.workplaceType.trim())
       throw new BadRequestException("Choose a workplace type.");
-    if (
-      dto.employmentType !== undefined &&
-      !dto.employmentType.trim()
-    )
+    if (dto.employmentType !== undefined && !dto.employmentType.trim())
       throw new BadRequestException("Choose an employment type.");
     await Promise.all([
       ...(dto.category !== undefined && dto.category !== job.category
@@ -490,16 +539,20 @@ export class JobsService {
     if (dto.title !== undefined) job.title = dto.title.trim();
     if (dto.company !== undefined) job.company = dto.company.trim();
     if (dto.location !== undefined) job.location = dto.location.trim();
-    if (dto.category !== undefined)
-      job.category = dto.category?.trim() || null;
-    if (dto.industry !== undefined)
-      job.industry = dto.industry?.trim() || null;
+    if (dto.category !== undefined) job.category = dto.category?.trim() || null;
+    if (dto.industry !== undefined) job.industry = dto.industry?.trim() || null;
     if (dto.experience !== undefined)
       job.experience = dto.experience?.trim() || null;
     if (dto.description !== undefined)
       job.description = dto.description?.trim() || null;
-    const saved = await this.jobsRepository.save(job);
-    await this.refreshSearchInfrastructure(saved);
+    const saved = await this.jobsRepository.manager.transaction(
+      async (manager) => {
+        const updated = await manager.getRepository(Job).save(job);
+        await this.search?.enqueueJob(updated.id, manager);
+        return updated;
+      },
+    );
+    await this.invalidatePublicJobCache();
     await this.auditService.record({
       actorUserId: actor.id,
       action: "job.updated",
@@ -528,8 +581,14 @@ export class JobsService {
     }
     job.isActive = false;
     job.moderationStatus = "closed";
-    const archived = await this.jobsRepository.save(job);
-    await this.refreshSearchInfrastructure(archived);
+    const archived = await this.jobsRepository.manager.transaction(
+      async (manager) => {
+        const updated = await manager.getRepository(Job).save(job);
+        await this.search?.enqueueJob(updated.id, manager);
+        return updated;
+      },
+    );
+    await this.invalidatePublicJobCache();
     await this.auditService.record({
       actorUserId: actor.id,
       action: "job.archived",
@@ -563,8 +622,14 @@ export class JobsService {
         job.applicationDeadline,
       );
     }
-    const saved = await this.jobsRepository.save(job);
-    await this.refreshSearchInfrastructure(saved);
+    const saved = await this.jobsRepository.manager.transaction(
+      async (manager) => {
+        const updated = await manager.getRepository(Job).save(job);
+        await this.search?.enqueueJob(updated.id, manager);
+        return updated;
+      },
+    );
+    await this.invalidatePublicJobCache();
     await this.auditService.record({
       actorUserId: actor.id,
       action: `job.moderation_${status}`,
@@ -625,10 +690,11 @@ export class JobsService {
           manager,
         );
         await jobs.delete(id);
+        await this.search?.removeJob(id, manager);
         return deletedJob;
       },
     );
-    await this.removeSearchInfrastructure(id);
+    await this.invalidatePublicJobCache();
     return { success: true };
   }
 

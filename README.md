@@ -8,6 +8,14 @@ NestJS serves the homepage from `public/index.html`, the admin dashboard from `p
 - npm
 - Docker Engine with Docker Compose v2 for the bundled production stack
 
+## Backend structure
+
+The backend is a modular monolith: identity, jobs, employers, applications,
+candidate profile/engagement/account/premium features, payments and
+infrastructure have separate NestJS module boundaries, while deploying as one
+application. This keeps domain dependencies clearer without adding distributed
+service operations or changing API routes.
+
 ## One-host production deployment
 
 The repository includes Docker Compose for the application, PostgreSQL, Redis,
@@ -65,7 +73,8 @@ provider authentication/TLS and set `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`,
 
 Before exposing the service publicly, complete these checks. Optionally configure
 `REDIS_URL` for shared caching and BullMQ workers, and `OPENSEARCH_URL` for
-accelerated public job search. PostgreSQL remains the authoritative fallback.
+accelerated public job and recruiter candidate search. PostgreSQL remains the
+authoritative fallback.
 1. Set `NODE_ENV=production`, a unique `JWT_ACCESS_SECRET`, PostgreSQL SSL settings,
    and `PUBLIC_APP_URL` to the canonical HTTPS origin.
 2. Configure private Supabase candidate storage and ClamAV. In production, resume
@@ -98,6 +107,18 @@ drain notifications and interview-reminder schedules with retries and
 concurrency controls. Public job caching also uses Redis and OpenSearch when
 their environment variables are configured. PostgreSQL search and the database
 outboxes remain the authoritative fallbacks.
+
+OpenSearch job and candidate indexes are created and initially populated when
+missing; normal restarts reuse existing indexes. Index updates are recorded in
+the PostgreSQL search-index outbox and retried with exponential backoff, so
+Redis is not required for indexing durability. PostgreSQL search remains
+available while a new index is being populated or an indexing backlog exists.
+The candidate index contains only
+recruiter-visible display names, headlines, locations and skills—not contact
+details, resume text or storage paths. Employer candidate results are always
+rechecked against PostgreSQL for recruiter visibility and active account status.
+Set `OPENSEARCH_CANDIDATE_INDEX` only when using a non-default candidate index
+name.
 
 ## Local PostgreSQL database (Windows)
 

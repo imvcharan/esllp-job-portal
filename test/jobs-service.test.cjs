@@ -110,6 +110,28 @@ test("public skill filtering rejects unsupported or oversized input", async () =
   await assert.rejects(service.findAll({ skill: ["React"] }), /must be text/);
 });
 
+test("public search bounds text and numeric filters before querying providers", async () => {
+  const { service, builders } = createService();
+
+  await assert.rejects(
+    service.findAll({ query: "x".repeat(121) }),
+    /120 characters or fewer/,
+  );
+  await assert.rejects(
+    service.findAll({ location: ["Remote"] }),
+    /must be text/,
+  );
+  await assert.rejects(
+    service.findAll({ minimumSalary: 2_000_000_001 }),
+    /outside the supported range/,
+  );
+  await assert.rejects(
+    service.findAll({ freshnessDays: 3_651 }),
+    /between 0 and 3650/,
+  );
+  assert.equal(builders.length, 0);
+});
+
 test("public search enforces publication eligibility and combines search filters", async () => {
   const { service, builders } = createService();
 
