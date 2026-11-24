@@ -1,5 +1,6 @@
 import {
   Column,
+  Check,
   CreateDateColumn,
   Entity,
   Index,
@@ -8,6 +9,14 @@ import {
 } from "typeorm";
 
 @Entity({ name: "employer_organizations" })
+@Check(
+  "CHK_employer_organizations_plan_key",
+  `"plan_key" IN ('free', 'starter', 'growth', 'business', 'enterprise')`,
+)
+@Check(
+  "CHK_employer_organizations_pending_plan_key",
+  `"pending_plan_key" IS NULL OR "pending_plan_key" IN ('starter', 'growth', 'business', 'enterprise')`,
+)
 export class EmployerOrganization {
   @PrimaryGeneratedColumn()
   id!: number;

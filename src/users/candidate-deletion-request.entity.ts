@@ -4,6 +4,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
   Column,
+  Check,
   UpdateDateColumn,
 } from "typeorm";
 
@@ -22,6 +23,17 @@ export enum CandidateDeletionRequestStatus {
   "status",
   "createdAt",
 ])
+@Index(
+  "IDX_candidate_deletion_requests_scheduled_due",
+  ["scheduledFor", "id"],
+  {
+    where: `"status" = 'scheduled'`,
+  },
+)
+@Check(
+  "candidate_deletion_requests_status_check",
+  `"status" IN ('open', 'reviewing', 'deferred', 'approved', 'scheduled', 'completed', 'cancelled')`,
+)
 export class CandidateDeletionRequest {
   @PrimaryGeneratedColumn()
   id!: number;

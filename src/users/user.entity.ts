@@ -27,7 +27,7 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Index("UQ_users_google_subject", { unique: true })
+  @Index("IDX_users_email", { unique: true })
   @Column({ length: 254 })
   email!: string;
 
@@ -37,11 +37,17 @@ export class User {
   @Column({ name: "display_name", length: 120 })
   displayName!: string;
 
-  @Index("UQ_users_username", { unique: true })
+  @Index("UQ_users_username", {
+    unique: true,
+    where: '"username" IS NOT NULL',
+  })
   @Column({ type: "varchar", length: 30, nullable: true })
   username!: string | null;
 
-  @Index("UQ_users_phone_e164", { unique: true })
+  @Index("UQ_users_phone_e164", {
+    unique: true,
+    where: '"phone_e164" IS NOT NULL',
+  })
   @Column({ name: "phone_e164", type: "varchar", length: 16, nullable: true })
   phoneE164!: string | null;
 
@@ -92,7 +98,10 @@ export class User {
   @Column({ name: "must_change_password", type: "boolean", default: false })
   mustChangePassword!: boolean;
 
-  @Index({ unique: true })
+  @Index("UQ_users_google_subject", {
+    unique: true,
+    where: '"google_subject" IS NOT NULL',
+  })
   @Column({
     name: "google_subject",
     type: "varchar",

@@ -352,7 +352,6 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
     candidateId: number,
     manager?: EntityManager,
   ): Promise<void> {
-    if (!this.client) return;
     await this.enqueueIndexRecord("candidate", candidateId, "delete", manager);
   }
 

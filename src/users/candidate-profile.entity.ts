@@ -1,5 +1,6 @@
 import {
   Column,
+  Check,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -9,6 +10,10 @@ import {
 import { User } from "./user.entity";
 
 @Entity({ name: "candidate_profiles" })
+@Check(
+  "CHK_candidate_profile_visibility",
+  `"profile_visibility" IN ('private', 'applications', 'recruiters')`,
+)
 export class CandidateProfile {
   @PrimaryColumn({ name: "user_id", type: "int" })
   userId!: number;

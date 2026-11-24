@@ -1,7 +1,9 @@
 import {
   Column,
+  Check,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -11,6 +13,14 @@ import { Job } from "../jobs/job.entity";
 import { User } from "./user.entity";
 
 @Entity({ name: "candidate_applications" })
+@Index("UQ_candidate_applications_active_user_job", ["userId", "jobId"], {
+  unique: true,
+  where: `"status" <> 'withdrawn'`,
+})
+@Check(
+  "CHK_candidate_application_status",
+  `"status" IN ('submitted', 'in_review', 'interview', 'offer', 'rejected', 'withdrawn', 'withdrawal_requested', 'offer_accepted', 'offer_declined', 'hired')`,
+)
 export class CandidateApplication {
   @PrimaryGeneratedColumn()
   id!: number;

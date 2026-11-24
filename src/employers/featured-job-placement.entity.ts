@@ -1,6 +1,15 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity({ name: "featured_job_placements" })
+@Check(
+  "featured_job_placements_placement_type_check",
+  `"placement_type" IN ('homepage', 'search', 'email')`,
+)
+@Check("featured_job_placements_ends_at_check", `"ends_at" > "starts_at"`)
+@Check(
+  "featured_job_placements_status_check",
+  `"status" IN ('scheduled', 'active', 'expired', 'cancelled')`,
+)
 export class FeaturedJobPlacement {
   @PrimaryGeneratedColumn() id!: number;
   @Column({ name: "job_id", type: "integer" }) jobId!: number;

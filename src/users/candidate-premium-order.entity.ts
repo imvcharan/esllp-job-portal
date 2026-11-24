@@ -1,5 +1,6 @@
 import {
   Column,
+  Check,
   CreateDateColumn,
   Entity,
   Index,
@@ -15,6 +16,20 @@ export type CandidatePremiumFulfillmentStatus =
   "pending" | "in_progress" | "completed" | "cancelled";
 
 @Entity({ name: "candidate_premium_orders" })
+@Check("candidate_premium_orders_amount_paise_check", `"amount_paise" > 0`)
+@Check(
+  "candidate_premium_orders_fulfillment_days_check",
+  `"fulfillment_days" BETWEEN 0 AND 3650`,
+)
+@Check("candidate_premium_orders_currency_check", `"currency" = 'INR'`)
+@Check(
+  "candidate_premium_orders_payment_status_check",
+  `"payment_status" IN ('pending', 'paid')`,
+)
+@Check(
+  "candidate_premium_orders_fulfillment_status_check",
+  `"fulfillment_status" IN ('pending', 'in_progress', 'completed', 'cancelled')`,
+)
 export class CandidatePremiumOrder {
   @PrimaryGeneratedColumn()
   id!: number;

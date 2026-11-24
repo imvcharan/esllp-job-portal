@@ -1,6 +1,19 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity({ name: "payment_coupons" })
+@Check(
+  "payment_coupons_discount_type_check",
+  `"discount_type" IN ('percentage', 'fixed')`,
+)
+@Check(
+  "payment_coupons_discount_value_paise_check",
+  `"discount_value_paise" > 0`,
+)
+@Check(
+  "payment_coupons_max_redemptions_check",
+  `"max_redemptions" IS NULL OR "max_redemptions" > 0`,
+)
+@Check("payment_coupons_redeemed_count_check", `"redeemed_count" >= 0`)
 export class PaymentCoupon {
   @PrimaryGeneratedColumn() id!: number;
   @Column({ length: 40, unique: true }) code!: string;

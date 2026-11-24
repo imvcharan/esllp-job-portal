@@ -94,6 +94,7 @@ import { WhatsAppInterviewReminders1729000000050 } from "./migrations/1729000000
 import { SeedDefaultFaqAndBlogContent1729000000051 } from "./migrations/1729000000051-SeedDefaultFaqAndBlogContent";
 import { CommercialControlsAndRetention1729000000052 } from "./migrations/1729000000052-CommercialControlsAndRetention";
 import { SearchIndexOutbox1729000000053 } from "./migrations/1729000000053-SearchIndexOutbox";
+import { EmployerPlanAndDeletionIndexes1729000000054 } from "./migrations/1729000000054-EmployerPlanAndDeletionIndexes";
 
 export const AppDataSource = new DataSource({
   ...getDatabaseConfig(),
@@ -191,6 +192,7 @@ export const AppDataSource = new DataSource({
     SeedDefaultFaqAndBlogContent1729000000051,
     CommercialControlsAndRetention1729000000052,
     SearchIndexOutbox1729000000053,
+    EmployerPlanAndDeletionIndexes1729000000054,
   ],
   synchronize: false,
 });

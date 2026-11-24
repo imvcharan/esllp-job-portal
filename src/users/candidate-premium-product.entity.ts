@@ -1,5 +1,6 @@
 import {
   Column,
+  Check,
   CreateDateColumn,
   Entity,
   OneToMany,
@@ -9,6 +10,11 @@ import {
 import { CandidatePremiumOrder } from "./candidate-premium-order.entity";
 
 @Entity({ name: "candidate_premium_products" })
+@Check("candidate_premium_products_amount_paise_check", `"amount_paise" > 0`)
+@Check(
+  "candidate_premium_products_fulfillment_days_check",
+  `"fulfillment_days" BETWEEN 0 AND 3650`,
+)
 export class CandidatePremiumProduct {
   @PrimaryGeneratedColumn()
   id!: number;

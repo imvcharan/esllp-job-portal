@@ -239,7 +239,7 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
              SET status = 'sent', recipient_email = NULL, subject = NULL,
                  message = NULL, last_error = NULL, locked_at = NULL,
                  sent_at = now()
-             WHERE id = $1`,
+             WHERE id = $1 AND status = 'sending'`,
             [notification.id],
           );
         } catch (error) {
@@ -259,7 +259,7 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
                  next_attempt_at = now() + ($3 * INTERVAL '1 second'),
                  locked_at = NULL,
                  last_error = $4
-             WHERE id = $1`,
+             WHERE id = $1 AND status = 'sending'`,
             [notification.id, status, delaySeconds, lastError],
           );
           this.logger.error(

@@ -219,13 +219,18 @@ JSON export of their profile, applications and status history, offer details
 and responses, application messages, saved jobs, saved searches, notifications,
 application-document metadata, and deletion requests; storage paths and
 temporary file links are excluded. Deletion requests remain subject to
-superadmin review and do **not** automatically delete or anonymize an account.
-When an eligible unlinked candidate account is permanently deleted, its
-application documents and resume-version files are purged from private object
-storage before the database account is removed. Linked business records still
-block permanent deletion and must be handled under the approved retention
-process. Document the database provider's actual backup expiry before launch;
+superadmin review. When a superadmin approves a request, the candidate is
+anonymized after `ACCOUNT_DELETION_RETENTION_DAYS` (default 30, maximum 365).
+The scheduled worker first removes private profile, resume, and application
+files; a storage failure leaves the request scheduled for retry. It then
+anonymizes the account and application content, removes pending notifications
+and search-index entries, and retains financial records with personal fields
+scrubbed. Document the database provider's actual backup expiry before launch;
 deletion from backups follows that provider's expiry schedule.
+
+Tax-invoice issuance is intentionally deferred until the seller's legal name,
+address, and GST/tax details are confirmed. The coupon catalog is admin-only;
+checkout redemption is not implemented.
 
 Candidate profile settings include education, work history, skills,
 certifications, salary/location preferences, recruiter visibility, and a
@@ -534,7 +539,7 @@ Useful API routes:
 - `GET /api/candidate/interviews` — list the candidate's interview schedule and joining details
 - `GET /api/employer/candidates?q=...` — search profiles opted into recruiter visibility; email/phone are returned only when the candidate also permits contact
 - `GET /api/candidate/account/export` — download the signed-in candidate's JSON data export
-- `GET|POST /api/candidate/account/deletion-request` — view or submit a candidate deletion request for superadmin review; no data is deleted
+- `GET|POST /api/candidate/account/deletion-request` — view or submit a candidate deletion request for superadmin review
 - `POST /api/reports` — submit a job, company, or user report as a signed-in candidate/employer
 - `GET /api/reports/mine` — list the signed-in reporter's report statuses and moderator-visible updates
 - `GET /api/admin/reports` and `PATCH /api/admin/reports/:id` — staff/admin/superadmin report queue and moderation actions

@@ -1,8 +1,17 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Check, Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 export type PaymentRefundStatus = "pending" | "approved" | "rejected" | "processed" | "failed";
 
 @Entity({ name: "payment_refunds" })
+@Check(
+  "payment_refunds_payment_source_check",
+  `"payment_source" IN ('candidate', 'employer')`,
+)
+@Check("payment_refunds_amount_paise_check", `"amount_paise" > 0`)
+@Check(
+  "payment_refunds_status_check",
+  `"status" IN ('pending', 'approved', 'rejected', 'processed', 'failed')`,
+)
 export class PaymentRefund {
   @PrimaryGeneratedColumn() id!: number;
   @Column({ name: "payment_source", length: 20 }) paymentSource!: "candidate" | "employer";

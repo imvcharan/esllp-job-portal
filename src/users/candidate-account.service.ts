@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -413,12 +414,17 @@ export class CandidateAccountService {
     }
     request.status = dto.status;
     if (dto.status === CandidateDeletionRequestStatus.APPROVED) {
+      const configuredRetentionDays = Number(
+        process.env.ACCOUNT_DELETION_RETENTION_DAYS ?? 30,
+      );
+      if (!Number.isFinite(configuredRetentionDays)) {
+        throw new InternalServerErrorException(
+          "ACCOUNT_DELETION_RETENTION_DAYS must be a number.",
+        );
+      }
       const retentionDays = Math.max(
         1,
-        Math.min(
-          365,
-          Number(process.env.ACCOUNT_DELETION_RETENTION_DAYS ?? 30),
-        ),
+        Math.min(365, Math.trunc(configuredRetentionDays)),
       );
       request.status = CandidateDeletionRequestStatus.SCHEDULED;
       request.scheduledFor = new Date(

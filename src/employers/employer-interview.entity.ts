@@ -1,5 +1,6 @@
 import {
   Column,
+  Check,
   CreateDateColumn,
   Entity,
   Index,
@@ -14,6 +15,14 @@ import { User } from "../users/user.entity";
 
 @Entity({ name: "employer_interviews" })
 @Index(["organizationId", "startsAt"])
+@Check(
+  "employer_interviews_duration_minutes_check",
+  `"duration_minutes" BETWEEN 15 AND 480`,
+)
+@Check(
+  "employer_interviews_status_check",
+  `"status" IN ('scheduled', 'cancelled', 'completed')`,
+)
 export class EmployerInterview {
   @PrimaryGeneratedColumn()
   id!: number;

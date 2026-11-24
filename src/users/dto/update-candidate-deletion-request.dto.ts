@@ -7,7 +7,6 @@ export class UpdateCandidateDeletionRequestDto {
     CandidateDeletionRequestStatus.DEFERRED,
     CandidateDeletionRequestStatus.APPROVED,
     CandidateDeletionRequestStatus.SCHEDULED,
-    CandidateDeletionRequestStatus.COMPLETED,
     CandidateDeletionRequestStatus.CANCELLED,
   ])
   status!: CandidateDeletionRequestStatus;

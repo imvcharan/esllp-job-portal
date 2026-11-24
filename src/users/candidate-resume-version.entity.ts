@@ -1,5 +1,6 @@
 import {
   Column,
+  Check,
   CreateDateColumn,
   Entity,
   Index,
@@ -11,6 +12,10 @@ import { User } from "./user.entity";
 
 @Entity({ name: "candidate_resume_versions" })
 @Index("IDX_candidate_resume_versions_user_created", ["userId", "createdAt"])
+@Check(
+  "candidate_resume_versions_mime_type_check",
+  `"mime_type" IN ('application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')`,
+)
 export class CandidateResumeVersion {
   @PrimaryGeneratedColumn()
   id!: number;
