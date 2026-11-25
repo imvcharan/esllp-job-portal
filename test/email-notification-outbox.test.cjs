@@ -65,6 +65,8 @@ test("notification outbox stores the rendered admin email template", async () =>
     "candidate@example.test",
     "application_status: Engineer",
     "Hello Example",
+    null,
+    null,
   ]);
 });
 
@@ -77,6 +79,8 @@ test("outbox worker clears delivery content after successful email delivery", as
       subject: "Application update",
       message: "Your application changed.",
       attempts: 1,
+      recipientUserId: null,
+      category: null,
     },
   ];
   service.send = async () => undefined;
@@ -99,6 +103,8 @@ test("outbox worker schedules bounded retries and eventually marks delivery fail
       subject: "Application update",
       message: "Your application changed.",
       attempts: 5,
+      recipientUserId: null,
+      category: null,
     },
   ];
   service.send = async () => {
@@ -120,7 +126,7 @@ test("admin retry only requeues failed deliveries with retained content", async 
   assert.match(service.queries[0].sql, /recipient_email IS NOT NULL/);
 });
 
-test("failed notification payloads and errors are cleared after 30 days", async () => {
+test("notification outbox rows expire according to their status retention windows", async () => {
   const service = createService();
   service.dataSource.query = async (sql) => {
     service.queries.push({ sql, parameters: [] });
@@ -131,8 +137,11 @@ test("failed notification payloads and errors are cleared after 30 days", async 
   assert.match(service.queries[0].sql, /status = 'failed'/);
   assert.match(
     service.queries[0].sql,
-    /failed_at < now\(\) - INTERVAL '30 days'/,
+    /failed_at < now\(\) - INTERVAL '90 days'/,
   );
-  assert.match(service.queries[0].sql, /recipient_email = NULL/);
-  assert.match(service.queries[0].sql, /last_error = NULL/);
+  assert.match(
+    service.queries[0].sql,
+    /created_at < now\(\) - INTERVAL '30 days'/,
+  );
+  assert.match(service.queries[0].sql, /RETURNING id/);
 });

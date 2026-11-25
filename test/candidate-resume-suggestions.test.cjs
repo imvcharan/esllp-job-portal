@@ -87,7 +87,12 @@ TypeScript, PostgreSQL`;
   let versionQuery;
   const service = new CandidateProfileService(
     {},
-    { createSignedUrl: async (path) => `https://files.example.test/${path}` },
+    {
+      createSignedUrl: async (path) => `https://files.example.test/${path}`,
+      scanStatus: async () => "clean",
+      scanStatuses: async (paths) =>
+        new Map(paths.map((path) => [path, "clean"])),
+    },
     {
       findOneBy: async () => ({
         id: 42,

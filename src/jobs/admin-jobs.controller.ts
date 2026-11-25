@@ -10,20 +10,21 @@ import {
   Post,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import { Request } from 'express';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { CurrentUser } from '../auth/current-user.decorator';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
-import { UserRole } from '../users/user.entity';
-import { CreateJobDto } from './dto/create-job.dto';
-import { UpdateJobDto } from './dto/update-job.dto';
-import { ModerateJobDto } from './dto/moderate-job.dto';
-import { JobsService } from './jobs.service';
+} from "@nestjs/common";
+import { Request } from "express";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
+import { UserRole } from "../users/user.entity";
+import { CreateJobDto } from "./dto/create-job.dto";
+import { UpdateJobDto } from "./dto/update-job.dto";
+import { ModerateJobDto } from "./dto/moderate-job.dto";
+import { CreateFeaturedPlacementDto } from "./dto/create-featured-placement.dto";
+import { JobsService } from "./jobs.service";
 
-@Controller('admin/jobs')
+@Controller("admin/jobs")
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.STAFF, UserRole.ADMIN, UserRole.SUPERADMIN)
 export class AdminJobsController {
@@ -32,6 +33,27 @@ export class AdminJobsController {
   @Get()
   findAll() {
     return this.jobsService.findAllForAdministration();
+  }
+
+  @Get("featured-placements")
+  featuredPlacements() {
+    return this.jobsService.listFeaturedPlacements();
+  }
+
+  @Post("featured-placements")
+  createFeaturedPlacement(
+    @Body() dto: CreateFeaturedPlacementDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.jobsService.createFeaturedPlacement(dto, actor);
+  }
+
+  @Patch("featured-placements/:id/cancel")
+  cancelFeaturedPlacement(
+    @Param("id", ParseIntPipe) id: number,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.jobsService.cancelFeaturedPlacement(id, actor);
   }
 
   @Post()
@@ -43,9 +65,9 @@ export class AdminJobsController {
     return this.jobsService.create(dto, actor, request.ip);
   }
 
-  @Patch(':id')
+  @Patch(":id")
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param("id", ParseIntPipe) id: number,
     @Body() dto: UpdateJobDto,
     @CurrentUser() actor: AuthenticatedUser,
     @Req() request: Request,
@@ -57,9 +79,9 @@ export class AdminJobsController {
     return job;
   }
 
-  @Patch(':id/moderation')
+  @Patch(":id/moderation")
   moderate(
-    @Param('id', ParseIntPipe) id: number,
+    @Param("id", ParseIntPipe) id: number,
     @Body() dto: ModerateJobDto,
     @CurrentUser() actor: AuthenticatedUser,
     @Req() request: Request,
@@ -73,9 +95,9 @@ export class AdminJobsController {
     );
   }
 
-  @Delete(':id')
+  @Delete(":id")
   async archive(
-    @Param('id', ParseIntPipe) id: number,
+    @Param("id", ParseIntPipe) id: number,
     @CurrentUser() actor: AuthenticatedUser,
     @Req() request: Request,
   ) {
@@ -86,9 +108,9 @@ export class AdminJobsController {
     return { success: true };
   }
 
-  @Delete(':id/permanent')
+  @Delete(":id/permanent")
   permanentlyDelete(
-    @Param('id', ParseIntPipe) id: number,
+    @Param("id", ParseIntPipe) id: number,
     @CurrentUser() actor: AuthenticatedUser,
     @Req() request: Request,
   ) {

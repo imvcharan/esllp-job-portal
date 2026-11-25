@@ -80,3 +80,30 @@ test("production uploads fail closed when ClamAV is not configured", async () =>
     else process.env.CLAMAV_HOST = previousEnvironment.host;
   }
 });
+
+test("the unscanned-file bypass requires an explicit local-development flag", async () => {
+  const previousEnvironment = {
+    nodeEnv: process.env.NODE_ENV,
+    host: process.env.CLAMAV_HOST,
+    bypass: process.env.ALLOW_UNSCANNED_LOCAL_FILES,
+  };
+  process.env.NODE_ENV = "development";
+  delete process.env.CLAMAV_HOST;
+  delete process.env.ALLOW_UNSCANNED_LOCAL_FILES;
+  try {
+    await assert.rejects(
+      new CandidateFileScanService().scan(Buffer.from("fixture")),
+      ServiceUnavailableException,
+    );
+    process.env.ALLOW_UNSCANNED_LOCAL_FILES = "true";
+    await new CandidateFileScanService().scan(Buffer.from("fixture"));
+  } finally {
+    if (previousEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousEnvironment.nodeEnv;
+    if (previousEnvironment.host === undefined) delete process.env.CLAMAV_HOST;
+    else process.env.CLAMAV_HOST = previousEnvironment.host;
+    if (previousEnvironment.bypass === undefined)
+      delete process.env.ALLOW_UNSCANNED_LOCAL_FILES;
+    else process.env.ALLOW_UNSCANNED_LOCAL_FILES = previousEnvironment.bypass;
+  }
+});

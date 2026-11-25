@@ -4,10 +4,12 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { Client } from "@opensearch-project/opensearch";
 import { DataSource, EntityManager } from "typeorm";
 import type { Job } from "../jobs/job.entity";
+import { backgroundWorkersEnabled } from "./process-role";
 
 @Injectable()
 export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
@@ -27,6 +29,7 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   async onModuleInit(): Promise<void> {
+    const workersEnabled = backgroundWorkersEnabled();
     const url = process.env.OPENSEARCH_URL?.trim();
     if (!url) return;
     try {
@@ -61,13 +64,15 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
       );
       return;
     }
-    this.outboxTimer = setInterval(() => {
-      void this.runOutboxCycle();
-    }, 1_000);
-    this.outboxTimer.unref();
+    if (workersEnabled) {
+      this.outboxTimer = setInterval(() => {
+        void this.runOutboxCycle();
+      }, 1_000);
+      this.outboxTimer.unref();
+    }
     try {
       await this.initializeIndex();
-      void this.runOutboxCycle();
+      if (workersEnabled) void this.runOutboxCycle();
     } catch (error) {
       this.logger.warn(
         `OpenSearch initialization failed; PostgreSQL search remains available: ${error instanceof Error ? error.message : "unknown error"}`,
@@ -77,6 +82,118 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
 
   get ready(): boolean {
     return Boolean(this.client && this.indexReady);
+  }
+
+  async operationalStatus() {
+    if (this.client && this.initialized) {
+      await this.refreshIndexReadiness();
+    }
+    const [outbox, backfills] = await Promise.all([
+      this.dataSource.query(
+        `SELECT entity_type AS "entityType",
+                COUNT(*)::int AS pending,
+                COUNT(*) FILTER (
+                  WHERE next_attempt_at <= now()
+                    AND (claimed_until IS NULL OR claimed_until < now())
+                )::int AS due,
+                COUNT(*) FILTER (WHERE attempts >= 5)::int AS "highAttempts",
+                MAX(attempts)::int AS "maxAttempts",
+                MIN(created_at) AS "oldestPendingAt"
+         FROM search_index_outbox
+         GROUP BY entity_type`,
+      ) as Promise<
+        Array<{
+          entityType: "job" | "candidate";
+          pending: number | string;
+          due: number | string;
+          highAttempts: number | string;
+          maxAttempts: number | string | null;
+          oldestPendingAt: Date | string | null;
+        }>
+      >,
+      this.dataSource.query(
+        `SELECT entity_type AS "entityType", completed_at AS "completedAt"
+         FROM search_index_backfills
+         WHERE index_name = $1 OR index_name = $2`,
+        [this.index, this.candidateIndex],
+      ) as Promise<
+        Array<{
+          entityType: "job" | "candidate";
+          completedAt: Date | string | null;
+        }>
+      >,
+    ]);
+    const recentFailures = (await this.dataSource.query(
+      `SELECT id, entity_type AS "entityType", entity_id AS "entityId",
+              attempts, last_error AS "lastError",
+              next_attempt_at AS "nextAttemptAt"
+       FROM search_index_outbox
+       WHERE attempts >= 5
+       ORDER BY attempts DESC, created_at ASC
+       LIMIT 20`,
+    )) as Array<{
+      id: number;
+      entityType: "job" | "candidate";
+      entityId: number;
+      attempts: number;
+      lastError: string | null;
+      nextAttemptAt: Date | string;
+    }>;
+    const statusFor = (entityType: "job" | "candidate") => {
+      const row = outbox.find((item) => item.entityType === entityType);
+      const backfill = backfills.find((item) => item.entityType === entityType);
+      return {
+        ready:
+          entityType === "job" ? this.indexReady : this.candidateIndexReady,
+        backfillComplete: Boolean(backfill?.completedAt),
+        pending: Number(row?.pending ?? 0),
+        due: Number(row?.due ?? 0),
+        highAttempts: Number(row?.highAttempts ?? 0),
+        maxAttempts: Number(row?.maxAttempts ?? 0),
+        oldestPendingAt: row?.oldestPendingAt
+          ? new Date(row.oldestPendingAt).toISOString()
+          : null,
+      };
+    };
+    return {
+      enabled: this.client !== null,
+      jobs: statusFor("job"),
+      candidates: statusFor("candidate"),
+      recentFailures: recentFailures.map((record) => ({
+        ...record,
+        nextAttemptAt: new Date(record.nextAttemptAt).toISOString(),
+      })),
+    };
+  }
+
+  async retryIndexingRecord(
+    id: number,
+  ): Promise<{ entityType: "job" | "candidate" } | null> {
+    return this.dataSource.transaction(async (manager) => {
+      const records = (await manager.query(
+        `UPDATE search_index_outbox
+         SET attempts = 0,
+             next_attempt_at = now(),
+             last_error = NULL,
+             claim_token = NULL,
+             claimed_until = NULL
+         WHERE id = $1
+         RETURNING entity_type AS "entityType"`,
+        [id],
+      )) as Array<{ entityType: "job" | "candidate" }>;
+      const record = records[0];
+      if (!record) return null;
+      await manager.query(
+        `UPDATE search_index_backfills
+         SET completed_at = NULL
+         WHERE entity_type = $1 AND index_name = $2`,
+        [
+          record.entityType,
+          record.entityType === "job" ? this.index : this.candidateIndex,
+        ],
+      );
+      return { entityType: record.entityType };
+    });
   }
 
   onModuleDestroy(): void {
@@ -309,35 +426,18 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
               analyzer: "candidate_index_analyzer",
               search_analyzer: "standard",
             },
+            summary: { type: "text" },
+            experience: { type: "text" },
+            education: { type: "text" },
+            certifications: { type: "text" },
+            desiredJobTitles: { type: "text" },
+            resumeText: { type: "text" },
             discoverable: { type: "boolean" },
           },
         },
       },
     });
     return true;
-  }
-
-  async indexJob(job: Job): Promise<void> {
-    if (!this.client) return;
-    await this.client.index({
-      index: this.index,
-      id: String(job.id),
-      body: {
-        title: job.title,
-        company: job.company,
-        location: job.location,
-        category: job.category,
-        industry: job.industry,
-        skills: job.skills,
-        workplaceType: job.workplaceType,
-        employmentType: job.employmentType,
-        description: job.description,
-        isActive: job.isActive,
-        applicationDeadline: job.applicationDeadline,
-        createdAt: job.createdAt,
-      },
-      refresh: "wait_for",
-    });
   }
 
   async indexCandidate(
@@ -378,171 +478,249 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
        SET operation = EXCLUDED.operation,
            attempts = 0,
            next_attempt_at = now(),
-           last_error = NULL`;
+           last_error = NULL,
+           claim_token = NULL,
+           claimed_until = NULL`;
     const parameters = [entityType, entityId, operation];
     if (manager) await manager.query(sql, parameters);
     else await this.dataSource.query(sql, parameters);
   }
 
-  private async removeCandidateDocument(candidateId: number): Promise<void> {
-    if (!this.client) throw new Error("OpenSearch is not connected.");
-    try {
-      await this.client.delete({
-        index: this.candidateIndex,
-        id: String(candidateId),
-      });
-    } catch (error) {
-      const status = (error as { meta?: { statusCode?: number } }).meta
-        ?.statusCode;
-      if (status !== 404) throw error;
-    }
-  }
+  private async buildBulkActions(
+    records: Array<{
+      entityType: "job" | "candidate";
+      entityId: number;
+      operation: "upsert" | "delete";
+    }>,
+  ): Promise<Array<Record<string, unknown>>> {
+    const jobIds = records
+      .filter(
+        (record) =>
+          record.entityType === "job" && record.operation === "upsert",
+      )
+      .map((record) => record.entityId);
+    const candidateIds = records
+      .filter(
+        (record) =>
+          record.entityType === "candidate" && record.operation === "upsert",
+      )
+      .map((record) => record.entityId);
+    const jobs = jobIds.length
+      ? ((await this.dataSource.query(
+          `SELECT id, title, company, location, category, industry, skills,
+                  workplace_type AS "workplaceType",
+                  employment_type AS "employmentType",
+                  description, is_active AS "isActive",
+                  application_deadline AS "applicationDeadline",
+                  created_at AS "createdAt"
+           FROM jobs WHERE id = ANY($1::int[])`,
+          [jobIds],
+        )) as Job[])
+      : [];
+    const candidates = candidateIds.length
+      ? ((await this.dataSource.query(
+          `SELECT users.id AS "candidateId",
+                  users.display_name AS "displayName",
+                  profile.headline,
+                  profile.location,
+                  profile.skills,
+                  profile.summary,
+                  profile.experience::text AS experience,
+                  profile.education::text AS education,
+                  profile.certifications::text AS certifications,
+                  profile.desired_job_titles::text AS "desiredJobTitles",
+                  CASE WHEN profile.allow_recruiter_resume_access
+                    THEN COALESCE(current_resume.parsed_text, '')
+                    ELSE ''
+                  END AS "resumeText"
+           FROM candidate_profiles profile
+           INNER JOIN users ON users.id = profile.user_id
+           LEFT JOIN candidate_resume_versions current_resume
+             ON current_resume.user_id = profile.user_id
+            AND current_resume.storage_path = profile.resume_path
+           WHERE users.id = ANY($1::int[])
+             AND profile.profile_visibility = 'recruiters'
+             AND users.role = 'candidate'
+             AND users.is_active = true`,
+          [candidateIds],
+        )) as Array<{
+          candidateId: number;
+          displayName: string;
+          headline: string;
+          location: string;
+          skills: string;
+          summary: string;
+          experience: string;
+          education: string;
+          certifications: string;
+          desiredJobTitles: string;
+          resumeText: string;
+        }>)
+      : [];
+    const jobsById = new Map(jobs.map((job) => [job.id, job]));
+    const candidatesById = new Map(
+      candidates.map((candidate) => [candidate.candidateId, candidate]),
+    );
+    const actions: Array<Record<string, unknown>> = [];
 
-  private async removeJobDocument(jobId: number): Promise<void> {
-    if (!this.client) throw new Error("OpenSearch is not connected.");
-    try {
-      await this.client.delete({ index: this.index, id: String(jobId) });
-    } catch (error) {
-      const status = (error as { meta?: { statusCode?: number } }).meta
-        ?.statusCode;
-      if (status !== 404) throw error;
-    }
-  }
-
-  private async applyIndexRecord(record: {
-    entityType: "job" | "candidate";
-    entityId: number;
-    operation: "upsert" | "delete";
-  }): Promise<void> {
-    if (!this.client) throw new Error("OpenSearch is not connected.");
-    if (record.operation === "delete") {
-      if (record.entityType === "job") {
-        await this.removeJobDocument(record.entityId);
-      } else {
-        await this.removeCandidateDocument(record.entityId);
+    for (const record of records) {
+      const index =
+        record.entityType === "job" ? this.index : this.candidateIndex;
+      if (record.operation === "delete") {
+        actions.push({
+          delete: { _index: index, _id: String(record.entityId) },
+        });
+        continue;
       }
-      return;
-    }
 
-    if (record.entityType === "job") {
-      const jobs = (await this.dataSource.query(
-        `SELECT id, title, company, location, category, industry, skills,
-                workplace_type AS "workplaceType",
-                employment_type AS "employmentType",
-                description, is_active AS "isActive",
-                application_deadline AS "applicationDeadline",
-                created_at AS "createdAt"
-         FROM jobs WHERE id = $1`,
-        [record.entityId],
-      )) as Job[];
-      if (jobs.length) await this.indexJob(jobs[0]);
-      else await this.removeJobDocument(record.entityId);
-      return;
-    }
+      if (record.entityType === "job") {
+        const job = jobsById.get(record.entityId);
+        if (!job) {
+          actions.push({
+            delete: { _index: this.index, _id: String(record.entityId) },
+          });
+        } else {
+          actions.push(
+            { index: { _index: this.index, _id: String(record.entityId) } },
+            {
+              title: job.title,
+              company: job.company,
+              location: job.location,
+              category: job.category,
+              industry: job.industry,
+              skills: job.skills,
+              workplaceType: job.workplaceType,
+              employmentType: job.employmentType,
+              description: job.description,
+              isActive: job.isActive,
+              applicationDeadline: job.applicationDeadline,
+              createdAt: job.createdAt,
+            },
+          );
+        }
+        continue;
+      }
 
-    const candidates = (await this.dataSource.query(
-      `SELECT users.id AS "candidateId",
-              users.display_name AS "displayName",
-              profile.headline,
-              profile.location,
-              profile.skills
-       FROM candidate_profiles profile
-       INNER JOIN users ON users.id = profile.user_id
-       WHERE users.id = $1
-         AND profile.profile_visibility = 'recruiters'
-         AND users.role = 'candidate'
-         AND users.is_active = true`,
-      [record.entityId],
-    )) as Array<{
-      candidateId: number;
-      displayName: string;
-      headline: string;
-      location: string;
-      skills: string;
-    }>;
-    if (!candidates.length) {
-      await this.removeCandidateDocument(record.entityId);
-      return;
+      const candidate = candidatesById.get(record.entityId);
+      if (!candidate) {
+        actions.push({
+          delete: { _index: this.candidateIndex, _id: String(record.entityId) },
+        });
+      } else {
+        actions.push(
+          {
+            index: {
+              _index: this.candidateIndex,
+              _id: String(record.entityId),
+            },
+          },
+          {
+            displayName: candidate.displayName,
+            headline: candidate.headline,
+            location: candidate.location,
+            skills: candidate.skills,
+            summary: candidate.summary,
+            experience: candidate.experience,
+            education: candidate.education,
+            certifications: candidate.certifications,
+            desiredJobTitles: candidate.desiredJobTitles,
+            resumeText: candidate.resumeText,
+            discoverable: true,
+          },
+        );
+      }
     }
-    const [candidate] = candidates;
-    await this.client.index({
-      index: this.candidateIndex,
-      id: String(record.entityId),
-      body: {
-        displayName: candidate.displayName,
-        headline: candidate.headline,
-        location: candidate.location,
-        skills: candidate.skills,
-        discoverable: true,
-      },
-      refresh: "wait_for",
-    });
+    return actions;
   }
 
   private async processOutbox(): Promise<void> {
     if (!this.client || this.processingOutbox || !this.initialized) return;
     this.processingOutbox = true;
     try {
-      for (let count = 0; count < 20; count += 1) {
-        const processed = await this.dataSource.transaction(async (manager) => {
-          const records = (await manager.query(
-            `SELECT id, entity_type AS "entityType",
-                    entity_id AS "entityId", operation, attempts
-             FROM search_index_outbox
-             WHERE next_attempt_at <= now()
-             ORDER BY id
-             LIMIT 1
-             FOR UPDATE SKIP LOCKED`,
-          )) as Array<{
-            id: number;
-            entityType: "job" | "candidate";
-            entityId: number;
-            operation: "upsert" | "delete";
-            attempts: number;
-          }>;
-          const record = records[0];
-          if (!record) return false;
+      const claimToken = randomUUID();
+      const records = (await this.dataSource.query(
+        `WITH due AS (
+           SELECT id
+           FROM search_index_outbox
+           WHERE next_attempt_at <= now()
+             AND (claimed_until IS NULL OR claimed_until < now())
+           ORDER BY id
+           LIMIT 100
+           FOR UPDATE SKIP LOCKED
+         )
+         UPDATE search_index_outbox outbox
+         SET claim_token = $1,
+             claimed_until = now() + INTERVAL '1 minute'
+         FROM due
+         WHERE outbox.id = due.id
+         RETURNING outbox.id, outbox.entity_type AS "entityType",
+                   outbox.entity_id AS "entityId", outbox.operation,
+                   outbox.attempts`,
+        [claimToken],
+      )) as Array<{
+        id: number;
+        entityType: "job" | "candidate";
+        entityId: number;
+        operation: "upsert" | "delete";
+        attempts: number;
+      }>;
+      if (records.length) {
+        const actions = await this.buildBulkActions(records);
+        if (actions.length) {
+          let response;
           try {
-            await this.applyIndexRecord(record);
-            await manager.query(
-              "DELETE FROM search_index_outbox WHERE id = $1",
-              [record.id],
-            );
+            response = await this.client.bulk({
+              body: actions,
+              refresh: "wait_for",
+            });
           } catch (error) {
-            const attempts = record.attempts + 1;
-            const retryDelay = Math.min(
-              3_600_000,
-              1_000 * 2 ** Math.min(attempts, 12),
-            );
-            const errorMessage =
+            const reason =
               error instanceof Error
-                ? error.message.slice(0, 1000)
-                : "Unknown indexing error";
-            await manager.query(
-              `UPDATE search_index_outbox
-               SET attempts = $2,
-                   next_attempt_at = now() + ($3 * interval '1 millisecond'),
-                   last_error = $4
-               WHERE id = $1`,
-              [record.id, attempts, retryDelay, errorMessage],
-            );
-            await manager.query(
-              `UPDATE search_index_backfills
-               SET completed_at = NULL
-               WHERE entity_type = $1
-                 AND index_name = $2`,
-              [
-                record.entityType,
-                record.entityType === "job" ? this.index : this.candidateIndex,
-              ],
-            );
-            this.logger.warn(
-              `OpenSearch ${record.entityType} indexing retry scheduled for ${record.entityId}: ${errorMessage}`,
+                ? error.message
+                : "Unknown OpenSearch bulk error";
+            for (const record of records) {
+              await this.retryOutboxRecord(record, claimToken, reason);
+            }
+            throw error;
+          }
+          const results = response.body.items as Array<
+            Record<
+              string,
+              { status?: number; error?: { reason?: string; type?: string } }
+            >
+          >;
+          if (results.length !== records.length) {
+            throw new Error(
+              "OpenSearch bulk response did not match its request.",
             );
           }
-          return true;
-        });
-        if (!processed) break;
+          const succeeded: number[] = [];
+          for (const [index, result] of results.entries()) {
+            const resultItem = Object.values(result)[0];
+            const operation = Object.keys(result)[0];
+            const isDeleteMissing =
+              operation === "delete" && resultItem?.status === 404;
+            if (
+              resultItem?.status !== undefined &&
+              (resultItem.status < 300 || isDeleteMissing)
+            ) {
+              succeeded.push(records[index].id);
+            } else {
+              const reason =
+                resultItem?.error?.reason ??
+                resultItem?.error?.type ??
+                "Unknown OpenSearch bulk error";
+              await this.retryOutboxRecord(records[index], claimToken, reason);
+            }
+          }
+          if (succeeded.length) {
+            await this.dataSource.query(
+              `DELETE FROM search_index_outbox
+               WHERE id = ANY($1::bigint[]) AND claim_token = $2`,
+              [succeeded, claimToken],
+            );
+          }
+        }
       }
       await this.completeBackfills();
       await this.refreshIndexReadiness();
@@ -557,12 +735,61 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async retryOutboxRecord(
+    record: {
+      id: number;
+      entityType: "job" | "candidate";
+      entityId: number;
+      attempts: number;
+    },
+    claimToken: string,
+    errorMessage: string,
+  ): Promise<void> {
+    const attempts = record.attempts + 1;
+    const retryDelay = Math.min(3_600_000, 1_000 * 2 ** Math.min(attempts, 12));
+    const result = (await this.dataSource.query(
+      `UPDATE search_index_outbox
+       SET attempts = $3,
+           next_attempt_at = now() + ($4 * interval '1 millisecond'),
+           last_error = $5,
+           claim_token = NULL,
+           claimed_until = NULL
+       WHERE id = $1 AND claim_token = $2
+       RETURNING id`,
+      [
+        record.id,
+        claimToken,
+        attempts,
+        retryDelay,
+        errorMessage.slice(0, 1000),
+      ],
+    )) as Array<{ id: number }>;
+    if (!result.length) return;
+    await this.dataSource.query(
+      `UPDATE search_index_backfills
+       SET completed_at = NULL
+       WHERE entity_type = $1 AND index_name = $2`,
+      [
+        record.entityType,
+        record.entityType === "job" ? this.index : this.candidateIndex,
+      ],
+    );
+    this.logger.warn(
+      `OpenSearch ${record.entityType} indexing retry scheduled for ${record.entityId}: ${errorMessage.slice(0, 240)}`,
+    );
+  }
+
   private async runOutboxCycle(): Promise<void> {
     if (!this.initialized) {
       if (Date.now() < this.nextInitializationAttemptAt) return;
       try {
         await this.initializeIndex();
-      } catch {
+      } catch (error) {
+        this.logger.warn(
+          `OpenSearch initialization retry failed: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`,
+        );
         return;
       }
     }
@@ -614,7 +841,18 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
                 {
                   multi_match: {
                     query: query.trim(),
-                    fields: ["displayName", "headline", "location", "skills"],
+                    fields: [
+                      "displayName",
+                      "headline",
+                      "location",
+                      "skills",
+                      "summary",
+                      "experience",
+                      "education",
+                      "certifications",
+                      "desiredJobTitles",
+                      "resumeText",
+                    ],
                     type: "cross_fields",
                     operator: "and",
                   },
@@ -656,7 +894,7 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
     const terms = `${filters.query ?? ""} ${filters.location ?? ""}`
       .trim()
       .split(/\s+/);
-    if (terms.some((term) => term.length < 2 || term.length > 20)) {
+    if (terms.some((term) => !/^[\p{L}\p{N}]{2,20}$/u.test(term))) {
       return null;
     }
     if (!this.indexReady) {
@@ -680,19 +918,20 @@ export class OpenSearchService implements OnModuleInit, OnModuleDestroy {
             "description",
             "location",
           ],
-          fuzziness: "AUTO",
+          type: "cross_fields",
+          operator: "and",
         },
       });
     }
     if (filters.location) {
-      must.push({ match: { location: filters.location } });
+      must.push({ match_phrase: { location: filters.location } });
     }
     try {
       const response = await this.client.search({
         index: this.index,
         body: {
           query: { bool: { must } },
-          sort: [{ _score: "desc" }, { createdAt: "desc" }],
+          sort: [{ createdAt: "desc" }],
           from: 0,
           size: 10_000,
         },

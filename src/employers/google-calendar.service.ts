@@ -1,6 +1,11 @@
 import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
+import { createHash } from "node:crypto";
 
-type CalendarResult = { meetingUrl: string | null; calendarStatus: "created" | "disabled" | "failed" };
+type CalendarResult = {
+  meetingUrl: string | null;
+  calendarEventId: string | null;
+  calendarStatus: "created" | "disabled" | "failed";
+};
 
 @Injectable()
 export class GoogleCalendarService {
@@ -62,7 +67,7 @@ export class GoogleCalendarService {
   async createInterviewEvent(input: {
     title: string;
     description: string;
-    attendeeEmail: string;
+    attendeeEmails: string[];
     startsAt: Date;
     durationMinutes: number;
   }): Promise<CalendarResult> {
@@ -73,9 +78,10 @@ export class GoogleCalendarService {
       this.logger.error(
         `Google Calendar authorization error: ${error instanceof Error ? error.name : "unknown"}.`,
       );
-      return { meetingUrl: null, calendarStatus: "failed" };
+      return { meetingUrl: null, calendarEventId: null, calendarStatus: "failed" };
     }
-    if (!accessToken) return { meetingUrl: null, calendarStatus: "disabled" };
+    if (!accessToken)
+      return { meetingUrl: null, calendarEventId: null, calendarStatus: "disabled" };
 
     try {
       const response = await fetch(
@@ -95,10 +101,10 @@ export class GoogleCalendarService {
                 input.startsAt.getTime() + input.durationMinutes * 60_000,
               ).toISOString(),
             },
-            attendees: [{ email: input.attendeeEmail }],
+            attendees: input.attendeeEmails.map((email) => ({ email })),
             conferenceData: {
               createRequest: {
-                requestId: `esllp-${input.startsAt.getTime()}-${input.attendeeEmail}`,
+                requestId: `esllp-${input.startsAt.getTime()}-${createHash("sha256").update(input.attendeeEmails.join("|")).digest("hex").slice(0, 20)}`,
                 conferenceSolutionKey: { type: "hangoutsMeet" },
               },
             },
@@ -108,7 +114,11 @@ export class GoogleCalendarService {
       );
       if (!response.ok) {
         this.logger.error(`Google Calendar event creation failed (HTTP ${response.status}).`);
-        return { meetingUrl: null, calendarStatus: "failed" };
+        return {
+          meetingUrl: null,
+          calendarEventId: null,
+          calendarStatus: "failed",
+        };
       }
       const payload = await response.json().catch(() => null);
       const entryPoints =
@@ -118,13 +128,93 @@ export class GoogleCalendarService {
       return {
         meetingUrl:
           entryPoints?.find((entry) => typeof entry.uri === "string")?.uri ?? null,
+        calendarEventId:
+          payload &&
+          typeof payload === "object" &&
+          "id" in payload &&
+          typeof payload.id === "string"
+            ? payload.id
+            : null,
         calendarStatus: "created",
       };
     } catch (error) {
       this.logger.error(
         `Google Calendar event creation error: ${error instanceof Error ? error.name : "unknown"}.`,
       );
-      return { meetingUrl: null, calendarStatus: "failed" };
+      return { meetingUrl: null, calendarEventId: null, calendarStatus: "failed" };
+    }
+  }
+
+  async updateInterviewEvent(
+    eventId: string,
+    startsAt: Date,
+    durationMinutes: number,
+    attendeeEmails: string[],
+  ): Promise<"updated" | "disabled" | "failed"> {
+    let accessToken: string | null;
+    try {
+      accessToken = await this.getAccessToken();
+    } catch (error) {
+      this.logger.error(
+        `Google Calendar authorization error: ${error instanceof Error ? error.name : "unknown"}.`,
+      );
+      return "failed";
+    }
+    if (!accessToken) return "disabled";
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            start: { dateTime: startsAt.toISOString() },
+            end: {
+              dateTime: new Date(
+                startsAt.getTime() + durationMinutes * 60_000,
+              ).toISOString(),
+            },
+            attendees: attendeeEmails.map((email) => ({ email })),
+          }),
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      if (!response.ok) {
+        this.logger.error(
+          `Google Calendar event update failed (HTTP ${response.status}).`,
+        );
+        return "failed";
+      }
+      return "updated";
+    } catch (error) {
+      this.logger.error(
+        `Google Calendar event update error: ${error instanceof Error ? error.name : "unknown"}.`,
+      );
+      return "failed";
+    }
+  }
+
+  async deleteInterviewEvent(eventId: string): Promise<void> {
+    const accessToken = await this.getAccessToken();
+    if (!accessToken) return;
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!response.ok && response.status !== 404 && response.status !== 410) {
+      this.logger.error(
+        `Google Calendar event deletion failed (HTTP ${response.status}).`,
+      );
+      throw new ServiceUnavailableException(
+        "The interview was cancelled, but its calendar event could not be removed.",
+      );
     }
   }
 }

@@ -10,23 +10,67 @@ import { createConnection, Socket } from "node:net";
 export class CandidateFileScanService {
   private readonly logger = new Logger(CandidateFileScanService.name);
 
+  get configured(): boolean {
+    return Boolean(process.env.CLAMAV_HOST?.trim());
+  }
+
+  async checkAvailability(): Promise<boolean> {
+    const host = process.env.CLAMAV_HOST?.trim();
+    if (!host) return false;
+    let port: number;
+    try {
+      port = this.getPort();
+    } catch (error) {
+      this.logger.warn(
+        `ClamAV availability check failed: ${
+          error instanceof Error ? error.message : "invalid configuration"
+        }`,
+      );
+      return false;
+    }
+    return new Promise<boolean>((resolve) => {
+      const socket: Socket = createConnection({ host, port });
+      let response = "";
+      let settled = false;
+      const finish = (available: boolean) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        resolve(available);
+      };
+      socket.setTimeout(3_000);
+      socket.once("connect", () => socket.write("PING\0"));
+      socket.on("data", (chunk: Buffer) => {
+        response += chunk.toString("utf8");
+        if (!response.includes("\0")) return;
+        finish(response.replace(/\0.*$/s, "").trim() === "PONG");
+      });
+      socket.once("timeout", () => finish(false));
+      socket.once("error", (error) => {
+        this.logger.warn(`ClamAV availability check failed (${error.name}).`);
+        finish(false);
+      });
+    });
+  }
+
   async scan(file: Buffer): Promise<void> {
     const host = process.env.CLAMAV_HOST?.trim();
     if (!host) {
-      if (process.env.NODE_ENV === "production")
-        throw new ServiceUnavailableException(
-          "Resume uploads are unavailable until the malware scanner is configured.",
+      if (
+        process.env.NODE_ENV === "development" &&
+        process.env.ALLOW_UNSCANNED_LOCAL_FILES === "true"
+      ) {
+        this.logger.warn(
+          "Local development upload is proceeding without malware scanning.",
         );
-      this.logger.warn(
-        "Candidate upload was not malware-scanned because CLAMAV_HOST is not configured.",
+        return;
+      }
+      throw new ServiceUnavailableException(
+        "File uploads are unavailable until the malware scanner is configured.",
       );
-      return;
     }
 
-    const portText = process.env.CLAMAV_PORT?.trim() || "3310";
-    const port = Number(portText);
-    if (!Number.isInteger(port) || port < 1 || port > 65535)
-      throw new ServiceUnavailableException("CLAMAV_PORT is invalid.");
+    const port = this.getPort();
 
     await new Promise<void>((resolve, reject) => {
       const socket: Socket = createConnection({ host, port });
@@ -94,5 +138,14 @@ export class CandidateFileScanService {
         ),
       );
     });
+  }
+
+  private getPort(): number {
+    const portText = process.env.CLAMAV_PORT?.trim() || "3310";
+    const port = Number(portText);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new ServiceUnavailableException("CLAMAV_PORT is invalid.");
+    }
+    return port;
   }
 }

@@ -6,6 +6,7 @@ import {
   IsISO8601,
   Matches,
   IsOptional,
+  IsObject,
   IsString,
   IsUrl,
   Max,
@@ -40,6 +41,48 @@ export class EmployerApplicantsQueryDto {
   status?: string;
 
   @IsOptional()
+  @IsString()
+  @Matches(/^(all|unassigned|[1-9]\d*)$/)
+  assignee?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  tag?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  from?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  to?: string;
+
+  @IsOptional()
+  @IsIn(["newest", "oldest", "name"])
+  sort?: "newest" | "oldest" | "name";
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  jobId?: number;
+}
+
+export class EmployerHiringReportQueryDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  from?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  to?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -50,6 +93,7 @@ export class CreateEmployerNoteDto {
   @IsString()
   @MinLength(1)
   @MaxLength(5000)
+  @Matches(/\S/)
   note!: string;
 }
 
@@ -65,6 +109,7 @@ export class EmployerTagDto {
   @IsString()
   @MinLength(1)
   @MaxLength(40)
+  @Matches(/\S/)
   label!: string;
 }
 
@@ -79,6 +124,12 @@ export class CreateEmployerInterviewDto {
   durationMinutes?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  interviewerUserId?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(500)
   location?: string;
@@ -88,6 +139,47 @@ export class CreateEmployerInterviewDto {
   @MaxLength(1000)
   @IsUrl({ protocols: ["http", "https"], require_protocol: true })
   meetingUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  notes?: string;
+}
+
+export class UpdateEmployerInterviewDto {
+  @IsISO8601()
+  startsAt!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(15)
+  @Max(480)
+  durationMinutes?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  interviewerUserId?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  meetingUrl?: string;
+}
+
+export class EmployerInterviewFeedbackDto {
+  @IsObject()
+  scores!: Record<string, number>;
+
+  @IsIn(["strong_yes", "yes", "maybe", "no"])
+  recommendation!: "strong_yes" | "yes" | "maybe" | "no";
 
   @IsOptional()
   @IsString()

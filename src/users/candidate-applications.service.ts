@@ -271,44 +271,86 @@ export class CandidateApplicationsService {
       extension,
     );
     await this.fileStorage.upload(filePath, file.contentType, file.buffer);
-    const documentRepository = this.dataSource.getRepository(
-      CandidateApplicationDocument,
-    );
     let document: CandidateApplicationDocument;
     try {
-      document = await documentRepository.save(
-        documentRepository.create({
-          userId: user.id,
-          jobId,
-          applicationId: null,
-          documentId,
-          documentLabel: configuredDocument.label,
+      document = await this.dataSource.transaction(async (manager) => {
+        const documentRepository = manager.getRepository(
+          CandidateApplicationDocument,
+        );
+        const previousDocuments = await documentRepository.find({
+          where: {
+            userId: user.id,
+            jobId,
+            documentId,
+            applicationId: IsNull(),
+          },
+          lock: { mode: "pessimistic_write" },
+        });
+        const savedDocument = await documentRepository.save(
+          documentRepository.create({
+            userId: user.id,
+            jobId,
+            applicationId: null,
+            documentId,
+            documentLabel: configuredDocument.label,
+            filePath,
+            fileName,
+            contentType: file.contentType,
+          }),
+        );
+        await this.fileStorage.markClean(
           filePath,
-          fileName,
-          contentType: file.contentType,
-        }),
-      );
+          user.id,
+          "application",
+          file.contentType,
+          manager,
+        );
+        await this.fileStorage.enqueueCleanup(
+          previousDocuments.map((previous) => previous.filePath),
+          manager,
+        );
+        if (previousDocuments.length) {
+          await documentRepository.delete(
+            previousDocuments.map((previous) => previous.id),
+          );
+        }
+        await this.auditService.record(
+          {
+            actorUserId: user.id,
+            action: "candidate.application_document_uploaded",
+            targetType: "job",
+            targetId: jobId,
+            details: { documentId, contentType: file.contentType },
+          },
+          manager,
+        );
+        return savedDocument;
+      });
     } catch (error) {
       try {
         await this.fileStorage.remove(filePath);
       } catch (cleanupError) {
-        this.logger.error(
-          `Could not remove orphaned application document for candidate ${user.id}: ${
-            cleanupError instanceof Error
-              ? cleanupError.message
-              : "unknown storage error"
-          }`,
-        );
+        try {
+          await this.fileStorage.enqueueCleanup([filePath]);
+          this.logger.warn(
+            "A failed application document upload was queued for storage cleanup.",
+          );
+        } catch (queueError) {
+          this.logger.error(
+            `Could not remove or queue a failed application document upload: ${
+              cleanupError instanceof Error
+                ? cleanupError.message
+                : "unknown storage error"
+            }; cleanup queue error: ${
+              queueError instanceof Error
+                ? queueError.message
+                : "unknown database error"
+            }`,
+          );
+        }
       }
       throw error;
     }
-    await this.auditService.record({
-      actorUserId: user.id,
-      action: "candidate.application_document_uploaded",
-      targetType: "job",
-      targetId: jobId,
-      details: { documentId, contentType: file.contentType },
-    });
     return {
       documentId,
       label: configuredDocument.label,
@@ -754,6 +796,10 @@ export class CandidateApplicationsService {
               configuration.applicationStages.find(
                 (stage) => stage.key === status,
               )?.label ?? status.replace(/_/g, " "),
+          },
+          {
+            userId: application.userId,
+            category: "application_update",
           },
         );
         notificationQueued = true;

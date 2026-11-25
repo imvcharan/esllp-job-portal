@@ -14,6 +14,7 @@ import {
   NotificationTemplatesService,
 } from "../notifications/notification-templates.service";
 import { JobQueueService } from "../infrastructure/job-queue.service";
+import { backgroundWorkersEnabled } from "../infrastructure/process-role";
 
 @Injectable()
 export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
@@ -22,7 +23,6 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailDeliveryService.name);
   private transporter: Transporter | null = null;
   private worker: NodeJS.Timeout | null = null;
-  private processing = false;
   private lastFailedNotificationRetentionSweepAt = 0;
 
   constructor(
@@ -32,6 +32,7 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (!backgroundWorkersEnabled()) return;
     await this.dataSource.query(`
       UPDATE email_notification_outbox
       SET status = CASE WHEN attempts >= 5 THEN 'failed' ELSE 'retrying' END,
@@ -44,11 +45,17 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
     await this.purgeExpiredFailedNotifications();
     this.lastFailedNotificationRetentionSweepAt = Date.now();
     if (this.queues?.enabled) {
-      this.queues.registerWorker("notifications", async () =>
-        this.processPendingNotifications(10),
+      this.queues.registerWorker("notifications", () =>
+        this.drainPendingNotifications(),
       );
       await Promise.resolve(
-        this.queues?.add("notifications", "drain-outbox", {}),
+        this.queues?.add(
+          "notifications",
+          "drain-outbox",
+          {},
+          0,
+          this.notificationQueueJobId(),
+        ),
       ).catch(() => false);
     }
     this.worker = setInterval(() => {
@@ -102,6 +109,10 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
     deduplicationKey: string = randomUUID(),
     templateKey?: NotificationEmailTemplateKey,
     templateValues: Record<string, string> = {},
+    deliveryContext?: {
+      userId: number;
+      category: "job_alert" | "application_update" | "interview_reminder";
+    },
   ): Promise<"queued"> {
     if (templateKey) {
       const template = await this.templates.render(templateKey, templateValues);
@@ -118,13 +129,31 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
       );
     await this.dataSource.query(
       `INSERT INTO email_notification_outbox
-         (deduplication_key, recipient_email, subject, message)
-       VALUES ($1, $2, $3, $4)
+         (deduplication_key, recipient_email, subject, message,
+          recipient_user_id, category)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (deduplication_key) DO NOTHING`,
-      [deduplicationKey, email.trim(), subject.trim(), message],
+      [
+        deduplicationKey,
+        email.trim(),
+        subject.trim(),
+        message,
+        deliveryContext?.userId ?? null,
+        deliveryContext?.category ?? null,
+      ],
     );
-    await this.queues?.add("notifications", "drain-outbox", {});
+    await this.queues?.add(
+      "notifications",
+      "drain-outbox",
+      {},
+      0,
+      this.notificationQueueJobId(),
+    );
     return "queued";
+  }
+
+  private notificationQueueJobId(): string {
+    return `drain-outbox-${Math.floor(Date.now() / 5_000)}`;
   }
 
   async outboxSummary() {
@@ -159,6 +188,36 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async outboxOperationalStatus() {
+    const rows = (await this.dataSource.query(
+      `SELECT status,
+              COUNT(*)::int AS count,
+              COUNT(*) FILTER (
+                WHERE status IN ('queued', 'retrying')
+                  AND next_attempt_at <= now()
+              )::int AS due,
+              MIN(next_attempt_at) FILTER (
+                WHERE status IN ('queued', 'retrying')
+              ) AS "oldestDueAt"
+       FROM email_notification_outbox
+       GROUP BY status`,
+    )) as Array<{
+      status: string;
+      count: number | string;
+      due: number | string;
+      oldestDueAt: Date | null;
+    }>;
+    const counts = Object.fromEntries(
+      rows.map(({ status, count }) => [status, Number(count)]),
+    );
+    return {
+      counts,
+      due: rows.reduce((total, row) => total + Number(row.due), 0),
+      oldestDueAt:
+        rows.find((row) => row.oldestDueAt)?.oldestDueAt?.toISOString() ?? null,
+    };
+  }
+
   async retryFailedNotification(id: number): Promise<boolean> {
     const result = (await this.dataSource.query(
       `UPDATE email_notification_outbox
@@ -176,20 +235,17 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
   }
 
   async processPendingNotifications(limit = 10): Promise<number> {
-    if (this.processing) return 0;
-    this.processing = true;
-    try {
-      const now = Date.now();
-      if (
-        now - (this.lastFailedNotificationRetentionSweepAt ?? 0) >=
-        EmailDeliveryService.failedNotificationRetentionSweepMs
-      ) {
-        await this.purgeExpiredFailedNotifications();
-        this.lastFailedNotificationRetentionSweepAt = now;
-      }
-      const batch = (await this.dataSource.transaction((manager) =>
-        manager.query(
-          `WITH due AS (
+    const now = Date.now();
+    if (
+      now - (this.lastFailedNotificationRetentionSweepAt ?? 0) >=
+      EmailDeliveryService.failedNotificationRetentionSweepMs
+    ) {
+      await this.purgeExpiredFailedNotifications();
+      this.lastFailedNotificationRetentionSweepAt = now;
+    }
+    const batch = (await this.dataSource.transaction((manager) =>
+      manager.query(
+        `WITH due AS (
              SELECT id
              FROM email_notification_outbox
              WHERE status IN ('queued', 'retrying')
@@ -205,84 +261,120 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
            FROM due
            WHERE outbox.id = due.id
            RETURNING outbox.id, outbox.recipient_email AS "recipientEmail",
-                     outbox.subject, outbox.message, outbox.attempts`,
-          [Math.min(50, Math.max(1, limit))],
-        ),
-      )) as Array<{
-        id: number;
-        recipientEmail: string | null;
-        subject: string | null;
-        message: string | null;
-        attempts: number;
-      }>;
-      for (const notification of batch) {
-        try {
-          if (
-            !notification.recipientEmail ||
-            !notification.subject ||
-            !notification.message
-          )
-            throw new Error("Queued notification content is incomplete.");
-          const escapedMessage = this.escapeHtml(notification.message);
-          const linkedMessage = escapedMessage.replace(
-            /(https:\/\/[^\s<]+)/g,
-            '<a href="$1">$1</a>',
-          );
-          await this.send(
-            notification.recipientEmail,
-            notification.subject,
-            notification.message,
-            `<p>${linkedMessage}</p>`,
-          );
-          await this.dataSource.query(
-            `UPDATE email_notification_outbox
-             SET status = 'sent', recipient_email = NULL, subject = NULL,
-                 message = NULL, last_error = NULL, locked_at = NULL,
-                 sent_at = now()
-             WHERE id = $1 AND status = 'sending'`,
+                   outbox.subject, outbox.message, outbox.attempts,
+                   outbox.recipient_user_id AS "recipientUserId",
+                   outbox.category`,
+        [Math.min(50, Math.max(1, limit))],
+      ),
+    )) as Array<{
+      id: number;
+      recipientEmail: string | null;
+      subject: string | null;
+      message: string | null;
+      attempts: number;
+      recipientUserId: number | null;
+      category: string | null;
+    }>;
+    for (const notification of batch) {
+      try {
+        if (
+          notification.recipientUserId !== null &&
+          notification.category !== null
+        ) {
+          const preferences = (await this.dataSource.query(
+            `SELECT candidate.is_active AS "isActive",
+                    CASE
+                      WHEN outbox.category = 'job_alert'
+                        THEN COALESCE(profile.job_alert_emails, false)
+                      WHEN outbox.category IN ('application_update', 'interview_reminder')
+                        THEN COALESCE(profile.application_email_updates, true)
+                      ELSE false
+                    END AS consent
+             FROM email_notification_outbox outbox
+             INNER JOIN users candidate ON candidate.id = outbox.recipient_user_id
+             LEFT JOIN candidate_profiles profile
+               ON profile.user_id = candidate.id
+             WHERE outbox.id = $1`,
             [notification.id],
-          );
-        } catch (error) {
-          const lastError =
-            error instanceof Error
-              ? error.message.slice(0, 1000)
-              : "Unknown email delivery error";
-          const status = notification.attempts >= 5 ? "failed" : "retrying";
-          const delaySeconds = Math.min(
-            21_600,
-            60 * 2 ** Math.max(0, notification.attempts - 1),
-          );
-          await this.dataSource.query(
-            `UPDATE email_notification_outbox
-             SET status = $2,
-                 failed_at = CASE WHEN $2 = 'failed' THEN now() ELSE NULL END,
-                 next_attempt_at = now() + ($3 * INTERVAL '1 second'),
-                 locked_at = NULL,
-                 last_error = $4
-             WHERE id = $1 AND status = 'sending'`,
-            [notification.id, status, delaySeconds, lastError],
-          );
-          this.logger.error(
-            `Notification email ${notification.id} failed on attempt ${notification.attempts}; status=${status}.`,
-          );
+          )) as Array<{ isActive: boolean; consent: boolean }>;
+          if (!preferences[0]?.isActive || !preferences[0]?.consent) {
+            await this.dataSource.query(
+              `UPDATE email_notification_outbox
+               SET status = 'cancelled', recipient_email = NULL,
+                   subject = NULL, message = NULL, locked_at = NULL,
+                   last_error = NULL
+               WHERE id = $1 AND status = 'sending'`,
+              [notification.id],
+            );
+            continue;
+          }
         }
+        if (
+          !notification.recipientEmail ||
+          !notification.subject ||
+          !notification.message
+        )
+          throw new Error("Queued notification content is incomplete.");
+        const escapedMessage = this.escapeHtml(notification.message);
+        const linkedMessage = escapedMessage.replace(
+          /(https:\/\/[^\s<]+)/g,
+          '<a href="$1">$1</a>',
+        );
+        await this.send(
+          notification.recipientEmail,
+          notification.subject,
+          notification.message,
+          `<p>${linkedMessage}</p>`,
+        );
+        await this.dataSource.query(
+          `UPDATE email_notification_outbox
+           SET status = 'sent', recipient_email = NULL, subject = NULL,
+               message = NULL, last_error = NULL, locked_at = NULL,
+               sent_at = now()
+           WHERE id = $1 AND status = 'sending'`,
+          [notification.id],
+        );
+      } catch (error) {
+        const lastError =
+          error instanceof Error
+            ? error.message.slice(0, 1000)
+            : "Unknown email delivery error";
+        const status = notification.attempts >= 5 ? "failed" : "retrying";
+        const delaySeconds = Math.min(
+          21_600,
+          60 * 2 ** Math.max(0, notification.attempts - 1),
+        );
+        await this.dataSource.query(
+          `UPDATE email_notification_outbox
+           SET status = $2,
+               failed_at = CASE WHEN $2 = 'failed' THEN now() ELSE NULL END,
+               next_attempt_at = now() + ($3 * INTERVAL '1 second'),
+               locked_at = NULL,
+               last_error = $4
+           WHERE id = $1 AND status = 'sending'`,
+          [notification.id, status, delaySeconds, lastError],
+        );
+        this.logger.error(
+          `Notification email ${notification.id} failed on attempt ${notification.attempts}; status=${status}.`,
+        );
       }
-      return batch.length;
-    } finally {
-      this.processing = false;
+    }
+    return batch.length;
+  }
+
+  private async drainPendingNotifications(): Promise<void> {
+    for (let batch = 0; batch < 10; batch += 1) {
+      const processed = await this.processPendingNotifications(50);
+      if (processed < 50) return;
     }
   }
 
   async purgeExpiredFailedNotifications(): Promise<number> {
     const expired = (await this.dataSource.query(`
-      UPDATE email_notification_outbox
-      SET recipient_email = NULL,
-          subject = NULL,
-          message = NULL,
-          last_error = NULL
-      WHERE status = 'failed'
-        AND failed_at < now() - INTERVAL '30 days'
-        AND recipient_email IS NOT NULL
+      DELETE FROM email_notification_outbox
+      WHERE (status = 'sent' AND sent_at < now() - INTERVAL '90 days')
+         OR (status = 'cancelled' AND created_at < now() - INTERVAL '30 days')
+         OR (status = 'failed' AND failed_at < now() - INTERVAL '90 days')
       RETURNING id
     `)) as Array<{ id: number }>;
     return expired.length;

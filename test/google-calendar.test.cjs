@@ -24,6 +24,7 @@ test("Google Calendar refreshes OAuth credentials and creates a Meet interview",
     }
     return new Response(
       JSON.stringify({
+        id: "calendar-event-123",
         conferenceData: {
           entryPoints: [{ uri: "https://meet.google.com/example-room" }],
         },
@@ -36,18 +37,23 @@ test("Google Calendar refreshes OAuth credentials and creates a Meet interview",
     const result = await new GoogleCalendarService().createInterviewEvent({
       title: "Interview",
       description: "Test interview",
-      attendeeEmail: "candidate@example.test",
+      attendeeEmails: ["candidate@example.test", "interviewer@example.test"],
       startsAt: new Date("2026-12-01T10:00:00.000Z"),
       durationMinutes: 30,
     });
     assert.equal(result.calendarStatus, "created");
     assert.equal(result.meetingUrl, "https://meet.google.com/example-room");
+    assert.equal(result.calendarEventId, "calendar-event-123");
     assert.equal(calls.length, 2);
     assert.match(calls[0].url, /oauth2\.googleapis\.com\/token/);
     assert.equal(
       calls[1].init.headers.Authorization,
       "Bearer access-token",
     );
+    assert.deepEqual(JSON.parse(calls[1].init.body).attendees, [
+      { email: "candidate@example.test" },
+      { email: "interviewer@example.test" },
+    ]);
   } finally {
     global.fetch = originalFetch;
     for (const key of keys) {
@@ -74,11 +80,15 @@ test("Google Calendar stays optional when OAuth credentials are absent", async (
     const result = await new GoogleCalendarService().createInterviewEvent({
       title: "Interview",
       description: "Test interview",
-      attendeeEmail: "candidate@example.test",
+      attendeeEmails: ["candidate@example.test"],
       startsAt: new Date("2026-12-01T10:00:00.000Z"),
       durationMinutes: 30,
     });
-    assert.deepEqual(result, { meetingUrl: null, calendarStatus: "disabled" });
+    assert.deepEqual(result, {
+      meetingUrl: null,
+      calendarEventId: null,
+      calendarStatus: "disabled",
+    });
   } finally {
     global.fetch = originalFetch;
     for (const key of keys) {

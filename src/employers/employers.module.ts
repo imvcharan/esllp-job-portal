@@ -12,6 +12,7 @@ import { User } from "../users/user.entity";
 import { EmployerApplicationNote } from "./employer-application-note.entity";
 import { EmployerApplicationTag } from "./employer-application-tag.entity";
 import { EmployerInterview } from "./employer-interview.entity";
+import { EmployerInterviewFeedback } from "./employer-interview-feedback.entity";
 import { EmployerOrganizationMember } from "./organization-member.entity";
 import { EmployerOrganization } from "./organization.entity";
 import { RazorpayWebhookEvent } from "./razorpay-webhook-event.entity";
@@ -42,6 +43,7 @@ import { InfrastructureModule } from "../infrastructure/infrastructure.module";
       EmployerApplicationNote,
       EmployerApplicationTag,
       EmployerInterview,
+      EmployerInterviewFeedback,
       UserNotification,
       RazorpayWebhookEvent,
       CandidateApplication,
@@ -69,6 +71,12 @@ import { InfrastructureModule } from "../infrastructure/infrastructure.module";
     RazorpayWebhookController,
     PublicCompanyPagesController,
   ],
-  providers: [EmployersService, EmployerApprovalGuard, InterviewReminderService, GoogleCalendarService],
+  providers: [
+    EmployersService,
+    EmployerApprovalGuard,
+    InterviewReminderService,
+    GoogleCalendarService,
+  ],
+  exports: [EmployersService, InterviewReminderService],
 })
 export class EmployersModule {}

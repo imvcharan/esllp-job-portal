@@ -46,3 +46,76 @@ test("candidate interview list is scoped to the signed-in candidate and excludes
   assert.equal(result.items[0].meetingUrl, interview.meetingUrl);
   assert.equal("notes" in result.items[0], false);
 });
+
+test("candidate interview responses lock the interview and notify only once", async () => {
+  const interview = {
+    id: 12,
+    startsAt: new Date(Date.now() + 60_000),
+    status: "scheduled",
+    candidateResponse: "pending",
+    scheduledByUserId: 9,
+    application: {
+      userId: 7,
+      job: { title: "Engineer" },
+    },
+  };
+  let lockMode;
+  const notifications = [];
+  const interviewRepository = {
+    createQueryBuilder() {
+      const query = {
+        innerJoinAndSelect() {
+          return query;
+        },
+        where() {
+          return query;
+        },
+        andWhere() {
+          return query;
+        },
+        setLock(mode) {
+          lockMode = mode;
+          return query;
+        },
+        getOne: async () => interview,
+      };
+      return query;
+    },
+    save: async (entity) => entity,
+  };
+  const notificationRepository = {
+    create: (entity) => entity,
+    save: async (entity) => notifications.push(entity),
+  };
+  const manager = {
+    getRepository(entity) {
+      return entity.name === "EmployerInterview"
+        ? interviewRepository
+        : notificationRepository;
+    },
+  };
+  const service = new CandidateInterviewsService({
+    manager: {
+      transaction: async (callback) => callback(manager),
+    },
+  });
+
+  assert.deepEqual(
+    await service.respond(
+      { id: 7, displayName: "Candidate", email: "candidate@example.test" },
+      12,
+      { response: "accepted" },
+    ),
+    { success: true, response: "accepted" },
+  );
+  assert.equal(lockMode, "pessimistic_write");
+  assert.equal(interview.candidateResponse, "accepted");
+  assert.equal(notifications.length, 1);
+
+  await service.respond({ id: 7 }, 12, { response: "accepted" });
+  assert.equal(notifications.length, 1);
+  await assert.rejects(
+    service.respond({ id: 7 }, 12, { response: "declined" }),
+    /already responded/,
+  );
+});

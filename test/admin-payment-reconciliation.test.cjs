@@ -8,7 +8,11 @@ test("admin payment reconciliation combines recent paid ledgers without losing p
   const service = Object.create(AdminInsightsService.prototype);
   service.candidatePayments = {
     find: async (options) => {
-      assert.deepEqual(options.where, { paymentStatus: "paid" });
+      assert.deepEqual(options.where, [
+        { paymentStatus: "paid" },
+        { paymentStatus: "partially_refunded" },
+        { paymentStatus: "refunded" },
+      ]);
       assert.equal(options.take, 500);
       return [
         {
@@ -16,6 +20,7 @@ test("admin payment reconciliation combines recent paid ledgers without losing p
           razorpayOrderId: "order_candidate",
           amountPaise: 12345,
           currency: "INR",
+          paymentStatus: "paid",
           paidAt: new Date("2026-11-02T10:00:00.000Z"),
         },
       ];

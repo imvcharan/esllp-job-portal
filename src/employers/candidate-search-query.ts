@@ -74,11 +74,34 @@ export function compileCandidateSearchQuery(query: string) {
     throw new BadRequestException("Check the Boolean search expression.");
 
   const parameters: Record<string, string> = {};
+  const rankingTerms: string[] = [];
   let parameterIndex = 0;
-  const compile = (node: SearchNode): string => {
-    if (node.kind === "not") return `(NOT ${compile(node.value)})`;
+  const termExpression = (name: string) => `(
+      candidate.displayName ILIKE :${name} ESCAPE '\\'
+      OR profile.headline ILIKE :${name} ESCAPE '\\'
+      OR profile.location ILIKE :${name} ESCAPE '\\'
+      OR profile.skills ILIKE :${name} ESCAPE '\\'
+      OR profile.summary ILIKE :${name} ESCAPE '\\'
+      OR profile.experience::text ILIKE :${name} ESCAPE '\\'
+      OR profile.education::text ILIKE :${name} ESCAPE '\\'
+      OR profile.certifications::text ILIKE :${name} ESCAPE '\\'
+      OR profile.desired_job_titles::text ILIKE :${name} ESCAPE '\\'
+      OR (
+        profile.allow_recruiter_resume_access = true
+        AND EXISTS (
+          SELECT 1
+          FROM candidate_resume_versions current_resume
+          WHERE current_resume.user_id = profile.user_id
+            AND current_resume.storage_path = profile.resume_path
+            AND current_resume.parsed_text ILIKE :${name} ESCAPE '\\'
+        )
+      )
+    )`;
+  const compile = (node: SearchNode, negated = false): string => {
+    if (node.kind === "not")
+      return `(NOT ${compile(node.value, !negated)})`;
     if (node.kind === "and" || node.kind === "or")
-      return `(${compile(node.left)} ${node.kind.toUpperCase()} ${compile(node.right)})`;
+      return `(${compile(node.left, negated)} ${node.kind.toUpperCase()} ${compile(node.right, negated)})`;
     if (node.kind === "term") {
       const name = `candidateSearch${parameterIndex++}`;
       const escaped = node.value
@@ -86,9 +109,18 @@ export function compileCandidateSearchQuery(query: string) {
         .slice(0, 100)
         .replace(/[\\%_]/g, "\\$&");
       parameters[name] = `%${escaped}%`;
-      return `(candidate.displayName ILIKE :${name} ESCAPE '\\' OR profile.headline ILIKE :${name} ESCAPE '\\' OR profile.location ILIKE :${name} ESCAPE '\\' OR profile.skills ILIKE :${name} ESCAPE '\\')`;
+      if (!negated) rankingTerms.push(name);
+      return termExpression(name);
     }
     throw new BadRequestException("Check the Boolean search expression.");
   };
-  return { expression: compile(tree), parameters };
+  return {
+    expression: compile(tree),
+    parameters,
+    rankExpression: rankingTerms.length
+      ? rankingTerms
+          .map((name) => `CASE WHEN ${termExpression(name)} THEN 1 ELSE 0 END`)
+          .join(" + ")
+      : null,
+  };
 }

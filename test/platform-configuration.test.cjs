@@ -306,6 +306,7 @@ test("employer job publication follows the configured moderation gate", async ()
       save: async (value) => value,
     };
     const organization = { id: 21 };
+    const alertEnqueues = [];
     const service = Object.create(EmployersService.prototype);
     Object.assign(service, {
       platformConfiguration: {
@@ -330,12 +331,17 @@ test("employer job publication follows the configured moderation gate", async ()
       assertJobQuota: async () => undefined,
       jobsService: {
         syncSearchIndex: async () => undefined,
-        notifyMatchingCandidates: async () => ({ queued: 0, failed: 0 }),
+        enqueueJobAlertGeneration: async (...args) => alertEnqueues.push(args),
+        processJobAlert: async () => ({ queued: 0, failed: 0 }),
       },
       auditService: { record: async () => undefined },
     });
 
-    return { result: await service.publishJob({ id: 7 }, job.id), job };
+    return {
+      result: await service.publishJob({ id: 7 }, job.id),
+      job,
+      alertEnqueues,
+    };
   }
 
   const gated = await publish(true);
@@ -347,4 +353,5 @@ test("employer job publication follows the configured moderation gate", async ()
   assert.equal(automatic.job.isActive, true);
   assert.equal(automatic.job.moderationStatus, "approved");
   assert.deepEqual(automatic.result.alertResult, { queued: 0, failed: 0 });
+  assert.equal(automatic.alertEnqueues.length, 1);
 });

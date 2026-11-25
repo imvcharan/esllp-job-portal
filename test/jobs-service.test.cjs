@@ -59,6 +59,9 @@ function createService() {
       builders.push(builder);
       return builder;
     },
+    manager: {
+      query: async () => [],
+    },
   };
   const service = new JobsService(
     jobsRepository,
@@ -68,9 +71,14 @@ function createService() {
     {},
     {},
     {},
+    {},
     {
       assertTaxonomyValue: async () => {},
       jobOptions: async () => ({}),
+    },
+    {
+      billingPolicy: async () => ({ pastDueGraceDays: 0 }),
+      employerPlans: async () => ({}),
     },
   );
   return { service, builders, job };
@@ -82,7 +90,7 @@ test("public search applies bounded pagination and returns live company options"
   const result = await service.findAll({ page: 0, limit: 500 });
 
   assert.deepEqual(result, {
-    items: [job],
+    items: [{ ...job, featuredPlacementTypes: [] }],
     total: 1,
     page: 1,
     limit: 100,
@@ -211,7 +219,7 @@ test("public search enforces publication eligibility and combines search filters
   assert.ok(
     calls.some(
       ([method, field]) =>
-        method === "orderBy" && field === "job.salaryCurrency",
+        method === "addOrderBy" && field === "job.salaryCurrency",
     ),
   );
   const searchBrackets = calls.find(
@@ -231,17 +239,29 @@ test("public search enforces publication eligibility and combines search filters
   };
   searchBrackets.whereFactory(whereBuilder);
   assert.deepEqual(searchConditions, [
-    ["where", "job.title ILIKE :query", { query: "%engineer%" }],
-    ["orWhere", "job.company ILIKE :query", { query: "%engineer%" }],
-    ["orWhere", "job.description ILIKE :query", { query: "%engineer%" }],
+    [
+      "where",
+      "job.title ILIKE :queryTerm0 ESCAPE '\\'",
+      { queryTerm0: "%engineer%" },
+    ],
+    [
+      "orWhere",
+      "job.company ILIKE :queryTerm0 ESCAPE '\\'",
+      { queryTerm0: "%engineer%" },
+    ],
+    [
+      "orWhere",
+      "job.description ILIKE :queryTerm0 ESCAPE '\\'",
+      { queryTerm0: "%engineer%" },
+    ],
     [
       "orWhere",
       `EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements_text(job.skills) AS job_skill(skill)
-                WHERE job_skill.skill ILIKE :query
+                WHERE job_skill.skill ILIKE :queryTerm0 ESCAPE '\\'
               )`,
-      { query: "%engineer%" },
+      { queryTerm0: "%engineer%" },
     ],
   ]);
 });

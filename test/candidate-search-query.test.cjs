@@ -13,6 +13,12 @@ test("candidate Boolean search compiles terms into parameterized SQL", () => {
   assert.match(compiled.expression, / AND /);
   assert.match(compiled.expression, / OR /);
   assert.match(compiled.expression, /NOT/);
+  assert.match(compiled.expression, /current_resume\.parsed_text/);
+  assert.match(
+    compiled.expression,
+    /profile\.allow_recruiter_resume_access = true/,
+  );
+  assert.match(compiled.rankExpression, /CASE WHEN/);
   assert.doesNotMatch(compiled.expression, /Python|analyst|junior/);
   assert.deepEqual(Object.values(compiled.parameters), [
     "%Python%",

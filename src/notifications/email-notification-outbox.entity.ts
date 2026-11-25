@@ -20,6 +20,12 @@ export class EmailNotificationOutbox {
   })
   deduplicationKey!: string;
 
+  @Column({ name: "recipient_user_id", type: "integer", nullable: true })
+  recipientUserId!: number | null;
+
+  @Column({ type: "varchar", length: 40, nullable: true })
+  category!: string | null;
+
   @Column({
     name: "recipient_email",
     type: "varchar",

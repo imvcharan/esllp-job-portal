@@ -7,9 +7,7 @@ const {
 const {
   EmployerOrganization,
 } = require("../dist/employers/organization.entity.js");
-const {
-  EmployersService,
-} = require("../dist/employers/employers.service.js");
+const { EmployersService } = require("../dist/employers/employers.service.js");
 const { Job } = require("../dist/jobs/job.entity.js");
 
 function createWebhookService(body, options = {}) {
@@ -40,7 +38,7 @@ function createWebhookService(body, options = {}) {
     getRepository: (entity) => {
       if (entity === EmployerOrganization)
         return {
-          findOne: async () => options.unlinked ? null : organization,
+          findOne: async () => (options.unlinked ? null : organization),
           save: async (value) => value,
         };
       if (entity === Job) return {};
@@ -52,9 +50,28 @@ function createWebhookService(body, options = {}) {
     dataSource: { transaction: (callback) => callback(manager) },
     razorpayConfiguration: {
       credentials: async () => ({ webhookSecret: "webhook-secret" }),
+      employerPlans: async () => ({
+        starter: {
+          planId: "plan_starter",
+          amountInr: 2999,
+          activeJobs: 5,
+          seats: 3,
+          resumeCredits: 0,
+        },
+      }),
     },
     logger: { error: () => undefined },
     enforceJobQuota: async () => undefined,
+    razorpayRequest: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "sub_123",
+        plan_id: "plan_starter",
+        status: "active",
+        current_end: 1_800_000_000,
+      }),
+    }),
   });
   const rawBody = Buffer.from(JSON.stringify(body));
   const signature = createHmac("sha256", "webhook-secret")
@@ -74,7 +91,11 @@ function chargeEvent(overrides = {}) {
     event: "subscription.charged",
     payload: {
       subscription: {
-        entity: { id: "sub_123", current_end: 1_800_000_000 },
+        entity: {
+          id: "sub_123",
+          plan_id: "plan_starter",
+          current_end: 1_800_000_000,
+        },
       },
       payment: {
         entity: {
@@ -154,31 +175,68 @@ test("employer subscription charges reject malformed or unlinked payments", asyn
 test("employer revenue analytics returns captured totals grouped by currency", async () => {
   const calls = [];
   const results = [
-    [{ currency: "INR", paidOrders: "2", grossAmount: "5998.00" }],
-    [{
-      currency: "INR",
-      month: "2026-11",
-      paidOrders: "2",
-      grossAmount: "5998.00",
-    }],
-    [{
-      planKey: "starter",
-      currency: "INR",
-      paidOrders: "2",
-      grossAmount: "5998.00",
-    }],
+    [
+      {
+        currency: "INR",
+        paidOrders: "2",
+        grossAmount: "5998.00",
+        refundedAmount: "100.00",
+        netAmount: "5898.00",
+      },
+    ],
+    [
+      {
+        currency: "INR",
+        month: "2026-11",
+        paidOrders: "2",
+        grossAmount: "5998.00",
+        refundedAmount: "100.00",
+        netAmount: "5898.00",
+      },
+    ],
+    [
+      {
+        planKey: "starter",
+        currency: "INR",
+        paidOrders: "2",
+        grossAmount: "5998.00",
+        refundedAmount: "100.00",
+        netAmount: "5898.00",
+      },
+    ],
   ];
   const service = Object.create(AdminInsightsService.prototype);
   service.employerPayments = {
     createQueryBuilder: () => {
       const query = {
-        select: (...args) => { calls.push(["select", ...args]); return query; },
-        addSelect: (...args) => { calls.push(["addSelect", ...args]); return query; },
-        where: (...args) => { calls.push(["where", ...args]); return query; },
-        groupBy: (...args) => { calls.push(["groupBy", ...args]); return query; },
-        addGroupBy: (...args) => { calls.push(["addGroupBy", ...args]); return query; },
-        orderBy: (...args) => { calls.push(["orderBy", ...args]); return query; },
-        addOrderBy: (...args) => { calls.push(["addOrderBy", ...args]); return query; },
+        select: (...args) => {
+          calls.push(["select", ...args]);
+          return query;
+        },
+        addSelect: (...args) => {
+          calls.push(["addSelect", ...args]);
+          return query;
+        },
+        where: (...args) => {
+          calls.push(["where", ...args]);
+          return query;
+        },
+        groupBy: (...args) => {
+          calls.push(["groupBy", ...args]);
+          return query;
+        },
+        addGroupBy: (...args) => {
+          calls.push(["addGroupBy", ...args]);
+          return query;
+        },
+        orderBy: (...args) => {
+          calls.push(["orderBy", ...args]);
+          return query;
+        },
+        addOrderBy: (...args) => {
+          calls.push(["addOrderBy", ...args]);
+          return query;
+        },
         getRawMany: async () => results.shift(),
       };
       return query;
@@ -189,20 +247,37 @@ test("employer revenue analytics returns captured totals grouped by currency", a
 
   assert.equal(revenue.scope, "employer_subscription_charges");
   assert.deepEqual(revenue.totalsByCurrency, [
-    { currency: "INR", paidOrders: "2", grossAmount: "5998.00" },
+    {
+      currency: "INR",
+      paidOrders: "2",
+      grossAmount: "5998.00",
+      refundedAmount: "100.00",
+      netAmount: "5898.00",
+    },
   ]);
-  assert.deepEqual(revenue.monthly, [{
-    currency: "INR",
-    month: "2026-11",
-    paidOrders: "2",
-    grossAmount: "5998.00",
-  }]);
-  assert.deepEqual(revenue.byPlan, [{
-    planKey: "starter",
-    currency: "INR",
-    paidOrders: "2",
-    grossAmount: "5998.00",
-  }]);
-  assert.ok(calls.some(([, expression]) =>
-    String(expression).includes("INTERVAL '11 months'")));
+  assert.deepEqual(revenue.monthly, [
+    {
+      currency: "INR",
+      month: "2026-11",
+      paidOrders: "2",
+      grossAmount: "5998.00",
+      refundedAmount: "100.00",
+      netAmount: "5898.00",
+    },
+  ]);
+  assert.deepEqual(revenue.byPlan, [
+    {
+      planKey: "starter",
+      currency: "INR",
+      paidOrders: "2",
+      grossAmount: "5998.00",
+      refundedAmount: "100.00",
+      netAmount: "5898.00",
+    },
+  ]);
+  assert.ok(
+    calls.some(([, expression]) =>
+      String(expression).includes("INTERVAL '11 months'"),
+    ),
+  );
 });

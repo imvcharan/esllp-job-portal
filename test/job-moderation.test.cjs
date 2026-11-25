@@ -8,15 +8,19 @@ function createService(job) {
   const service = Object.create(JobsService.prototype);
   const repository = {
     findOneBy: async () => job,
+    findOne: async () => job,
     save: async (value) => value,
   };
   const transactionManager = {
     getRepository: () => repository,
+    query: async (sql) =>
+      sql.includes("RETURNING attempts") ? [{ attempts: 1 }] : [],
   };
   service.jobsRepository = {
     ...repository,
     manager: {
       transaction: async (callback) => callback(transactionManager),
+      query: async () => [],
     },
   };
   service.auditService = {

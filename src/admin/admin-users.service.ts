@@ -26,8 +26,6 @@ import { CandidateProfile } from "../users/candidate-profile.entity";
 import { CandidateSavedJob } from "../users/candidate-saved-job.entity";
 import { CandidateSavedSearch } from "../users/candidate-saved-search.entity";
 import { CandidatePremiumOrder } from "../users/candidate-premium-order.entity";
-import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
-import { CandidateResumeVersion } from "../users/candidate-resume-version.entity";
 import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
 import {
   EmployerOrganizationMember,
@@ -330,23 +328,32 @@ export class AdminUsersService {
       }
 
       if (user.role === UserRole.CANDIDATE) {
-        const [applicationDocuments, resumeVersions] = await Promise.all([
-          manager.getRepository(CandidateApplicationDocument).find({
-            where: { userId: targetUserId },
-            select: { filePath: true },
-          }),
-          manager.getRepository(CandidateResumeVersion).find({
-            where: { userId: targetUserId },
-            select: { storagePath: true },
-          }),
-        ]);
-        const filePaths = [
-          ...new Set([
-            ...applicationDocuments.map(({ filePath }) => filePath),
-            ...resumeVersions.map(({ storagePath }) => storagePath),
-          ]),
-        ];
-        await this.candidateFileStorage.removeMany(filePaths);
+        const files = (await manager.query(
+          `SELECT file_path AS path
+           FROM candidate_application_documents
+           WHERE user_id = $1
+           UNION
+           SELECT storage_path AS path
+           FROM candidate_resume_versions
+           WHERE user_id = $1
+           UNION
+           SELECT resume_path AS path
+           FROM candidate_profiles
+           WHERE user_id = $1 AND resume_path IS NOT NULL
+           UNION
+           SELECT photo_path AS path
+           FROM candidate_profiles
+           WHERE user_id = $1 AND photo_path IS NOT NULL
+           UNION
+           SELECT resume_path AS path
+           FROM candidate_applications
+           WHERE user_id = $1 AND resume_path IS NOT NULL`,
+          [targetUserId],
+        )) as Array<{ path: string }>;
+        await this.candidateFileStorage.enqueueCleanup(
+          files.map(({ path }) => path),
+          manager,
+        );
       }
 
       const deletedUser = { email: user.email, role: user.role };

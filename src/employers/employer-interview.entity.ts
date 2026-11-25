@@ -15,6 +15,7 @@ import { User } from "../users/user.entity";
 
 @Entity({ name: "employer_interviews" })
 @Index(["organizationId", "startsAt"])
+@Index(["organizationId", "status", "startsAt"])
 @Check(
   "employer_interviews_duration_minutes_check",
   `"duration_minutes" BETWEEN 15 AND 480`,
@@ -48,6 +49,13 @@ export class EmployerInterview {
   @JoinColumn({ name: "scheduled_by_user_id" })
   scheduledBy!: User;
 
+  @Column({ name: "interviewer_user_id", type: "integer", nullable: true })
+  interviewerUserId!: number | null;
+
+  @ManyToOne(() => User, { onDelete: "SET NULL", nullable: true })
+  @JoinColumn({ name: "interviewer_user_id" })
+  interviewer!: User | null;
+
   @Column({ name: "starts_at", type: "timestamptz" })
   startsAt!: Date;
 
@@ -70,6 +78,23 @@ export class EmployerInterview {
 
   @Column({ type: "varchar", length: 20, default: "scheduled" })
   status!: "scheduled" | "cancelled" | "completed";
+
+  @Column({
+    name: "candidate_response",
+    type: "varchar",
+    length: 24,
+    default: "pending",
+  })
+  candidateResponse!: "pending" | "accepted" | "declined" | "reschedule_requested";
+
+  @Column({ name: "candidate_response_note", type: "varchar", length: 500, nullable: true })
+  candidateResponseNote!: string | null;
+
+  @Column({ name: "candidate_response_at", type: "timestamptz", nullable: true })
+  candidateResponseAt!: Date | null;
+
+  @Column({ name: "calendar_event_id", type: "varchar", length: 255, nullable: true })
+  calendarEventId!: string | null;
 
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;

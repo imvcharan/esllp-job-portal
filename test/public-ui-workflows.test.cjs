@@ -59,14 +59,45 @@ test("email verification uses route parameters in its submit handler", () => {
   assert.doesNotMatch(submitHandler, /authParams\.get\("email"\)/);
 });
 
+test("admin background jobs view exposes queue status and audited retry actions", () => {
+  const html = readFileSync("public/admin/index.html", "utf8");
+  assert.match(
+    html,
+    /class="nav-link admin-only"[^>]*data-view="background-jobs"/,
+  );
+  assert.match(html, /\/api\/admin\/background-jobs/);
+  assert.match(html, /\/api\/admin\/email-outbox\/\$\{encodeURIComponent/);
+  assert.match(html, /\/indexing\/\$\{encodeURIComponent/);
+  assert.match(html, /Indexing records needing attention/);
+  assert.match(html, /Failed email deliveries/);
+  assert.match(html, /background-file-scanner-status/);
+  assert.match(html, /background-file-cleanup-pending/);
+});
+
+test("private resume and application file links are created on demand", () => {
+  const html = readFileSync("public/index.html", "utf8");
+
+  assert.match(html, /data-open-private-file/);
+  assert.match(html, /data-delete-resume-history/);
+  assert.match(html, /method: "DELETE"[\s\S]*resume-versions/);
+  assert.match(html, /applications\/\$\{application\.id\}\/documents/);
+  assert.doesNotMatch(html, /application\.resumeUrl/);
+});
+
 test("verification resend actions reuse the account email and offer recovery", () => {
   const html = readFileSync("public/index.html", "utf8");
 
   assert.match(html, /#email-otp\?email=\$\{encodeURIComponent\(email\)\}/);
   assert.match(html, /name="email" type="email" autocomplete="email"/);
-  assert.match(html, /const email = String\(formData\.get\("email"\) \|\| ""\)\.trim\(\)/);
+  assert.match(
+    html,
+    /const email = String\(formData\.get\("email"\) \|\| ""\)\.trim\(\)/,
+  );
   assert.match(html, /name="intent" value="resend">Resend SMS code/);
-  assert.match(html, /action !== "phone-verification-resend" &&\s*!form\.reportValidity\(\)/);
+  assert.match(
+    html,
+    /action !== "phone-verification-resend" &&\s*!form\.reportValidity\(\)/,
+  );
   assert.match(
     html,
     /Enter your account email above before requesting another SMS code/,
@@ -77,10 +108,7 @@ test("registration offers optional mobile verification after email verification"
   const html = readFileSync("public/index.html", "utf8");
 
   assert.match(html, /Step 1 of 2: Verify your email/);
-  assert.match(
-    html,
-    /First confirm that you own this email address/,
-  );
+  assert.match(html, /First confirm that you own this email address/);
   assert.match(html, /Open the verification link sent to/);
   assert.match(
     html,
@@ -170,15 +198,24 @@ test("login uses one clear divider and aligned alternate sign-in buttons", () =>
     html,
     /if \(!config\.googleClientId\) \{\s+if \(googleOption\) googleOption\.hidden = true;/,
   );
-  assert.match(html, /class="button button-light auth-email-code" href="#email-otp"/);
+  assert.match(
+    html,
+    /class="button button-light auth-email-code" href="#email-otp"/,
+  );
   assert.match(html, /Other ways to sign in/);
   assert.doesNotMatch(html, /Or continue with Google|Or use a one-time code/);
   assert.match(html, /\.auth-tabs a\s*\{[^}]*background:\s*#e2eee8/);
-  assert.match(html, /\.auth-tabs a\[aria-current="page"\]\s*\{[^}]*background:\s*var\(--green\)/);
+  assert.match(
+    html,
+    /\.auth-tabs a\[aria-current="page"\]\s*\{[^}]*background:\s*var\(--green\)/,
+  );
   assert.match(html, /theme: "filled_blue"/);
   assert.match(html, /shape: "pill"/);
   assert.match(html, /\.auth-divider\s*\{[^}]*font-size:\s*12px/);
-  assert.match(html, /\.auth-google-option #google-sign-in\s*\{[^}]*max-width:\s*320px/);
+  assert.match(
+    html,
+    /\.auth-google-option #google-sign-in\s*\{[^}]*max-width:\s*320px/,
+  );
   assert.match(html, /\.auth-email-code\s*\{[^}]*max-width:\s*320px/);
   assert.doesNotMatch(
     html,
@@ -190,10 +227,7 @@ test("login uses one clear divider and aligned alternate sign-in buttons", () =>
 test("auth layout top-aligns content and resets scroll without animation", () => {
   const html = readFileSync("public/index.html", "utf8");
 
-  assert.match(
-    html,
-    /\.auth-layout\s*\{[^}]*align-items:\s*start/,
-  );
+  assert.match(html, /\.auth-layout\s*\{[^}]*align-items:\s*start/);
   assert.match(
     html,
     /renderAuth\(\);\s+window\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*"instant"\s*\}\);/,
@@ -213,7 +247,10 @@ test("superadmin MFA code field appears before the verify button", () => {
     /For routine sign-in, use the current 6-digit code from your authenticator app\. Recovery codes are single-use backups\./,
   );
   assert.match(html, /Complete the CAPTCHA again, then verify\./);
-  assert.match(html, /The CAPTCHA has been reset; complete it again before retrying\./);
+  assert.match(
+    html,
+    /The CAPTCHA has been reset; complete it again before retrying\./,
+  );
 });
 
 test("announcement banner skips the API request in file previews", () => {
@@ -286,21 +323,44 @@ test("admin messaging settings expose independent SMS and WhatsApp controls", ()
 test("admin SMS settings use clear field labels, switch cards, and responsive layout", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
 
-  assert.match(html, /#twilio-config-form\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(html, /#twilio-config-form \.form-row:not\(\.form-row-toggle\)\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
-  assert.match(html, /#twilio-config-form > \.form-row-toggle\s*\{[^}]*background:\s*#f7faf9/);
+  assert.match(
+    html,
+    /#twilio-config-form\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
+  );
+  assert.match(
+    html,
+    /#twilio-config-form \.form-row:not\(\.form-row-toggle\)\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/,
+  );
+  assert.match(
+    html,
+    /#twilio-config-form > \.form-row-toggle\s*\{[^}]*background:\s*#f7faf9/,
+  );
   assert.match(html, /input\.toggle\[name="enabled"\],/);
-  assert.match(html, /@media \(max-width: 1024px\)\s*\{\s*#twilio-config-form \{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
-  assert.match(html, /name="authToken" type="password" maxlength="255" autocomplete="off"/);
+  assert.match(
+    html,
+    /@media \(max-width: 1024px\)\s*\{\s*#twilio-config-form \{\s*grid-template-columns:\s*minmax\(0, 1fr\)/,
+  );
+  assert.match(
+    html,
+    /name="authToken" type="password" maxlength="255" autocomplete="off"/,
+  );
   assert.match(html, /"Enter the Twilio Auth Token"/);
 });
 
 test("SMS settings reload bypasses cache and clears stale save feedback", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
   const loaderStart = html.indexOf("async function loadTwilioConfiguration()");
-  const loaderEnd = html.indexOf("async function loadNotificationTemplates()", loaderStart);
-  const refreshStart = html.indexOf('document.querySelector("[data-refresh-twilio-config]")');
-  const refreshEnd = html.indexOf('document.querySelector("[data-refresh-notification-templates]")', refreshStart);
+  const loaderEnd = html.indexOf(
+    "async function loadNotificationTemplates()",
+    loaderStart,
+  );
+  const refreshStart = html.indexOf(
+    'document.querySelector("[data-refresh-twilio-config]")',
+  );
+  const refreshEnd = html.indexOf(
+    'document.querySelector("[data-refresh-notification-templates]")',
+    refreshStart,
+  );
   assert.notEqual(loaderStart, -1, "SMS settings loader exists");
   assert.notEqual(refreshStart, -1, "SMS settings reload handler exists");
 
@@ -308,7 +368,10 @@ test("SMS settings reload bypasses cache and clears stale save feedback", () => 
   const refresh = html.slice(refreshStart, refreshEnd);
 
   assert.match(loader, /setInlineFeedback\("#twilio-config-feedback", ""\)/);
-  assert.match(loader, /authRequest\("\/api\/admin\/twilio-config",\s*\{\s*cache:\s*"no-store"/);
+  assert.match(
+    loader,
+    /authRequest\("\/api\/admin\/twilio-config",\s*\{\s*cache:\s*"no-store"/,
+  );
   assert.match(refresh, /await loadTwilioConfiguration\(\)/);
   assert.match(refresh, /Messaging settings reloaded\./);
   assert.match(refresh, /Unable to reload SMS settings:/);
@@ -316,13 +379,21 @@ test("SMS settings reload bypasses cache and clears stale save feedback", () => 
 
 test("SMS save distinguishes a saved update from a failed settings reload", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
-  const saveStart = html.indexOf('#twilio-config-form").addEventListener("submit"');
-  const saveEnd = html.indexOf('#platform-configuration-reset").addEventListener("click"', saveStart);
+  const saveStart = html.indexOf(
+    '#twilio-config-form").addEventListener("submit"',
+  );
+  const saveEnd = html.indexOf(
+    '#platform-configuration-reset").addEventListener("click"',
+    saveStart,
+  );
   assert.notEqual(saveStart, -1, "SMS settings submit handler exists");
   const handler = html.slice(saveStart, saveEnd);
 
   assert.match(handler, /Messaging settings saved and audited\./);
-  assert.match(handler, /Settings were saved, but could not be reloaded:[\s\S]*Use Reload to verify\./);
+  assert.match(
+    handler,
+    /Settings were saved, but could not be reloaded:[\s\S]*Use Reload to verify\./,
+  );
 });
 
 test("admin API requests renew an expired access token and retry once", () => {
@@ -339,14 +410,20 @@ test("admin API requests renew an expired access token and retry once", () => {
     /response\.status === 401 &&\s+adminAccessToken &&\s+path !== "\/api\/auth\/refresh"/,
   );
   assert.match(adminScript, /response = await sendRequest\(\)/);
-  assert.match(adminScript, /Your admin session expired\. Sign in again\. The request was not saved\./);
+  assert.match(
+    adminScript,
+    /Your admin session expired\. Sign in again\. The request was not saved\./,
+  );
 });
 
 test("admin email template controls use separate labels and full-width fields", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
 
   assert.match(html, /form\.className = "notification-template-form"/);
-  assert.match(html, /label\.htmlFor = field\.id;\s*row\.append\(label, field\)/);
+  assert.match(
+    html,
+    /label\.htmlFor = field\.id;\s*row\.append\(label, field\)/,
+  );
   assert.doesNotMatch(html, /label\.append\(field\)/);
   assert.match(
     html,
@@ -370,12 +447,18 @@ test("admin SMS navigation displays one accessible label", () => {
 test("admin content save and list refresh report distinct outcomes", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
   const start = html.indexOf('#content-entry-form").addEventListener("submit"');
-  const end = html.indexOf('#content-table-body").addEventListener("click"', start);
+  const end = html.indexOf(
+    '#content-table-body").addEventListener("click"',
+    start,
+  );
   assert.notEqual(start, -1, "content submit handler exists");
   const handler = html.slice(start, end);
 
   assert.match(handler, /await authRequest\(id \? `\/api\/admin\/content/);
-  assert.match(handler, /resetContentForm\(\);\s*feedback\.textContent = "Content saved\."/);
+  assert.match(
+    handler,
+    /resetContentForm\(\);\s*feedback\.textContent = "Content saved\."/,
+  );
   assert.match(
     handler,
     /Content saved, but the list could not be refreshed:[\s\S]*Use Refresh to update the list/,
@@ -389,9 +472,15 @@ test("admin content save and list refresh report distinct outcomes", () => {
 test("admin dashboard and reports retain inline retry controls after load failures", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
   assert.match(html, /id="overview-load-error" role="alert" hidden/);
-  assert.match(html, /Dashboard data could not be loaded:[\s\S]*retry\.dataset\.retryOverview/);
+  assert.match(
+    html,
+    /Dashboard data could not be loaded:[\s\S]*retry\.dataset\.retryOverview/,
+  );
   assert.match(html, /refreshOverviewData\(\)\s*\.catch\(\(\) => \{\}\)/);
-  assert.match(html, /Unable to load reports:[\s\S]*retry\.dataset\.retryReports = String\(page\)/);
+  assert.match(
+    html,
+    /Unable to load reports:[\s\S]*retry\.dataset\.retryReports = String\(page\)/,
+  );
   assert.match(
     html,
     /loadAdminReports\(Number\(retry\.dataset\.retryReports\)\)\s*\.catch\(\(\) => \{\}\)/,
@@ -407,7 +496,10 @@ test("admin API failures use endpoint-neutral fallback text", () => {
 test("job modal close paths restore focus to the opener", () => {
   const html = readFileSync("public/admin/index.html", "utf8");
   assert.match(html, /let jobModalOpener = null/);
-  assert.match(html, /function closeJobModal\(\)[\s\S]*?jobModalOpener\?\.isConnected[\s\S]*?jobModalOpener\.focus\(\)/);
+  assert.match(
+    html,
+    /function closeJobModal\(\)[\s\S]*?jobModalOpener\?\.isConnected[\s\S]*?jobModalOpener\.focus\(\)/,
+  );
   assert.match(html, /if \(event\.key === "Escape"\) \{\s+closeJobModal\(\)/);
   assert.match(html, /addEventListener\("click", closeJobModal\)/);
   assert.match(html, /if \(event\.target === jobModal\) closeJobModal\(\)/);
@@ -415,18 +507,33 @@ test("job modal close paths restore focus to the opener", () => {
 
 test("candidate dashboard and reports failures include persistent retry actions", () => {
   const html = readFileSync("public/index.html", "utf8");
-  assert.match(html, /stats\.querySelectorAll\("\.workspace-stat-value"\)[\s\S]*?Unavailable/);
+  assert.match(
+    html,
+    /stats\.querySelectorAll\("\.workspace-stat-value"\)[\s\S]*?Unavailable/,
+  );
   assert.match(html, /retry\.textContent = "Retry dashboard"/);
-  assert.match(html, /retry\.addEventListener\("click", \(\) => void loadWorkspaceOverview\(\)\)/);
+  assert.match(
+    html,
+    /retry\.addEventListener\("click", \(\) => void loadWorkspaceOverview\(\)\)/,
+  );
   assert.match(html, /data-retry-workspace-reports/);
-  assert.match(html, /addEventListener\("click", \(\) => void loadWorkspaceReports\(\)\)/);
+  assert.match(
+    html,
+    /addEventListener\("click", \(\) => void loadWorkspaceReports\(\)\)/,
+  );
 });
 
 test("successful reports require an explicit new-report action before another submission", () => {
   const html = readFileSync("public/index.html", "utf8");
   assert.match(html, /if \(form\.dataset\.reportSubmitted === "true"\) return/);
-  assert.match(html, /Report received\. Thank you for helping us keep the community safe\./);
-  assert.match(html, /button\.disabled = true;\s+button\.textContent = "Report received"/);
+  assert.match(
+    html,
+    /Report received\. Thank you for helping us keep the community safe\./,
+  );
+  assert.match(
+    html,
+    /button\.disabled = true;\s+button\.textContent = "Report received"/,
+  );
   assert.match(html, /newReport\.dataset\.reportNew = ""/);
   assert.match(html, /form\.dataset\.reportSubmitted = "false"/);
   assert.match(html, /newReport\.textContent = "Start a new report"/);

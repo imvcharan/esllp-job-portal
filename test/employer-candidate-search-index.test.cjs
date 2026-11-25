@@ -50,8 +50,8 @@ test("candidate index IDs are rechecked against recruiter visibility in PostgreS
     education: [],
     certifications: [],
     premiumBoostUntil: null,
-    resumePath: null,
-    allowRecruiterResumeAccess: false,
+    resumePath: "private/candidate.pdf",
+    allowRecruiterResumeAccess: true,
     allowRecruiterContact: false,
   };
   const builder = new QueryBuilder(profile);
@@ -65,6 +65,10 @@ test("candidate index IDs are rechecked against recruiter visibility in PostgreS
     createQueryBuilder: () => builder,
   };
   service.search = { searchCandidateIds: async () => [42] };
+  service.fileStorage = {
+    scanStatuses: async () =>
+      new Map([["private/candidate.pdf", "pending"]]),
+  };
   service.limitsFor = async () => ({ resumeCredits: 5 });
   service.dataSource = {
     query: async () => [{ used: 0, candidateIds: [] }],
@@ -74,6 +78,8 @@ test("candidate index IDs are rechecked against recruiter visibility in PostgreS
   const result = await service.searchCandidates({ id: 7 }, "React");
 
   assert.equal(result.items[0].candidateId, 42);
+  assert.equal(result.items[0].resumeAccessAvailable, false);
+  assert.equal(result.items[0].resumeScanStatus, "pending");
   assert.ok(
     builder.calls.some(
       ([method, expression, parameters]) =>

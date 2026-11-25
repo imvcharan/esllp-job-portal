@@ -234,9 +234,7 @@ export class AdminInsightsService {
     ]);
     return {
       acceptedOffers: Number(acceptance?.acceptedOffers ?? 0),
-      averageDaysToAcceptance: Number(
-        acceptance?.averageDaysToAcceptance ?? 0,
-      ),
+      averageDaysToAcceptance: Number(acceptance?.averageDaysToAcceptance ?? 0),
       hires: Number(hires?.hires ?? 0),
       averageDaysToHire: Number(hires?.averageDaysToHire ?? 0),
     };
@@ -287,6 +285,7 @@ export class AdminInsightsService {
         website: organization.website,
         industry: organization.industry,
         companySize: organization.companySize,
+        verificationStatus: organization.verificationStatus,
         planKey: organization.planKey,
         subscriptionStatus: organization.subscriptionStatus,
         createdAt: organization.createdAt,
@@ -320,6 +319,11 @@ export class AdminInsightsService {
   }
 
   async employerSubscriptionRevenue() {
+    const refundedAmountExpression =
+      `COALESCE((SELECT SUM(refund.amount_paise) FROM payment_refunds refund ` +
+      `WHERE refund.payment_source = 'employer' ` +
+      `AND refund.payment_reference = "payment"."razorpay_payment_id" ` +
+      `AND refund.status = 'processed'), 0)`;
     const monthExpression =
       "to_char(date_trunc('month', payment.paidAt AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM')";
     const totalsQuery = this.employerPayments
@@ -329,6 +333,14 @@ export class AdminInsightsService {
       .addSelect(
         "ROUND(COALESCE(SUM(payment.amountPaise), 0)::numeric / 100, 2)::text",
         "grossAmount",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "refundedAmount",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(payment.amountPaise - ${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "netAmount",
       )
       .groupBy("payment.currency")
       .orderBy("payment.currency", "ASC");
@@ -340,6 +352,14 @@ export class AdminInsightsService {
       .addSelect(
         "ROUND(COALESCE(SUM(payment.amountPaise), 0)::numeric / 100, 2)::text",
         "grossAmount",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "refundedAmount",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(payment.amountPaise - ${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "netAmount",
       )
       .where(
         "payment.paidAt >= ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata') - INTERVAL '11 months') AT TIME ZONE 'Asia/Kolkata')",
@@ -357,6 +377,14 @@ export class AdminInsightsService {
         "ROUND(COALESCE(SUM(payment.amountPaise), 0)::numeric / 100, 2)::text",
         "grossAmount",
       )
+      .addSelect(
+        `ROUND(COALESCE(SUM(${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "refundedAmount",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(payment.amountPaise - ${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "netAmount",
+      )
       .groupBy("payment.planKey")
       .addGroupBy("payment.currency")
       .orderBy("payment.planKey", "ASC")
@@ -366,18 +394,24 @@ export class AdminInsightsService {
         currency: string;
         paidOrders: string;
         grossAmount: string;
+        refundedAmount: string;
+        netAmount: string;
       }>(),
       monthlyQuery.getRawMany<{
         currency: string;
         month: string;
         paidOrders: string;
         grossAmount: string;
+        refundedAmount: string;
+        netAmount: string;
       }>(),
       planQuery.getRawMany<{
         planKey: string | null;
         currency: string;
         paidOrders: string;
         grossAmount: string;
+        refundedAmount: string;
+        netAmount: string;
       }>(),
     ]);
     return {
@@ -391,7 +425,11 @@ export class AdminInsightsService {
   async paymentReconciliation() {
     const [candidateOrders, employerPayments] = await Promise.all([
       this.candidatePayments.find({
-        where: { paymentStatus: "paid" },
+        where: [
+          { paymentStatus: "paid" },
+          { paymentStatus: "partially_refunded" },
+          { paymentStatus: "refunded" },
+        ],
         order: { paidAt: "DESC", createdAt: "DESC" },
         take: 500,
       }),
@@ -407,7 +445,12 @@ export class AdminInsightsService {
       invoiceId: null,
       amount: paiseToAmount(String(order.amountPaise)),
       currency: order.currency,
-      status: order.razorpayPaymentId ? "captured" : "missing_payment_id",
+      status: !order.razorpayPaymentId
+        ? "missing_payment_id"
+        : order.paymentStatus === "partially_refunded" ||
+            order.paymentStatus === "refunded"
+          ? order.paymentStatus
+          : "captured",
       paidAt: order.paidAt?.toISOString() ?? null,
     }));
     const employerItems = employerPayments.map((payment) => ({

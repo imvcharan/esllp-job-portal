@@ -15,6 +15,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -23,10 +24,12 @@ import { RolesGuard } from "../auth/roles.guard";
 import { UserRole } from "../users/user.entity";
 import {
   BulkCreateEmployerJobsDto,
+  BulkValidateEmployerJobsDto,
   CreateEmployerJobDto,
   UpdateEmployerJobDto,
 } from "./dto/employer-job.dto";
 import { UpdateCompanyDto } from "./dto/update-company.dto";
+import { RequestCompanyVerificationDto } from "./dto/request-company-verification.dto";
 import {
   AcceptTeamInviteDto,
   AssignApplicationDto,
@@ -34,16 +37,21 @@ import {
   CreateEmployerInterviewDto,
   CreateEmployerOfferDto,
   CreateEmployerNoteDto,
+  EmployerInterviewFeedbackDto,
   EmployerApplicantsQueryDto,
+  EmployerHiringReportQueryDto,
   EmployerTagDto,
   InviteTeamMemberDto,
   UpdateTeamMemberDto,
+  UpdateEmployerInterviewDto,
   VerifyRazorpaySubscriptionDto,
 } from "./dto/employer-workflow.dto";
 import { UpdateApplicationStatusDto } from "../users/dto/update-application-status.dto";
 import { EmployersService } from "./employers.service";
 import { CreateEmployerSavedSearchDto } from "./dto/employer-saved-search.dto";
+import { UpdateEmployerSavedSearchDto } from "./dto/update-employer-saved-search.dto";
 import { EmployerApplicationScorecardDto } from "./dto/employer-application-scorecard.dto";
+import { UpdateEmployerBillingProfileDto } from "./dto/update-employer-billing-profile.dto";
 import { CreateCandidateApplicationMessageDto } from "../users/dto/create-candidate-application-message.dto";
 import { ResolveCandidateWithdrawalDto } from "../users/dto/resolve-candidate-withdrawal.dto";
 import {
@@ -113,6 +121,19 @@ export class EmployersController {
     );
   }
 
+  @Post("company/verification")
+  requestCompanyVerification(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: RequestCompanyVerificationDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.requestCompanyVerification(
+      user,
+      dto.details,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
   @Get("jobs")
   @Header("Cache-Control", "private, no-store")
   @AllowPendingEmployerReadOnly()
@@ -150,6 +171,19 @@ export class EmployersController {
     @Headers("x-organization-id") organizationId?: string,
   ) {
     return this.employersService.bulkCreateJobs(
+      user,
+      dto.jobs,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("jobs/bulk/validate")
+  validateBulkJobs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: BulkValidateEmployerJobsDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.validateBulkJobs(
       user,
       dto.jobs,
       optionalOrganizationId(organizationId),
@@ -198,6 +232,7 @@ export class EmployersController {
   }
 
   @Get("applications")
+  @Header("Cache-Control", "private, no-store")
   applications(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: EmployerApplicantsQueryDto,
@@ -206,6 +241,53 @@ export class EmployersController {
     return this.employersService.listApplicants(
       user,
       query,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Get("reports/hiring")
+  @Header("Cache-Control", "private, no-store")
+  hiringReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: EmployerHiringReportQueryDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.hiringReport(
+      user,
+      query,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Get("applications/:applicationId/resume-url")
+  @Header("Cache-Control", "private, no-store")
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  applicationResumeUrl(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.createApplicationFileUrl(
+      user,
+      applicationId,
+      null,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Get("applications/:applicationId/documents/:documentId/url")
+  @Header("Cache-Control", "private, no-store")
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  applicationDocumentUrl(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Param("documentId", ParseIntPipe) documentId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.createApplicationFileUrl(
+      user,
+      applicationId,
+      documentId,
       optionalOrganizationId(organizationId),
     );
   }
@@ -262,6 +344,21 @@ export class EmployersController {
     return this.employersService.saveCandidateSearch(
       user,
       body,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Patch("candidate-searches/:searchId")
+  updateCandidateSearch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("searchId", ParseIntPipe) searchId: number,
+    @Body() dto: UpdateEmployerSavedSearchDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.updateCandidateSearch(
+      user,
+      searchId,
+      dto,
       optionalOrganizationId(organizationId),
     );
   }
@@ -360,11 +457,15 @@ export class EmployersController {
   applicationMessages(
     @CurrentUser() user: AuthenticatedUser,
     @Param("applicationId", ParseIntPipe) applicationId: number,
+    @Query("page", new DefaultValuePipe(1), ParseIntPipe) page = 1,
+    @Query("limit", new DefaultValuePipe(25), ParseIntPipe) limit = 25,
     @Headers("x-organization-id") organizationId?: string,
   ) {
     return this.employersService.listApplicationMessages(
       user,
       applicationId,
+      page,
+      limit,
       optionalOrganizationId(organizationId),
     );
   }
@@ -432,10 +533,14 @@ export class EmployersController {
   @Get("interviews")
   interviews(
     @CurrentUser() user: AuthenticatedUser,
+    @Query("page", new DefaultValuePipe(1), ParseIntPipe) page = 1,
+    @Query("limit", new DefaultValuePipe(25), ParseIntPipe) limit = 25,
     @Headers("x-organization-id") organizationId?: string,
   ) {
     return this.employersService.listInterviews(
       user,
+      page,
+      limit,
       optionalOrganizationId(organizationId),
     );
   }
@@ -464,6 +569,49 @@ export class EmployersController {
     return this.employersService.cancelInterview(
       user,
       interviewId,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Patch("interviews/:interviewId")
+  rescheduleInterview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("interviewId", ParseIntPipe) interviewId: number,
+    @Body() dto: UpdateEmployerInterviewDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.rescheduleInterview(
+      user,
+      interviewId,
+      dto,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Post("interviews/:interviewId/complete")
+  completeInterview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("interviewId", ParseIntPipe) interviewId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.completeInterview(
+      user,
+      interviewId,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Put("interviews/:interviewId/feedback")
+  saveInterviewFeedback(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("interviewId", ParseIntPipe) interviewId: number,
+    @Body() dto: EmployerInterviewFeedbackDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.saveInterviewFeedback(
+      user,
+      interviewId,
+      dto,
       optionalOrganizationId(organizationId),
     );
   }
@@ -528,6 +676,19 @@ export class EmployersController {
     );
   }
 
+  @Post("team/:memberId/transfer-ownership")
+  transferOwnership(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("memberId", ParseIntPipe) memberId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.transferOrganizationOwnership(
+      user,
+      memberId,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
   @Get("notifications")
   notifications(
     @CurrentUser() user: AuthenticatedUser,
@@ -547,10 +708,39 @@ export class EmployersController {
   @Get("billing")
   billing(
     @CurrentUser() user: AuthenticatedUser,
+    @Query("page", new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Headers("x-organization-id") organizationId?: string,
   ) {
     return this.employersService.billingSummary(
       user,
+      optionalOrganizationId(organizationId),
+      page,
+    );
+  }
+
+  @Patch("billing/profile")
+  updateBillingProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateEmployerBillingProfileDto,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.updateBillingProfile(
+      user,
+      dto,
+      optionalOrganizationId(organizationId),
+    );
+  }
+
+  @Get("billing/invoices/:paymentId")
+  @Header("Cache-Control", "private, no-store")
+  subscriptionInvoice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("paymentId", ParseIntPipe) paymentId: number,
+    @Headers("x-organization-id") organizationId?: string,
+  ) {
+    return this.employersService.subscriptionInvoiceUrl(
+      user,
+      paymentId,
       optionalOrganizationId(organizationId),
     );
   }

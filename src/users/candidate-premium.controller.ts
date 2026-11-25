@@ -61,6 +61,15 @@ export class CandidatePremiumController {
   ) {
     return this.premium.verifyPayment(user, dto);
   }
+
+  @Get("orders/:id/invoice")
+  @Header("Cache-Control", "private, no-store")
+  invoice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", ParseIntPipe) orderId: number,
+  ) {
+    return this.premium.candidateInvoiceUrl(user, orderId);
+  }
 }
 
 @Controller("admin/candidate-premium")

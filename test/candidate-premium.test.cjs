@@ -186,13 +186,34 @@ test("admin candidate revenue reports only paid orders and fills the last 12 IST
   function builder(result, resultType) {
     const calls = [];
     const query = {
-      select: (...args) => { calls.push(["select", ...args]); return query; },
-      addSelect: (...args) => { calls.push(["addSelect", ...args]); return query; },
-      where: (...args) => { calls.push(["where", ...args]); return query; },
-      andWhere: (...args) => { calls.push(["andWhere", ...args]); return query; },
-      groupBy: (...args) => { calls.push(["groupBy", ...args]); return query; },
-      addGroupBy: (...args) => { calls.push(["addGroupBy", ...args]); return query; },
-      orderBy: (...args) => { calls.push(["orderBy", ...args]); return query; },
+      select: (...args) => {
+        calls.push(["select", ...args]);
+        return query;
+      },
+      addSelect: (...args) => {
+        calls.push(["addSelect", ...args]);
+        return query;
+      },
+      where: (...args) => {
+        calls.push(["where", ...args]);
+        return query;
+      },
+      andWhere: (...args) => {
+        calls.push(["andWhere", ...args]);
+        return query;
+      },
+      groupBy: (...args) => {
+        calls.push(["groupBy", ...args]);
+        return query;
+      },
+      addGroupBy: (...args) => {
+        calls.push(["addGroupBy", ...args]);
+        return query;
+      },
+      orderBy: (...args) => {
+        calls.push(["orderBy", ...args]);
+        return query;
+      },
       getRawOne: async () => result,
       getRawMany: async () => result,
     };
@@ -214,23 +235,42 @@ test("admin candidate revenue reports only paid orders and fills the last 12 IST
       createQueryBuilder: () => {
         const index = builders.length;
         if (index === 0)
-          return builder({
-            paidOrders: "2",
-            pendingOrders: "1",
-            grossPaidInr: "48.98",
-          }, "one");
+          return builder(
+            {
+              paidOrders: "2",
+              pendingOrders: "1",
+              grossPaidInr: "48.98",
+              refundedInr: "3.00",
+              netPaidInr: "45.98",
+            },
+            "one",
+          );
         if (index === 1)
-          return builder([{
-            productKey: "resume-review",
-            productName: "Resume review",
-            paidOrders: "2",
-            grossPaidInr: "48.98",
-          }], "many");
-        return builder([{
-          month: currentMonth,
-          paidOrders: "2",
-          grossPaidInr: "48.98",
-        }], "many");
+          return builder(
+            [
+              {
+                productKey: "resume-review",
+                productName: "Resume review",
+                paidOrders: "2",
+                grossPaidInr: "48.98",
+                refundedInr: "3.00",
+                netPaidInr: "45.98",
+              },
+            ],
+            "many",
+          );
+        return builder(
+          [
+            {
+              month: currentMonth,
+              paidOrders: "2",
+              grossPaidInr: "48.98",
+              refundedInr: "3.00",
+              netPaidInr: "45.98",
+            },
+          ],
+          "many",
+        );
       },
     },
     {},
@@ -246,26 +286,45 @@ test("admin candidate revenue reports only paid orders and fills the last 12 IST
     paidOrders: "2",
     pendingOrders: "1",
     grossPaidInr: "48.98",
+    refundedInr: "3.00",
+    netPaidInr: "45.98",
   });
-  assert.deepEqual(revenue.byProduct, [{
-    productKey: "resume-review",
-    productName: "Resume review",
-    paidOrders: "2",
-    grossPaidInr: "48.98",
-  }]);
+  assert.deepEqual(revenue.byProduct, [
+    {
+      productKey: "resume-review",
+      productName: "Resume review",
+      paidOrders: "2",
+      grossPaidInr: "48.98",
+      refundedInr: "3.00",
+      netPaidInr: "45.98",
+    },
+  ]);
   assert.equal(revenue.monthly.length, 12);
   assert.deepEqual(revenue.monthly[11], {
     month: currentMonth,
     paidOrders: "2",
     grossPaidInr: "48.98",
+    refundedInr: "3.00",
+    netPaidInr: "45.98",
   });
   assert.equal(revenue.monthly[0].paidOrders, "0");
-  assert.ok(builders[0].calls.some(([, expression]) =>
-    String(expression).includes("order.paymentStatus = 'pending'")));
-  assert.ok(builders[1].calls.some(([, expression]) =>
-    String(expression).includes("order.paymentStatus = 'paid' AND order.paidAt IS NOT NULL")));
-  assert.ok(builders[2].calls.some(([, expression]) =>
-    String(expression).includes("INTERVAL '11 months'")));
+  assert.ok(
+    builders[0].calls.some(([, expression]) =>
+      String(expression).includes("order.paymentStatus = 'pending'"),
+    ),
+  );
+  assert.ok(
+    builders[1].calls.some(
+      ([, expression]) =>
+        String(expression).includes("partially_refunded") &&
+        String(expression).includes("order.paidAt IS NOT NULL"),
+    ),
+  );
+  assert.ok(
+    builders[2].calls.some(([, expression]) =>
+      String(expression).includes("INTERVAL '11 months'"),
+    ),
+  );
 });
 
 test("admin candidate revenue returns zero totals for an empty payment history", async () => {
@@ -302,11 +361,20 @@ test("admin candidate revenue returns zero totals for an empty payment history",
     paidOrders: "0",
     pendingOrders: "0",
     grossPaidInr: "0",
+    refundedInr: "0",
+    netPaidInr: "0",
   });
   assert.deepEqual(revenue.byProduct, []);
   assert.equal(revenue.monthly.length, 12);
-  assert.ok(revenue.monthly.every((month) =>
-    month.paidOrders === "0" && month.grossPaidInr === "0"));
+  assert.ok(
+    revenue.monthly.every(
+      (month) =>
+        month.paidOrders === "0" &&
+        month.grossPaidInr === "0" &&
+        month.refundedInr === "0" &&
+        month.netPaidInr === "0",
+    ),
+  );
 });
 
 test("candidate premium webhook verifies raw-body signatures and processes captured payments once", async () => {
@@ -404,4 +472,68 @@ test("candidate premium webhook verifies raw-body signatures and processes captu
       delete process.env.RAZORPAY_WEBHOOK_SECRET;
     else process.env.RAZORPAY_WEBHOOK_SECRET = previousSecret;
   }
+});
+
+test("captured-payment replay cannot erase a partial or full refund", async () => {
+  const order = {
+    id: 12,
+    userId: 6,
+    paymentStatus: "partially_refunded",
+    razorpayPaymentId: "pay_refunded",
+  };
+  let saved = false;
+  const service = new CandidatePremiumService(
+    {
+      transaction: (callback) =>
+        callback({
+          getRepository: () => ({
+            findOne: async () => order,
+            save: async (value) => {
+              saved = true;
+              return value;
+            },
+          }),
+        }),
+    },
+    {},
+    {},
+    {},
+    {},
+    {},
+  );
+
+  const result = await service.markPaid(
+    order.id,
+    order.userId,
+    order.razorpayPaymentId,
+  );
+
+  assert.equal(result.order.paymentStatus, "partially_refunded");
+  assert.equal(result.changed, false);
+  assert.equal(saved, false);
+});
+
+test("candidate invoice access is scoped to the order owner and trusted provider URL", async () => {
+  const audits = [];
+  const service = Object.create(CandidatePremiumService.prototype);
+  service.orders = {
+    findOneBy: async (where) => {
+      assert.deepEqual(where, { id: 8, userId: 4 });
+      return { id: 8, invoiceId: "inv_123" };
+    },
+  };
+  service.razorpayRequest = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      id: "inv_123",
+      short_url: "https://rzp.io/i/inv_123",
+    }),
+  });
+  service.audit = { record: async (event) => audits.push(event) };
+
+  const result = await service.candidateInvoiceUrl({ id: 4 }, 8);
+
+  assert.deepEqual(result, { invoiceUrl: "https://rzp.io/i/inv_123" });
+  assert.equal(audits[0].action, "candidate.premium_invoice_accessed");
 });

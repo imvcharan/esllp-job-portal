@@ -24,7 +24,7 @@ export type CandidatePremiumFulfillmentStatus =
 @Check("candidate_premium_orders_currency_check", `"currency" = 'INR'`)
 @Check(
   "candidate_premium_orders_payment_status_check",
-  `"payment_status" IN ('pending', 'paid')`,
+  `"payment_status" IN ('pending', 'paid', 'partially_refunded', 'refunded')`,
 )
 @Check(
   "candidate_premium_orders_fulfillment_status_check",
@@ -47,12 +47,15 @@ export class CandidatePremiumOrder {
   })
   razorpayPaymentId!: string | null;
 
-  @Column({ name: "user_id", type: "integer" })
-  userId!: number;
+  @Column({ name: "user_id", type: "integer", nullable: true })
+  userId!: number | null;
 
-  @ManyToOne(() => User, { onDelete: "CASCADE" })
+  @ManyToOne(() => User, { onDelete: "SET NULL" })
   @JoinColumn({ name: "user_id" })
-  user!: User;
+  user!: User | null;
+
+  @Column({ name: "invoice_id", type: "varchar", length: 100, nullable: true })
+  invoiceId!: string | null;
 
   @Column({ name: "product_key", type: "varchar", length: 40 })
   productKey!: string;
@@ -84,7 +87,7 @@ export class CandidatePremiumOrder {
     length: 20,
     default: "pending",
   })
-  paymentStatus!: "pending" | "paid";
+  paymentStatus!: "pending" | "paid" | "partially_refunded" | "refunded";
 
   @Column({
     name: "fulfillment_status",

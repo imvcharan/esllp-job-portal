@@ -150,6 +150,28 @@ export class CandidateProfileController {
     return this.profileService.listResumeVersions(user);
   }
 
+  @Get("resume/url")
+  @Header("Cache-Control", "private, no-store")
+  createResumeUrl(@CurrentUser() user: AuthenticatedUser) {
+    return this.profileService.createResumeUrl(user);
+  }
+
+  @Get("resume-versions/:id/url")
+  @Header("Cache-Control", "private, no-store")
+  createResumeVersionUrl(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", ParseIntPipe) id: number,
+  ) {
+    return this.profileService.createResumeVersionUrl(user, id);
+  }
+
+  @Delete("resume-versions")
+  @Header("Cache-Control", "private, no-store")
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  deleteResumeHistory(@CurrentUser() user: AuthenticatedUser) {
+    return this.profileService.deleteResumeHistory(user);
+  }
+
   @Post("resume-versions/:id/restore")
   @Header("Cache-Control", "private, no-store")
   restoreResumeVersion(

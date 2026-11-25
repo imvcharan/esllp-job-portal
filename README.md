@@ -25,8 +25,8 @@ v1 contract or introduce a new explicit version before making breaking changes.
 
 ## One-host production deployment
 
-The repository includes Docker Compose for the application, PostgreSQL, Redis,
-OpenSearch, ClamAV and Caddy HTTPS reverse proxy. This stack requires a
+The repository includes Docker Compose for the web application, a dedicated
+background worker, PostgreSQL, Redis, OpenSearch, ClamAV and Caddy HTTPS reverse proxy. This stack requires a
 Hostinger VPS (or another VPS with Docker and at least 8 GB RAM recommended).
 Hostinger shared/managed Node.js hosting cannot run this Compose stack; use
 separate managed Redis/OpenSearch services there and configure the application
@@ -54,21 +54,40 @@ environment variables instead.
    docker compose config --quiet
    docker compose up -d --build
    docker compose ps
-   docker compose logs --tail=100 app caddy
+   docker compose logs --tail=100 app worker caddy
    ```
 
    Caddy obtains and renews HTTPS certificates automatically when public DNS
-   resolves to this VPS. The app runs schema migrations at startup. OpenSearch
-   creates its index and reindexes jobs on application startup.
-6. Configure encrypted/offsite backups. For a database dump:
+   resolves to this VPS. The web app runs schema migrations at startup; the
+   worker starts after the app is healthy and runs background jobs. OpenSearch
+   creates missing indexes and queues initial backfills from PostgreSQL.
+6. Configure GPG and an offsite `rclone` remote, then set
+   `BACKUP_GPG_RECIPIENT`, `BACKUP_RCLONE_REMOTE`, and
+   `BACKUP_RETENTION_DAYS`. Schedule `scripts/backup-postgres.sh` at least daily.
+   The script encrypts a custom-format database dump before upload and applies
+   the configured retention. Configure `PRIVATE_OBJECTS_SOURCE` for the private
+   Supabase bucket and `PRIVATE_OBJECTS_BACKUP_REMOTE` as an `rclone crypt`
+   remote, then schedule `scripts/backup-private-objects.sh` daily. Keep
+   provider credentials and the GPG private key outside the repository; keep a
+   separately tested offline recovery copy of the key. Run both scripts with
+   `bash` from the repository root, and provide their variables through the
+   scheduler or secret manager. The default retention is 35 days for both
+   backup sets.
+
+   Restore only in an isolated recovery environment; never set
+   `RECOVERY_DATABASE_URL` or `PRIVATE_OBJECTS_RESTORE_TARGET` to production:
 
    ```sh
-   docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > esllp-postgres-backup.sql
+   gpg --decrypt esllp-postgres-<timestamp>.dump.gpg |
+     pg_restore --clean --if-exists --no-owner \
+       --dbname="$RECOVERY_DATABASE_URL"
+   rclone copy "$PRIVATE_OBJECTS_BACKUP_REMOTE/esllp-private-objects/<timestamp>" \
+     "$PRIVATE_OBJECTS_RESTORE_TARGET"
    ```
 
-   Store backups outside this VPS and test restores before launch. Also back up
-   candidate files from the private Supabase bucket; a database dump alone does
-   not include resumes or application documents.
+   Confirm the GPG private key and rclone crypt password can be recovered
+   before relying on these backups. Rebuild Redis and OpenSearch from the
+   restored PostgreSQL source.
 
 OpenSearch security is disabled only for the Compose deployment and its port is
 not published to the host; keep the Docker network private and do not publish
@@ -93,39 +112,88 @@ authoritative fallback.
    allowed-hostname list.
 5. Configure Google OAuth JavaScript origins for every deployed hostname.
    Configure Google Calendar credentials separately for interview Meet events.
-6. Configure Razorpay live keys, webhook secrets and the live plan catalog. Verify
-   a real low-value payment and the corresponding webhook before launch.
+6. Configure Razorpay live keys, webhook secrets, the live plan catalog, seller
+   legal/tax details, and provider invoice settings. The portal exposes
+   Razorpay-issued employer and candidate-service invoices when the provider
+   supplies an invoice ID; it does not calculate tax or generate separate local
+   invoices.
+   Verify a real low-value payment, invoice, and corresponding webhook before
+   launch.
 7. Configure Twilio only after validating SMS and WhatsApp consent flows.
 8. Configure `TRUST_PROXY_HOPS` to the exact reverse-proxy count, not an arbitrary
    value. Keep it at `0` when the application is directly exposed.
-9. Configure database backups and object-storage lifecycle policies in the
-   provider. Perform and document a database restore plus a private-object restore
-   test before accepting production users.
-10. Monitor `/api/health/live`, `/api/health/ready`, and `/api/health/metrics`.
-   Alert on readiness failures, worker delivery failures, payment failures,
-   database growth and sustained memory/CPU pressure.
-11. Run `npm test` and perform a staged browser test for candidate registration,
+9. Configure database backups and provider lifecycle rules only for incomplete
+   multipart uploads; do not auto-expire stored candidate objects, since the
+   application enforces resume and submitted-application retention. Perform and
+   document a database restore plus a private-object restore test before
+   accepting production users.
+10. Set a random, server-only `METRICS_BEARER_TOKEN` of at least 32 characters
+    before enabling scrapes of `/api/health/metrics`; it returns 503 until
+    configured and requires `Authorization: Bearer <token>`. Monitor
+    `/api/health/live` and `/api/health/ready` as public probes. In the admin
+    workspace, review **Background jobs**:
+    alert operators on sustained indexing backlog/age, repeated indexing
+    failures, failed email/WhatsApp deliveries, missing worker heartbeats, and
+    payment failures, as well as database growth and sustained memory/CPU
+    pressure.
+11. Set initial recovery targets to RPO 24 hours and RTO 8 hours, or replace
+    these placeholders with the actual deployment SLA. Perform a database and
+    private-object restore drill at least quarterly. Restore PostgreSQL first,
+    then private objects; rebuild Redis and OpenSearch from PostgreSQL. Verify
+    GPG key recovery, migrations, application startup, signed file access, and
+    account deletion. Record restore duration and data loss against the targets.
+12. Run `npm test` and perform a staged browser test for candidate registration,
     employer approval, job publication, application submission, interview
     scheduling and account deletion.
+
+Employer subscription checkout reuses pending provider subscriptions; a worker
+periodically reconciles provider status and admins can run an audited
+reconciliation from **Background jobs**. Paid plan limits are snapshotted at
+activation. `past_due` subscriptions keep paid entitlements through the
+configurable grace period (default 7 days after the paid period end), then fall
+back to free limits. Resume unlock credits use calendar months in the
+Asia/Kolkata time zone and append-only credit events preserve the original plan
+and allowance snapshot. Candidate checkout reuses a valid pending Razorpay
+order. Processed refund webhooks are deduplicated and reflected in the financial
+ledger and net revenue summaries. A replayed capture cannot overwrite a refund.
+Invoice links are looked up against the signed-in customer’s payment record and
+redirect only to validated HTTPS Razorpay invoice hosts. Configure seller legal
+details and tax registration in Razorpay; the application does not issue
+standalone tax invoices.
 
 The database notification and interview workers use PostgreSQL row locks and
 restart recovery as fallbacks. When `REDIS_URL` is configured, BullMQ workers
 drain notifications and interview-reminder schedules with retries and
-concurrency controls. Public job caching also uses Redis and OpenSearch when
-their environment variables are configured. PostgreSQL search and the database
-outboxes remain the authoritative fallbacks.
+concurrency controls. Scheduled triggers are coalesced; the PostgreSQL
+outboxes remain authoritative. Public job caching also uses Redis when
+configured and coalesces identical in-process cache misses.
+Sent and failed email outbox rows are retained for 90 days; cancelled rows for
+30 days. WhatsApp delivery rows use the same retention windows, while webhook
+deduplication records are retained for 180 days. Captured-payment and refund
+ledgers are retained for financial reconciliation.
 
 OpenSearch job and candidate indexes are created and initially populated when
 missing; normal restarts reuse existing indexes. Index updates are recorded in
 the PostgreSQL search-index outbox and retried with exponential backoff, so
-Redis is not required for indexing durability. PostgreSQL search remains
-available while a new index is being populated or an indexing backlog exists.
+Redis is not required for indexing durability. Workers claim index batches with
+short-lived database leases, bulk-index outside PostgreSQL transactions, and
+retry partial failures. PostgreSQL search remains available while a new index
+is being populated or an indexing backlog exists. Public job search requires
+all query terms, treats the location as a phrase, and defaults to newest-first
+ordering whether OpenSearch or PostgreSQL serves the query.
 The candidate index contains only
 recruiter-visible display names, headlines, locations and skills—not contact
 details, resume text or storage paths. Employer candidate results are always
 rechecked against PostgreSQL for recruiter visibility and active account status.
 Set `OPENSEARCH_CANDIDATE_INDEX` only when using a non-default candidate index
 name.
+
+The Compose stack uses `APP_PROCESS_ROLE=web` for API instances and
+`APP_PROCESS_ROLE=worker` for the worker service. For local combined operation,
+the default role runs both; use `npm run start:worker` to start a separate worker
+after applying migrations. The admin **Background jobs** view reports Redis,
+BullMQ, email-outbox, worker-heartbeat, and index-backlog status. Administrators
+can retry high-attempt index records there; each manual retry is audit logged.
 
 ## Local PostgreSQL database (Windows)
 
@@ -318,7 +386,10 @@ Authentication routes:
 - `GET /api/auth/me` — current user (bearer token required)
 - `GET /api/candidate/profile` — read the authenticated candidate's profile and saved onboarding position
 - `PUT /api/candidate/profile` — create/update the authenticated candidate's profile and onboarding position (steps 1–5)
-- `GET /api/candidate/profile/resume-versions` and `POST /api/candidate/profile/resume-versions/:id/restore` — list private resume versions and restore one as current
+- `GET /api/candidate/profile/resume-versions`, `GET /api/candidate/profile/resume/url`, and `GET /api/candidate/profile/resume-versions/:id/url` — list resume history and request an on-demand private link for a clean-scanned file
+- `POST /api/candidate/profile/resume-versions/:id/restore` — restore a previous resume version as current
+- `DELETE /api/candidate/profile/resume-versions` — delete older history versions while preserving the current resume and files attached to applications
+- `GET /api/employer/applications/:applicationId/resume-url` and `GET /api/employer/applications/:applicationId/documents/:documentId/url` — issue audited, temporary links for files on an application the employer is authorized to access
 - `GET /api/candidate/recommendations` — return explainable job matches based on profile and salary preferences
 - `GET /api/candidate/interviews` — list the candidate's interview schedule and joining details
 - `GET /api/candidate/premium` — available candidate services, order history, and boost status
@@ -534,7 +605,8 @@ Useful API routes:
 - `GET|PUT /api/candidate/profile` — read or update the signed-in candidate's private profile
 - `POST|DELETE /api/candidate/profile/photo` — upload a cropped photo or remove it
 - `POST|DELETE /api/candidate/profile/resume` — upload a PDF/DOCX resume or clear the current resume
-- `GET /api/candidate/profile/resume-versions` and `POST /api/candidate/profile/resume-versions/:id/restore` — list private resume versions and restore one as current
+- `GET /api/candidate/profile/resume-versions`, `GET /api/candidate/profile/resume/url`, and `GET /api/candidate/profile/resume-versions/:id/url` — list resume history and request an on-demand private link for a clean-scanned file
+- `POST /api/candidate/profile/resume-versions/:id/restore` and `DELETE /api/candidate/profile/resume-versions` — restore a previous version or delete older history while preserving files attached to applications
 - `GET /api/candidate/recommendations` — return explainable job matches based on profile and salary preferences
 - `GET /api/candidate/interviews` — list the candidate's interview schedule and joining details
 - `GET /api/employer/candidates?q=...` — search profiles opted into recruiter visibility; email/phone are returned only when the candidate also permits contact
@@ -588,11 +660,11 @@ Candidate photo and resume uploads require Supabase Storage in addition to the P
 1. In Supabase Storage, create a bucket named `candidate-private` and keep it **private**. Do not add public read policies.
 2. Set the bucket file-size limit to at least 8 MB and allow only `image/webp`, `application/pdf`, and `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
 3. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the server's environment. Use a newly generated, server-only service-role secret; never put it in `public/`, a browser variable, or committed files. `SUPABASE_CANDIDATE_BUCKET` is optional and defaults to `candidate-private`.
-4. Configure a reachable ClamAV `clamd` TCP service using `CLAMAV_HOST` and optional `CLAMAV_PORT` (default `3310`). Keep the scanner on a private network accessible only to the API. Production uploads fail closed if the scanner is missing or unavailable; detected files are rejected before storage. Photos are decoded, normalized and resized by the API; PDF/DOCX resumes are limited to 8 MB and parsed with bounded extraction. Stored files use owner-scoped object paths in the private bucket, with a retained version history. The API returns signed links that expire after five minutes. Scanned PDFs without selectable text need OCR and are rejected.
+4. Configure a reachable ClamAV `clamd` TCP service using `CLAMAV_HOST` and optional `CLAMAV_PORT` (default `3310`). Keep the scanner on a private network accessible only to the API. Production uploads fail closed if the scanner is missing or unavailable; detected files are rejected before storage. Photos are decoded, normalized and resized by the API; PDF/DOCX resumes are limited to 8 MB and parsed with bounded extraction. New files are recorded as clean only after scanning succeeds. Existing files are marked pending during migration and cannot be shared until a background worker scans them successfully. The worker also keeps at most 20 resume versions, expires unattached application-document uploads after 30 days, and retries object deletion through a durable cleanup queue. Files attached to submitted applications are retained until the application/account is deleted. Removing a current resume unlinks it from the profile but preserves its history; candidates can separately delete older versions. The API issues signed links on demand; links expire after five minutes and are not cached by the API. Scanned PDFs without selectable text need OCR and are rejected.
 
 The candidate profile response can include section-based resume suggestions for skills, experience, and education. These heuristics only prefill the candidate's editable form; nothing changes on the server until the candidate reviews and saves. They are not AI-generated and may miss or misread resume content.
 
-The profile/photo and profile/resume upload and delete endpoints require an authenticated candidate account. A resume is **not** automatically attached to an application; candidates choose whether to include it for each submission. Employer application access is restricted to assigned jobs. Recruiter-directory resume access is a separate candidate opt-in, requires the candidate to remain discoverable, spends one admin-configured monthly organization credit per candidate, and is audited; each resulting signed link expires after five minutes. Replacing/removing a resume does not invalidate an older resume already attached to an application. Avoid configuring a public bucket or sharing the service-role key.
+The profile/photo and profile/resume upload and delete endpoints require an authenticated candidate account. A resume is **not** automatically attached to an application; candidates choose whether to include it for each submission. Employer application access is restricted to assigned jobs. Resume versions and application documents are requested through authorized API routes that issue a short-lived URL only when the user opens a file. Recruiter-directory resume access is a separate candidate opt-in, requires the candidate to remain discoverable, spends one admin-configured monthly organization credit per candidate, and is audited; each resulting signed link expires after five minutes. Replacing/removing a resume does not invalidate an older resume already attached to an application. Avoid configuring a public bucket or sharing the service-role key.
 
 ### Email delivery
 

@@ -29,29 +29,45 @@ export class CommercialControlsService {
   async createCoupon(dto: CreatePaymentCouponDto, actor: AuthenticatedUser) {
     const code = dto.code.trim().toUpperCase();
     if (!/^[A-Z0-9][A-Z0-9_-]{1,39}$/.test(code)) {
-      throw new BadRequestException("Coupon codes may contain letters, numbers, hyphens, and underscores.");
+      throw new BadRequestException(
+        "Coupon codes may contain letters, numbers, hyphens, and underscores.",
+      );
     }
     if (dto.discountType === "percentage" && dto.discountValuePaise > 10_000) {
-      throw new BadRequestException("Percentage coupons cannot exceed 100 percent.");
+      throw new BadRequestException(
+        "Percentage coupons cannot exceed 100 percent.",
+      );
     }
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : null;
     const endsAt = dto.endsAt ? new Date(dto.endsAt) : null;
-    if ((startsAt && Number.isNaN(startsAt.getTime())) || (endsAt && Number.isNaN(endsAt.getTime()))) {
-      throw new BadRequestException("Coupon dates must be valid ISO timestamps.");
+    if (
+      (startsAt && Number.isNaN(startsAt.getTime())) ||
+      (endsAt && Number.isNaN(endsAt.getTime()))
+    ) {
+      throw new BadRequestException(
+        "Coupon dates must be valid ISO timestamps.",
+      );
     }
     if (startsAt && endsAt && endsAt <= startsAt) {
-      throw new BadRequestException("Coupon end date must be after its start date.");
+      throw new BadRequestException(
+        "Coupon end date must be after its start date.",
+      );
     }
-    const coupon = await this.coupons.save(this.coupons.create({
-      code,
-      discountType: dto.discountType,
-      discountValuePaise: dto.discountType === "percentage" ? dto.discountValuePaise : dto.discountValuePaise,
-      maxRedemptions: dto.maxRedemptions ?? null,
-      redeemedCount: 0,
-      startsAt,
-      endsAt,
-      isActive: true,
-    }));
+    const coupon = await this.coupons.save(
+      this.coupons.create({
+        code,
+        discountType: dto.discountType,
+        discountValuePaise:
+          dto.discountType === "percentage"
+            ? dto.discountValuePaise
+            : dto.discountValuePaise,
+        maxRedemptions: dto.maxRedemptions ?? null,
+        redeemedCount: 0,
+        startsAt,
+        endsAt,
+        isActive: true,
+      }),
+    );
     await this.audit.record({
       actorUserId: actor.id,
       action: "payment.coupon_created",
@@ -75,7 +91,7 @@ export class CommercialControlsService {
             SELECT razorpay_payment_id AS "paymentReference",
                    amount_paise::text AS "amountPaise"
             FROM candidate_premium_orders
-            WHERE payment_status = 'paid'
+            WHERE payment_status IN ('paid', 'partially_refunded')
               AND (razorpay_payment_id = $1 OR razorpay_order_id = $1)
             ORDER BY (razorpay_payment_id = $1) DESC
             LIMIT 1
@@ -143,17 +159,27 @@ export class CommercialControlsService {
     return this.refunds.find({ order: { createdAt: "DESC" }, take: 500 });
   }
 
-  async reviewRefund(id: number, dto: ReviewPaymentRefundDto, actor: AuthenticatedUser) {
+  async reviewRefund(
+    id: number,
+    dto: ReviewPaymentRefundDto,
+    actor: AuthenticatedUser,
+  ) {
     const refund = await this.refunds.findOneBy({ id });
     if (!refund) throw new NotFoundException("Refund request was not found.");
-    if (refund.status !== "pending") throw new BadRequestException("This refund request has already been reviewed.");
+    if (refund.status !== "pending")
+      throw new BadRequestException(
+        "This refund request has already been reviewed.",
+      );
     refund.status = dto.status;
     refund.reviewedByUserId = actor.id;
     refund.reviewNote = dto.reviewNote?.trim() || null;
     const saved = await this.refunds.save(refund);
     await this.audit.record({
       actorUserId: actor.id,
-      action: dto.status === "approved" ? "payment.refund_approved" : "payment.refund_rejected",
+      action:
+        dto.status === "approved"
+          ? "payment.refund_approved"
+          : "payment.refund_rejected",
       targetType: "payment_refund",
       targetId: saved.id,
       details: { reviewNote: saved.reviewNote },

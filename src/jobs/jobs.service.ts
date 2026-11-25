@@ -4,6 +4,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
 } from "@nestjs/common";
 import { AuditService } from "../audit/audit.service";
 import { AuthenticatedUser } from "../auth/auth.types";
@@ -19,6 +22,9 @@ import {
   EmployerOrganizationMember,
   OrganizationMemberRole,
 } from "../employers/organization-member.entity";
+import { EmployerOrganization } from "../employers/organization.entity";
+import { employerPlanLimits } from "../employers/employer-entitlements";
+import { FeaturedJobPlacement } from "../employers/featured-job-placement.entity";
 import { CandidateSavedSearchesService } from "../users/candidate-saved-searches.service";
 import {
   currentJobDeadlineDate,
@@ -31,10 +37,30 @@ import { Report, ReportTargetType } from "../reports/report.entity";
 import { PlatformConfigurationService } from "../platform-config/platform-configuration.service";
 import { RedisCacheService } from "../infrastructure/redis-cache.service";
 import { OpenSearchService } from "../infrastructure/open-search.service";
+import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
+import { backgroundWorkersEnabled } from "../infrastructure/process-role";
+import { RazorpayConfigurationService } from "../payments/razorpay-configuration.service";
+import { CreateFeaturedPlacementDto } from "./dto/create-featured-placement.dto";
+
+type PublicJobSearchResult = {
+  items: Array<Job & { featuredPlacementTypes: string[] }>;
+  total: number;
+  page: number;
+  limit: number;
+  companies: string[];
+};
 
 @Injectable()
-export class JobsService {
+export class JobsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(JobsService.name);
+  private jobAlertWorker: NodeJS.Timeout | null = null;
+  private jobExpiryWorker: NodeJS.Timeout | null = null;
+  private processingJobAlerts = false;
+  private readonly publicJobQueries = new Map<
+    string,
+    Promise<PublicJobSearchResult>
+  >();
+  private publicJobCacheGeneration = 0;
 
   constructor(
     @InjectRepository(Job)
@@ -45,13 +71,289 @@ export class JobsService {
     private readonly profilesRepository: Repository<CandidateProfile>,
     @InjectRepository(EmployerOrganizationMember)
     private readonly organizationMembers: Repository<EmployerOrganizationMember>,
+    @InjectRepository(FeaturedJobPlacement)
+    private readonly featuredPlacements: Repository<FeaturedJobPlacement>,
     private readonly auditService: AuditService,
     private readonly emailDelivery: EmailDeliveryService,
     private readonly savedSearchesService: CandidateSavedSearchesService,
     private readonly platformConfiguration: PlatformConfigurationService,
+    private readonly razorpayConfiguration: RazorpayConfigurationService,
     private readonly cache: RedisCacheService | null = null,
     private readonly search: OpenSearchService | null = null,
+    @Optional()
+    private readonly fileStorage: CandidateFileStorageService | null = null,
   ) {}
+
+  async onModuleInit() {
+    if (!backgroundWorkersEnabled()) return;
+    await this.jobsRepository.manager.query(`
+      UPDATE job_alert_generation_outbox
+      SET status = CASE WHEN attempts >= 5 THEN 'failed' ELSE 'queued' END,
+          locked_at = NULL, next_attempt_at = now(), updated_at = now()
+      WHERE status = 'processing'
+        AND (locked_at IS NULL OR locked_at < now() - INTERVAL '2 minutes')
+    `);
+    this.jobAlertWorker = setInterval(() => {
+      void this.processPendingJobAlerts().catch((error: unknown) => {
+        this.logger.error(
+          `Job alert generation worker failed: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`,
+        );
+      });
+    }, 15_000);
+    this.jobAlertWorker.unref();
+    this.jobExpiryWorker = setInterval(() => {
+      void this.expireDueJobs().catch((error: unknown) => {
+        this.logger.error(
+          `Job expiry worker failed: ${
+            error instanceof Error ? error.message : "unknown database error"
+          }`,
+        );
+      });
+    }, 60_000);
+    this.jobExpiryWorker.unref();
+    void this.expireDueJobs().catch((error: unknown) => {
+      this.logger.error(
+        `Initial job expiry scan failed: ${
+          error instanceof Error ? error.message : "unknown database error"
+        }`,
+      );
+    });
+  }
+
+  onModuleDestroy() {
+    if (this.jobAlertWorker) clearInterval(this.jobAlertWorker);
+    if (this.jobExpiryWorker) clearInterval(this.jobExpiryWorker);
+  }
+
+  async expireDueJobs(limit = 100): Promise<number> {
+    const result = await this.jobsRepository.manager.transaction(
+      async (manager) => {
+        const rows = (await manager.query(
+          `
+          WITH due_jobs AS (
+            SELECT id
+            FROM jobs
+            WHERE is_active = true
+              AND application_deadline <
+                (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+            ORDER BY application_deadline ASC, id ASC
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED
+          )
+          UPDATE jobs AS job
+          SET is_active = false,
+              moderation_status = 'closed',
+              moderation_note = 'Closed automatically after the application deadline.'
+          FROM due_jobs
+          WHERE job.id = due_jobs.id
+          RETURNING job.id
+          `,
+          [Math.max(1, Math.min(500, limit))],
+        )) as Array<{ id: number }>;
+        const startedPlacements = (await manager.query(
+          `UPDATE featured_job_placements
+           SET status = 'active', updated_at = now()
+           WHERE status = 'scheduled'
+             AND starts_at <= now() AND ends_at > now()
+           RETURNING job_id AS "jobId", placement_type AS "placementType"`,
+        )) as Array<{ jobId: number; placementType: string }>;
+        for (const placement of startedPlacements) {
+          if (placement.placementType === "email") {
+            await this.enqueueJobAlertGeneration(
+              placement.jobId,
+              manager,
+              true,
+            );
+          }
+        }
+        for (const { id } of rows) {
+          await this.search?.enqueueJob(id, manager);
+        }
+        const expiredPlacements = (await manager.query(
+          `UPDATE featured_job_placements
+           SET status = 'expired', updated_at = now()
+           WHERE status IN ('scheduled', 'active') AND ends_at <= now()
+           RETURNING id`,
+        )) as Array<{ id: number }>;
+        return {
+          expiredJobs: rows,
+          placementChanges: startedPlacements.length + expiredPlacements.length,
+        };
+      },
+    );
+    if (result.expiredJobs.length || result.placementChanges)
+      await this.invalidatePublicJobCache();
+    return result.expiredJobs.length;
+  }
+
+  private async withFeaturedPlacementTypes(
+    jobs: Job[],
+  ): Promise<Array<Job & { featuredPlacementTypes: string[] }>> {
+    if (!jobs.length) return [];
+    const rows = (await this.jobsRepository.manager.query(
+      `SELECT job_id AS "jobId", placement_type AS "placementType"
+       FROM featured_job_placements
+       WHERE job_id = ANY($1::integer[])
+         AND status IN ('scheduled', 'active')
+         AND starts_at <= now() AND ends_at > now()`,
+      [jobs.map((job) => job.id)],
+    )) as Array<{ jobId: number; placementType: string }>;
+    const typesByJob = new Map<number, string[]>();
+    for (const row of rows) {
+      const types = typesByJob.get(row.jobId) ?? [];
+      types.push(row.placementType);
+      typesByJob.set(row.jobId, types);
+    }
+    return jobs.map((job) =>
+      Object.assign(job, {
+        featuredPlacementTypes: typesByJob.get(job.id) ?? [],
+      }),
+    );
+  }
+
+  async listFeaturedPlacements() {
+    return this.featuredPlacements
+      .createQueryBuilder("placement")
+      .innerJoin(Job, "job", "job.id = placement.jobId")
+      .innerJoin(
+        EmployerOrganization,
+        "organization",
+        "organization.id = placement.organizationId",
+      )
+      .select("placement.id", "id")
+      .addSelect("placement.jobId", "jobId")
+      .addSelect("job.title", "jobTitle")
+      .addSelect("placement.organizationId", "organizationId")
+      .addSelect("organization.name", "organizationName")
+      .addSelect("placement.placementType", "placementType")
+      .addSelect("placement.startsAt", "startsAt")
+      .addSelect("placement.endsAt", "endsAt")
+      .addSelect("placement.status", "status")
+      .addSelect("placement.paymentReference", "paymentReference")
+      .orderBy("placement.createdAt", "DESC")
+      .getRawMany();
+  }
+
+  async createFeaturedPlacement(
+    dto: CreateFeaturedPlacementDto,
+    actor: AuthenticatedUser,
+  ) {
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+    if (
+      Number.isNaN(startsAt.getTime()) ||
+      Number.isNaN(endsAt.getTime()) ||
+      endsAt <= startsAt ||
+      endsAt <= new Date()
+    ) {
+      throw new BadRequestException(
+        "Choose a valid future placement window with the end after the start.",
+      );
+    }
+    const placement = await this.jobsRepository.manager.transaction(
+      async (manager) => {
+        const jobs = manager.getRepository(Job);
+        const observedJob = await jobs.findOneBy({ id: dto.jobId });
+        if (!observedJob)
+          throw new NotFoundException(`Job ${dto.jobId} was not found.`);
+        if (observedJob.organizationId === null)
+          throw new BadRequestException(
+            "Featured placements are only available for company-owned jobs.",
+          );
+        const organization = await manager
+          .getRepository(EmployerOrganization)
+          .findOne({
+            where: { id: observedJob.organizationId },
+            lock: { mode: "pessimistic_write" },
+          });
+        if (!organization)
+          throw new NotFoundException("Company workspace was not found.");
+        const job = await jobs.findOne({
+          where: { id: dto.jobId },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (!job || job.organizationId !== organization.id)
+          throw new ConflictException(
+            "The job’s company changed. Reload and try again.",
+          );
+        if (
+          !job.isActive ||
+          (job.applicationDeadline &&
+            job.applicationDeadline < currentJobDeadlineDate())
+        ) {
+          throw new BadRequestException(
+            "Only currently published jobs can be featured.",
+          );
+        }
+        const overlapping = await manager.query(
+          `SELECT id
+           FROM featured_job_placements
+           WHERE job_id = $1 AND placement_type = $2
+             AND status IN ('scheduled', 'active')
+             AND starts_at < $4 AND ends_at > $3
+           LIMIT 1`,
+          [job.id, dto.placementType, startsAt, endsAt],
+        );
+        if (overlapping.length) {
+          throw new ConflictException(
+            "This job already has an overlapping placement of that type.",
+          );
+        }
+        const saved = await manager.getRepository(FeaturedJobPlacement).save({
+          jobId: job.id,
+          organizationId: organization.id,
+          placementType: dto.placementType,
+          startsAt,
+          endsAt,
+          status: startsAt > new Date() ? "scheduled" : "active",
+          paymentReference: dto.paymentReference?.trim() || null,
+        });
+        if (saved.placementType === "email" && saved.status === "active") {
+          await this.enqueueJobAlertGeneration(saved.jobId, manager, true);
+        }
+        return saved;
+      },
+    );
+    await this.auditService.record({
+      actorUserId: actor.id,
+      action: "admin.featured_job_placement_created",
+      targetType: "featured_job_placement",
+      targetId: placement.id,
+      details: {
+        jobId: placement.jobId,
+        organizationId: placement.organizationId,
+        placementType: placement.placementType,
+        paymentReference: placement.paymentReference,
+      },
+    });
+    await this.invalidatePublicJobCache();
+    return placement;
+  }
+
+  async cancelFeaturedPlacement(placementId: number, actor: AuthenticatedUser) {
+    const placement = await this.featuredPlacements.findOneBy({
+      id: placementId,
+    });
+    if (!placement)
+      throw new NotFoundException("Featured placement was not found.");
+    if (!["scheduled", "active"].includes(placement.status))
+      throw new ConflictException(
+        "Only scheduled or active featured placements can be cancelled.",
+      );
+    placement.status = "cancelled";
+    const saved = await this.featuredPlacements.save(placement);
+    await this.auditService.record({
+      actorUserId: actor.id,
+      action: "admin.featured_job_placement_cancelled",
+      targetType: "featured_job_placement",
+      targetId: saved.id,
+      details: { jobId: saved.jobId, organizationId: saved.organizationId },
+    });
+    await this.invalidatePublicJobCache();
+    return saved;
+  }
 
   jobOptions() {
     return this.platformConfiguration.jobOptions();
@@ -74,25 +376,63 @@ export class JobsService {
     freshnessDays?: number;
     sort?: string;
     skill?: string;
-  }): Promise<{
-    items: Job[];
-    total: number;
-    page: number;
-    limit: number;
-    companies: string[];
-  }> {
+  }): Promise<PublicJobSearchResult> {
     this.validateSearchFilters(filters);
     const page = Math.min(1_000_000, Math.max(1, filters.page ?? 1));
     const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
-    const cacheKey = `public-jobs:${Buffer.from(JSON.stringify({ ...filters, page, limit })).toString("base64url")}`;
+    const cacheGeneration = this.publicJobCacheGeneration;
+    const cacheKey = `public-jobs:${cacheGeneration}:${Buffer.from(JSON.stringify({ ...filters, page, limit })).toString("base64url")}`;
     const cached = await this.cache?.get(cacheKey);
     if (cached) {
       try {
         return JSON.parse(cached);
       } catch {
-        await this.cache?.deleteByPrefix(cacheKey);
+        this.logger.warn("Ignoring malformed public job cache entry.");
       }
     }
+    const inFlight = this.publicJobQueries.get(cacheKey);
+    if (inFlight) return inFlight;
+
+    const load = this.loadPublicJobResults(filters, page, limit).then(
+      async (response) => {
+        if (cacheGeneration === this.publicJobCacheGeneration) {
+          await this.cache?.set(cacheKey, JSON.stringify(response), 30);
+        }
+        return response;
+      },
+    );
+    this.publicJobQueries.set(cacheKey, load);
+    try {
+      return await load;
+    } finally {
+      if (this.publicJobQueries.get(cacheKey) === load) {
+        this.publicJobQueries.delete(cacheKey);
+      }
+    }
+  }
+
+  private async loadPublicJobResults(
+    filters: {
+      query?: string;
+      location?: string;
+      page?: number;
+      limit?: number;
+      workplaceType?: string;
+      employmentType?: string;
+      experience?: string;
+      company?: string;
+      category?: string;
+      industry?: string;
+      minimumSalary?: number;
+      salaryCurrency?: string;
+      salaryPeriod?: string;
+      freshnessDays?: number;
+      sort?: string;
+      skill?: string;
+    },
+    page: number,
+    limit: number,
+  ): Promise<PublicJobSearchResult> {
     const searchIds =
       filters.query || filters.location
         ? ((await this.search?.searchIds({
@@ -109,42 +449,42 @@ export class JobsService {
       .take(limit)
       .skip((page - 1) * limit);
 
-    if (searchIds !== null) {
-      if (!searchIds.length) {
-        const empty = { items: [], total: 0, page, limit, companies: [] };
-        await this.cache?.set(cacheKey, JSON.stringify(empty), 30);
-        return empty;
-      }
+    if (searchIds?.length) {
       queryBuilder.andWhere("job.id IN (:...searchIds)", { searchIds });
-      queryBuilder.orderBy(
-        `array_position(ARRAY[${searchIds.join(",")}]::integer[], job.id)`,
-      );
     }
 
-    const query = filters.query?.trim();
-    if (query && searchIds === null) {
+    const queryTerms = filters.query?.trim().split(/\s+/).filter(Boolean) ?? [];
+    for (const [index, term] of queryTerms.entries()) {
+      const parameter = `queryTerm${index}`;
+      const pattern = `%${term.replace(/[\\%_]/g, "\\$&")}%`;
       queryBuilder.andWhere(
         new Brackets((where) => {
           where
-            .where("job.title ILIKE :query", { query: `%${query}%` })
-            .orWhere("job.company ILIKE :query", { query: `%${query}%` })
-            .orWhere("job.description ILIKE :query", { query: `%${query}%` })
+            .where(`job.title ILIKE :${parameter} ESCAPE '\\'`, {
+              [parameter]: pattern,
+            })
+            .orWhere(`job.company ILIKE :${parameter} ESCAPE '\\'`, {
+              [parameter]: pattern,
+            })
+            .orWhere(`job.description ILIKE :${parameter} ESCAPE '\\'`, {
+              [parameter]: pattern,
+            })
             .orWhere(
               `EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements_text(job.skills) AS job_skill(skill)
-                WHERE job_skill.skill ILIKE :query
+                WHERE job_skill.skill ILIKE :${parameter} ESCAPE '\\'
               )`,
-              { query: `%${query}%` },
+              { [parameter]: pattern },
             );
         }),
       );
     }
 
     const location = filters.location?.trim();
-    if (location && searchIds === null) {
-      queryBuilder.andWhere("job.location ILIKE :location", {
-        location: `%${location}%`,
+    if (location) {
+      queryBuilder.andWhere("job.location ILIKE :location ESCAPE '\\'", {
+        location: `%${location.replace(/[\\%_]/g, "\\$&")}%`,
       });
     }
 
@@ -238,9 +578,20 @@ export class JobsService {
       );
     }
 
+    const featuredOrdering = `EXISTS (
+      SELECT 1 FROM featured_job_placements placement
+      WHERE placement.job_id = job.id
+        AND placement.placement_type IN ('homepage', 'search')
+        AND placement.status IN ('scheduled', 'active')
+        AND placement.starts_at <= now() AND placement.ends_at > now()
+    )`;
+    const searchPosition = searchIds?.length
+      ? `array_position(ARRAY[${searchIds.join(",")}]::integer[], job.id)`
+      : null;
     if (filters.sort === "salary") {
       queryBuilder
-        .orderBy("job.salaryCurrency", "ASC")
+        .orderBy(featuredOrdering, "DESC")
+        .addOrderBy("job.salaryCurrency", "ASC")
         .addOrderBy("job.salaryPeriod", "ASC")
         .addOrderBy(
           "COALESCE(job.salaryMax, job.salaryMin)",
@@ -248,15 +599,21 @@ export class JobsService {
           "NULLS LAST",
         )
         .addOrderBy("job.createdAt", "DESC");
+      if (searchPosition) queryBuilder.addOrderBy(searchPosition, "ASC");
     } else if (filters.sort === "title") {
       queryBuilder
-        .orderBy("job.title", "ASC")
+        .orderBy(featuredOrdering, "DESC")
+        .addOrderBy("job.title", "ASC")
         .addOrderBy("job.createdAt", "DESC");
-    } else if (searchIds === null) {
-      queryBuilder.orderBy("job.createdAt", "DESC");
+      if (searchPosition) queryBuilder.addOrderBy(searchPosition, "ASC");
+    } else {
+      queryBuilder.orderBy(featuredOrdering, "DESC");
+      if (searchPosition) queryBuilder.addOrderBy(searchPosition, "ASC");
+      queryBuilder.addOrderBy("job.createdAt", "DESC");
     }
 
     const [items, total] = await queryBuilder.getManyAndCount();
+    const itemsWithPlacements = await this.withFeaturedPlacementTypes(items);
     const companies = await this.jobsRepository
       .createQueryBuilder("job")
       .select("DISTINCT job.company", "company")
@@ -267,13 +624,12 @@ export class JobsService {
       .orderBy("job.company", "ASC")
       .getRawMany<{ company: string }>();
     const response = {
-      items,
+      items: itemsWithPlacements,
       total,
       page,
       limit,
       companies: companies.map(({ company }) => company),
     };
-    await this.cache?.set(cacheKey, JSON.stringify(response), 30);
     return response;
   }
 
@@ -341,15 +697,25 @@ export class JobsService {
 
   async syncSearchIndex(job: Job, manager?: EntityManager): Promise<void> {
     await this.search?.enqueueJob(job.id, manager);
-    await this.cache?.deleteByPrefix("public-jobs:");
+    await this.invalidatePublicJobCache();
   }
 
   private async invalidatePublicJobCache(): Promise<void> {
+    this.publicJobCacheGeneration += 1;
     await this.cache?.deleteByPrefix("public-jobs:");
   }
 
-  findAllForAdministration(): Promise<Job[]> {
-    return this.jobsRepository.find({ order: { createdAt: "DESC" } });
+  async findAllForAdministration(): Promise<Array<Job & { expired: boolean }>> {
+    const jobs = await this.jobsRepository.find({
+      order: { createdAt: "DESC" },
+    });
+    const today = currentJobDeadlineDate();
+    return jobs.map((job) => ({
+      ...job,
+      expired: Boolean(
+        job.applicationDeadline && job.applicationDeadline < today,
+      ),
+    }));
   }
 
   async create(
@@ -396,6 +762,12 @@ export class JobsService {
     }
     const job = await this.jobsRepository.manager.transaction(
       async (manager) => {
+        if (dto.isActive && employerOrganizationId !== null) {
+          await this.assertOrganizationJobQuota(
+            manager,
+            employerOrganizationId,
+          );
+        }
         const saved = await manager.getRepository(Job).save(
           manager.getRepository(Job).create({
             ...dto,
@@ -422,6 +794,8 @@ export class JobsService {
           }),
         );
         await this.search?.enqueueJob(saved.id, manager);
+        if (saved.isActive)
+          await this.enqueueJobAlertGeneration(saved.id, manager);
         return saved;
       },
     );
@@ -439,7 +813,7 @@ export class JobsService {
       ipAddress,
     });
     if (!job.isActive) return job;
-    const notificationDelivery = await this.notifyMatchingCandidates(job);
+    const notificationDelivery = await this.processJobAlert(job.id);
     return Object.assign(job, { notificationDelivery });
   }
 
@@ -495,12 +869,13 @@ export class JobsService {
           ]
         : []),
     ]);
+    const wasActive = job.isActive;
+    const previousOrganizationId = job.organizationId;
     if (dto.employerUserId !== undefined) {
       job.organizationId = await this.getEmployerOrganizationId(
         dto.employerUserId,
       );
     }
-    const wasActive = job.isActive;
     const nextDeadline =
       dto.applicationDeadline === undefined
         ? job.applicationDeadline
@@ -547,8 +922,16 @@ export class JobsService {
       job.description = dto.description?.trim() || null;
     const saved = await this.jobsRepository.manager.transaction(
       async (manager) => {
+        const activatesInOrganization =
+          job.isActive &&
+          (!wasActive || job.organizationId !== previousOrganizationId);
+        if (activatesInOrganization && job.organizationId != null) {
+          await this.assertOrganizationJobQuota(manager, job.organizationId);
+        }
         const updated = await manager.getRepository(Job).save(job);
         await this.search?.enqueueJob(updated.id, manager);
+        if (dto.isActive === true && !wasActive)
+          await this.enqueueJobAlertGeneration(updated.id, manager);
         return updated;
       },
     );
@@ -566,7 +949,7 @@ export class JobsService {
       ipAddress,
     });
     if (dto.isActive !== true || wasActive) return saved;
-    const notificationDelivery = await this.notifyMatchingCandidates(saved);
+    const notificationDelivery = await this.processJobAlert(saved.id);
     return Object.assign(saved, { notificationDelivery });
   }
 
@@ -607,28 +990,48 @@ export class JobsService {
     actor: AuthenticatedUser,
     ipAddress?: string,
   ) {
-    const job = await this.jobsRepository.findOneBy({ id });
-    if (!job) throw new NotFoundException(`Job ${id} was not found`);
-    const previousStatus = job.moderationStatus;
-    const wasActive = job.isActive;
-    job.moderationStatus = status;
-    job.moderationNote = reason.trim();
-    job.isActive = status === "approved";
-    if (job.isActive) {
-      const readinessError = jobPublicationError(job);
-      if (readinessError) throw new BadRequestException(readinessError);
-      this.assertDeadlineAllowsPublishing(
-        job.isActive,
-        job.applicationDeadline,
-      );
-    }
-    const saved = await this.jobsRepository.manager.transaction(
-      async (manager) => {
-        const updated = await manager.getRepository(Job).save(job);
+    const { saved, wasActive, previousStatus } =
+      await this.jobsRepository.manager.transaction(async (manager) => {
+        const jobs = manager.getRepository(Job);
+        const observedJob = await jobs.findOneBy({ id });
+        if (!observedJob)
+          throw new NotFoundException(`Job ${id} was not found`);
+        if (status === "approved" && observedJob.organizationId != null) {
+          await this.assertOrganizationJobQuota(
+            manager,
+            observedJob.organizationId,
+            id,
+          );
+        }
+        const job = await jobs.findOne({
+          where: { id },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (!job) throw new NotFoundException(`Job ${id} was not found`);
+        if (job.organizationId !== observedJob.organizationId) {
+          throw new ConflictException(
+            "The job’s company changed during moderation. Reload and try again.",
+          );
+        }
+        const previousStatus = job.moderationStatus;
+        const wasActive = job.isActive;
+        job.moderationStatus = status;
+        job.moderationNote = reason.trim();
+        job.isActive = status === "approved";
+        if (job.isActive) {
+          const readinessError = jobPublicationError(job);
+          if (readinessError) throw new BadRequestException(readinessError);
+          this.assertDeadlineAllowsPublishing(
+            job.isActive,
+            job.applicationDeadline,
+          );
+        }
+        const updated = await jobs.save(job);
         await this.search?.enqueueJob(updated.id, manager);
-        return updated;
-      },
-    );
+        if (status === "approved" && !wasActive)
+          await this.enqueueJobAlertGeneration(updated.id, manager);
+        return { saved: updated, wasActive, previousStatus };
+      });
     await this.invalidatePublicJobCache();
     await this.auditService.record({
       actorUserId: actor.id,
@@ -644,7 +1047,7 @@ export class JobsService {
     });
     const notificationDelivery =
       status === "approved" && !wasActive
-        ? await this.notifyMatchingCandidates(saved)
+        ? await this.processJobAlert(saved.id)
         : undefined;
     return { ...saved, notificationDelivery };
   }
@@ -678,6 +1081,16 @@ export class JobsService {
           );
         }
         const deletedJob = { title: job.title };
+        const pendingDocuments = (await manager.query(
+          `SELECT file_path AS path
+           FROM candidate_application_documents
+           WHERE job_id = $1 AND application_id IS NULL`,
+          [id],
+        )) as Array<{ path: string }>;
+        await this.fileStorage?.enqueueCleanup(
+          pendingDocuments.map(({ path }) => path),
+          manager,
+        );
         await this.auditService.record(
           {
             actorUserId: actor.id,
@@ -756,8 +1169,223 @@ export class JobsService {
     }
   }
 
+  private async assertOrganizationJobQuota(
+    manager: EntityManager,
+    organizationId: number,
+    excludedJobId?: number,
+  ) {
+    const organizations = manager.getRepository(EmployerOrganization);
+    const organization = await organizations.findOne({
+      where: { id: organizationId },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!organization) {
+      throw new ConflictException(
+        "The company workspace no longer exists; job activation was cancelled.",
+      );
+    }
+    const limits = await employerPlanLimits(
+      organization,
+      this.razorpayConfiguration,
+    );
+    const jobs = manager.getRepository(Job);
+    const activeQuery = jobs
+      .createQueryBuilder("job")
+      .where("job.organizationId = :organizationId", { organizationId })
+      .andWhere("job.isActive = true");
+    if (excludedJobId !== undefined) {
+      activeQuery.andWhere("job.id != :excludedJobId", { excludedJobId });
+    }
+    const activeJobs = await activeQuery.getCount();
+    if (activeJobs >= limits.activeJobs) {
+      throw new ConflictException(
+        `This company’s plan allows ${limits.activeJobs} active job(s). Close a job or upgrade the plan before activating this listing.`,
+      );
+    }
+  }
+
+  async enqueueJobAlertGeneration(
+    jobId: number,
+    manager: EntityManager,
+    restartCompleted = false,
+  ) {
+    await manager.query(
+      `INSERT INTO job_alert_generation_outbox (job_id)
+       VALUES ($1)
+       ON CONFLICT (job_id) DO UPDATE
+       SET status = 'queued', attempts = 0, next_attempt_at = now(),
+           locked_at = NULL, last_error = NULL, updated_at = now()
+       WHERE $2::boolean AND job_alert_generation_outbox.status IN ('completed', 'failed')`,
+      [jobId, restartCompleted],
+    );
+  }
+
+  async processPendingJobAlerts(limit = 10) {
+    if (this.processingJobAlerts) return 0;
+    this.processingJobAlerts = true;
+    try {
+      const due = (await this.jobsRepository.manager.transaction((manager) =>
+        manager.query(
+          `SELECT job_id AS "jobId"
+           FROM job_alert_generation_outbox
+           WHERE status = 'queued' AND next_attempt_at <= now()
+           ORDER BY next_attempt_at, job_id
+           LIMIT $1`,
+          [Math.min(50, Math.max(1, limit))],
+        ),
+      )) as Array<{ jobId: number }>;
+      for (const item of due) await this.processJobAlert(item.jobId);
+      return due.length;
+    } finally {
+      this.processingJobAlerts = false;
+    }
+  }
+
+  async jobAlertOperationalStatus() {
+    const [rows, failed] = await Promise.all([
+      this.jobsRepository.manager.query(`
+        SELECT status, COUNT(*)::int AS count,
+               COUNT(*) FILTER (
+                 WHERE status = 'queued' AND next_attempt_at <= now()
+               )::int AS due,
+               MIN(created_at) FILTER (WHERE status = 'queued') AS "oldestQueuedAt"
+        FROM job_alert_generation_outbox
+        GROUP BY status
+      `) as Promise<
+        Array<{
+          status: string;
+          count: number | string;
+          due: number | string;
+          oldestQueuedAt: Date | null;
+        }>
+      >,
+      this.jobsRepository.manager.query(`
+        SELECT outbox.job_id AS "jobId", job.title,
+               outbox.attempts, outbox.last_error AS "lastError",
+               outbox.updated_at AS "updatedAt"
+        FROM job_alert_generation_outbox outbox
+        INNER JOIN jobs job ON job.id = outbox.job_id
+        WHERE outbox.status = 'failed'
+        ORDER BY outbox.updated_at DESC
+        LIMIT 50
+      `) as Promise<
+        Array<{
+          jobId: number;
+          title: string;
+          attempts: number;
+          lastError: string | null;
+          updatedAt: Date;
+        }>
+      >,
+    ]);
+    return {
+      counts: Object.fromEntries(
+        rows.map(({ status, count }) => [status, Number(count)]),
+      ),
+      due: rows.reduce((total, row) => total + Number(row.due), 0),
+      oldestQueuedAt:
+        rows.find((row) => row.oldestQueuedAt)?.oldestQueuedAt?.toISOString() ??
+        null,
+      failed,
+    };
+  }
+
+  async retryFailedJobAlert(jobId: number) {
+    const result = (await this.jobsRepository.manager.query(
+      `UPDATE job_alert_generation_outbox
+       SET status = 'queued', attempts = 0, next_attempt_at = now(),
+           locked_at = NULL, last_error = NULL, updated_at = now()
+       WHERE job_id = $1 AND status = 'failed'
+       RETURNING job_id AS "jobId"`,
+      [jobId],
+    )) as Array<{ jobId: number }>;
+    return result.length > 0;
+  }
+
+  async processJobAlert(jobId: number) {
+    const claimed = (await this.jobsRepository.manager.transaction((manager) =>
+      manager.query(
+        `UPDATE job_alert_generation_outbox
+         SET status = 'processing', attempts = attempts + 1,
+             locked_at = now(), updated_at = now()
+         WHERE job_id = $1 AND status = 'queued'
+           AND next_attempt_at <= now()
+         RETURNING attempts`,
+        [jobId],
+      ),
+    )) as Array<{ attempts: number }>;
+    if (!claimed.length) return { queued: 0, failed: 0 };
+    const attempts = Number(claimed[0].attempts);
+    try {
+      const job = await this.jobsRepository.findOneBy({
+        id: jobId,
+        isActive: true,
+      });
+      if (!job) {
+        await this.jobsRepository.manager.query(
+          `UPDATE job_alert_generation_outbox
+           SET status = 'completed', locked_at = NULL, last_error = NULL,
+               updated_at = now()
+           WHERE job_id = $1 AND status = 'processing'`,
+          [jobId],
+        );
+        return { queued: 0, failed: 0 };
+      }
+      const result = await this.notifyMatchingCandidates(job);
+      const failed = result.failed > 0;
+      const delaySeconds = Math.min(21_600, 60 * 2 ** (attempts - 1));
+      await this.jobsRepository.manager.query(
+        `UPDATE job_alert_generation_outbox
+         SET status = $2, locked_at = NULL,
+             next_attempt_at = CASE WHEN $2 = 'queued'
+               THEN now() + ($3 * INTERVAL '1 second')
+               ELSE next_attempt_at END,
+             last_error = $4, updated_at = now()
+         WHERE job_id = $1 AND status = 'processing'`,
+        [
+          jobId,
+          failed && attempts < 5 ? "queued" : failed ? "failed" : "completed",
+          delaySeconds,
+          failed ? "One or more matching alerts could not be generated." : null,
+        ],
+      );
+      return result;
+    } catch (error) {
+      const lastError =
+        error instanceof Error ? error.message.slice(0, 1000) : "Unknown error";
+      await this.jobsRepository.manager.query(
+        `UPDATE job_alert_generation_outbox
+         SET status = $2, locked_at = NULL,
+             next_attempt_at = CASE WHEN $2 = 'queued'
+               THEN now() + ($3 * INTERVAL '1 second')
+               ELSE next_attempt_at END,
+             last_error = $4, updated_at = now()
+         WHERE job_id = $1 AND status = 'processing'`,
+        [
+          jobId,
+          attempts < 5 ? "queued" : "failed",
+          Math.min(21_600, 60 * 2 ** (attempts - 1)),
+          lastError,
+        ],
+      );
+      throw error;
+    }
+  }
+
   async notifyMatchingCandidates(job: Job) {
     try {
+      const emailPlacementRows = (await this.jobsRepository.manager.query(
+        `SELECT id AS "placementId"
+         FROM featured_job_placements
+         WHERE job_id = $1 AND placement_type = 'email'
+           AND status IN ('scheduled', 'active')
+           AND starts_at <= now() AND ends_at > now()
+         ORDER BY starts_at DESC, id DESC
+         LIMIT 1`,
+        [job.id],
+      )) as Array<{ placementId: number }>;
+      const featuredPlacementId = emailPlacementRows[0]?.placementId;
+      const emailFeatured = featuredPlacementId !== undefined;
       const profiles = await this.profilesRepository.findBy({
         jobAlertEmails: true,
       });
@@ -809,6 +1437,12 @@ export class JobsService {
       let savedSearchFailure = 0;
       try {
         savedSearches = await this.savedSearchesService.matchingForJob(job);
+        const optedInUserIds = new Set(
+          matchingProfiles.map((profile) => profile.userId),
+        );
+        savedSearches = savedSearches.filter((search) =>
+          optedInUserIds.has(search.userId),
+        );
       } catch (error) {
         savedSearchFailure = 1;
         this.logger.error(
@@ -841,9 +1475,11 @@ export class JobsService {
         recipients.map((recipient) =>
           this.emailDelivery.sendNotification(
             recipient.email,
-            `New job matching your preferences: ${job.title}`,
-            `${job.title} at ${job.company} in ${job.location} matches your saved job preferences${matchingSearches.has(recipient.id) ? ` (${matchingSearches.get(recipient.id)?.join(", ")})` : ""}.${jobUrl ? ` View this listing: ${jobUrl}` : ""}`,
-            `job-alert:${job.id}:${recipient.id}:${job.createdAt.toISOString()}`,
+            `${emailFeatured ? "Featured job" : "New job"} matching your preferences: ${job.title}`,
+            `${emailFeatured ? "Featured opportunity: " : ""}${job.title} at ${job.company} in ${job.location} matches your saved job preferences${matchingSearches.has(recipient.id) ? ` (${matchingSearches.get(recipient.id)?.join(", ")})` : ""}.${jobUrl ? ` View this listing: ${jobUrl}` : ""}`,
+            featuredPlacementId
+              ? `featured-placement:${featuredPlacementId}:${recipient.id}`
+              : `job-alert:${job.id}:${recipient.id}:${job.createdAt.toISOString()}`,
             "job_alert",
             {
               jobTitle: job.title,
@@ -854,6 +1490,7 @@ export class JobsService {
                 : "",
               jobUrl: jobUrl ? ` View this listing: ${jobUrl}` : "",
             },
+            { userId: recipient.id, category: "job_alert" },
           ),
         ),
       );

@@ -145,4 +145,10 @@ export class UpdateRazorpayConfigurationDto {
   @Min(0)
   @Max(1000000)
   enterpriseResumeCredits?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(30)
+  pastDueGraceDays?: number;
 }

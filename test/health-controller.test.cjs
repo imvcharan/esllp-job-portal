@@ -20,7 +20,12 @@ test("readiness reports the database check when the database is available", asyn
 
   assert.deepEqual(await controller.getReadiness(), {
     status: "ready",
-    checks: { database: "ok" },
+    checks: {
+      database: "ok",
+      redisCache: "optional_unavailable",
+      bullMq: "optional_unavailable",
+      openSearch: "optional_unavailable",
+    },
   });
   assert.deepEqual(queries, ["SELECT 1"]);
 });
@@ -42,9 +47,25 @@ test("readiness returns service unavailable when the database probe fails", asyn
   await assert.rejects(controller.getReadiness(), ServiceUnavailableException);
 });
 
-test("metrics report process health without database or secret details", () => {
-  const controller = new HealthController({ isInitialized: false });
-  const metrics = controller.getMetrics();
+test("metrics require a bearer token and omit database credentials", async () => {
+  const previous = process.env.METRICS_BEARER_TOKEN;
+  const token = "test-metrics-token-with-at-least-32-characters";
+  process.env.METRICS_BEARER_TOKEN = token;
+  const controller = new HealthController({
+    isInitialized: false,
+    async query() {
+      return [];
+    },
+  });
+  let metrics;
+  try {
+    metrics = await controller.getMetrics({
+      get: () => `Bearer ${token}`,
+    });
+  } finally {
+    if (previous === undefined) delete process.env.METRICS_BEARER_TOKEN;
+    else process.env.METRICS_BEARER_TOKEN = previous;
+  }
 
   assert.equal(metrics.status, "ok");
   assert.equal(typeof metrics.uptimeSeconds, "number");
@@ -52,4 +73,5 @@ test("metrics report process health without database or secret details", () => {
   assert.equal(metrics.process.node, process.version);
   assert.equal(typeof metrics.memory.rssBytes, "number");
   assert.equal(typeof metrics.memory.heapUsedBytes, "number");
+  assert.equal(JSON.stringify(metrics).includes(token), false);
 });

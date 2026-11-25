@@ -59,6 +59,8 @@ function createService({ existingUnlock = false, usage = 0, currentResume = true
           if (query.includes("SELECT id")) return [];
           if (query.includes("COUNT(*)")) return [{ used: usage }];
           if (query.includes("INSERT INTO employer_candidate_resume_unlocks"))
+            return [{ id: 1 }];
+          if (query.includes("INSERT INTO employer_resume_credit_events"))
             return [];
           throw new Error(`Unexpected SQL in test: ${query}`);
         },

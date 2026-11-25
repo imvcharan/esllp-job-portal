@@ -11,8 +11,15 @@ import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
 import { API_VERSIONING_OPTIONS } from "./api-versioning";
 import { createRequestContextMiddleware } from "./audit/request-context.middleware";
+import { appProcessRole } from "./infrastructure/process-role";
 
 async function bootstrap(): Promise<void> {
+  const processRole = appProcessRole();
+  if (processRole === "worker") {
+    throw new Error(
+      "APP_PROCESS_ROLE=worker must use the dedicated workers command.",
+    );
+  }
   if (
     process.env.NODE_ENV === "production" &&
     (!process.env.JWT_ACCESS_SECRET ||

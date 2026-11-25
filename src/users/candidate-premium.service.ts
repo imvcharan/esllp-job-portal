@@ -27,6 +27,12 @@ import {
 
 type JsonObject = Record<string, unknown>;
 
+function asJsonObject(value: unknown): JsonObject | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as JsonObject)
+    : null;
+}
+
 @Injectable()
 export class CandidatePremiumService {
   constructor(
@@ -59,8 +65,8 @@ export class CandidatePremiumService {
       currency: "INR",
       checkoutReady: Boolean(
         configuration.enabled &&
-          configuration.apiSecretConfigured &&
-          Boolean(configuration.keyId),
+        configuration.apiSecretConfigured &&
+        Boolean(configuration.keyId),
       ),
       premiumBoostUntil: profile?.premiumBoostUntil ?? null,
       products: products.map((product) => this.publicProduct(product)),
@@ -82,14 +88,41 @@ export class CandidatePremiumService {
         "Complete your candidate profile before purchasing a profile boost.",
       );
     const credentials = await this.razorpayConfiguration.credentials();
-    if (
-      !credentials.enabled ||
-      !credentials.keyId ||
-      !credentials.apiSecret
-    )
+    if (!credentials.enabled || !credentials.keyId || !credentials.apiSecret)
       throw new ServiceUnavailableException(
         "Candidate checkout is disabled or not configured. Please contact support.",
       );
+
+    const pendingOrder = await this.orders.findOne({
+      where: {
+        userId: user.id,
+        productKey: product.key,
+        paymentStatus: "pending",
+      },
+      order: { createdAt: "DESC" },
+    });
+    if (pendingOrder) {
+      const response = await this.razorpayRequest(
+        `/orders/${encodeURIComponent(pendingOrder.razorpayOrderId)}`,
+        { method: "GET" },
+      );
+      if (response.status !== 404) {
+        const existingOrder = await this.readProviderResponse(response);
+        if (
+          existingOrder.id === pendingOrder.razorpayOrderId &&
+          existingOrder.amount === pendingOrder.amountPaise &&
+          existingOrder.currency === pendingOrder.currency &&
+          ["created", "attempted"].includes(String(existingOrder.status))
+        )
+          return this.checkoutPayload(
+            credentials.keyId,
+            pendingOrder.razorpayOrderId,
+            pendingOrder.amountPaise,
+            pendingOrder.productName,
+            user,
+          );
+      }
+    }
 
     const receipt = `cp_${user.id}_${randomBytes(8).toString("hex")}`;
     const response = await this.razorpayRequest("/orders", {
@@ -136,16 +169,13 @@ export class CandidatePremiumService {
       targetId: order.id,
       details: { productKey: product.key, amountPaise: product.amountPaise },
     });
-    return {
-      keyId: credentials.keyId,
-      orderId: payload.id,
-      amount: product.amountPaise,
-      currency: "INR",
-      name: "esllp",
-      description: product.name,
-      prefill: { email: user.email, name: user.displayName },
-      theme: { color: "#176b4b" },
-    };
+    return this.checkoutPayload(
+      credentials.keyId,
+      payload.id,
+      product.amountPaise,
+      product.name,
+      user,
+    );
   }
 
   async verifyPayment(
@@ -216,7 +246,12 @@ export class CandidatePremiumService {
         "Razorpay has not confirmed the expected captured payment.",
       );
 
-    const result = await this.markPaid(order.id, user.id, dto.paymentId);
+    const result = await this.markPaid(
+      order.id,
+      user.id,
+      dto.paymentId,
+      this.providerInvoiceId(payment.invoice_id),
+    );
     return this.publicOrder(result.order);
   }
 
@@ -245,6 +280,9 @@ export class CandidatePremiumService {
         "The Razorpay webhook signature is invalid.",
       );
 
+    if (body.event === "refund.processed") {
+      return this.processCandidateRefund(body);
+    }
     if (body.event !== "payment.captured") return { received: true };
     const eventPayload = body.payload;
     const paymentEnvelope =
@@ -275,12 +313,136 @@ export class CandidatePremiumService {
       throw new BadRequestException(
         "The Razorpay event does not match the candidate order.",
       );
+    if (order.userId === null) {
+      const updated = (await this.dataSource.query(
+        `UPDATE candidate_premium_orders
+         SET payment_status = CASE WHEN payment_status = 'pending'
+                                   THEN 'paid' ELSE payment_status END,
+             razorpay_payment_id = COALESCE(razorpay_payment_id, $2),
+             invoice_id = COALESCE(invoice_id, $3),
+             paid_at = COALESCE(paid_at, now()), updated_at = now()
+         WHERE id = $1
+           AND (razorpay_payment_id IS NULL OR razorpay_payment_id = $2)
+         RETURNING id`,
+        [
+          order.id,
+          paymentEntity.id,
+          this.providerInvoiceId(paymentEntity.invoice_id),
+        ],
+      )) as Array<{ id: number }>;
+      if (!updated.length)
+        throw new ConflictException(
+          "This order was verified with another payment.",
+        );
+      return { received: true, fulfillmentSkipped: true };
+    }
     const result = await this.markPaid(
       order.id,
       order.userId,
       paymentEntity.id,
+      this.providerInvoiceId(paymentEntity.invoice_id),
     );
     return { received: true, order: this.publicOrder(result.order) };
+  }
+
+  private async processCandidateRefund(body: Record<string, unknown>) {
+    const payload = asJsonObject(body.payload);
+    const refundEnvelope = asJsonObject(payload?.refund);
+    const refund = asJsonObject(refundEnvelope?.entity);
+    if (
+      !refund ||
+      typeof refund.id !== "string" ||
+      typeof refund.payment_id !== "string" ||
+      refund.status !== "processed" ||
+      typeof refund.amount !== "number" ||
+      !Number.isSafeInteger(refund.amount) ||
+      refund.amount < 1
+    )
+      throw new BadRequestException("The Razorpay refund event is malformed.");
+    const refundAmount = refund.amount;
+
+    return this.dataSource.transaction(async (manager) => {
+      const orders = (await manager.query(
+        `SELECT id, user_id AS "userId", product_key AS "productKey",
+                fulfillment_days AS "fulfillmentDays",
+                amount_paise AS "amountPaise"
+         FROM candidate_premium_orders
+         WHERE razorpay_payment_id = $1
+         FOR UPDATE`,
+        [refund.payment_id],
+      )) as Array<{
+        id: number;
+        userId: number | null;
+        productKey: string;
+        fulfillmentDays: number;
+        amountPaise: number;
+      }>;
+      const order = orders[0];
+      if (!order) return { received: true, ignored: true };
+      const inserted = (await manager.query(
+        `INSERT INTO payment_refunds (
+           payment_source, payment_reference, amount_paise, reason,
+           status, provider_refund_id, processed_at
+         )
+         VALUES ('candidate', $1, $2, 'Razorpay refund', 'processed', $3, now())
+         ON CONFLICT (provider_refund_id) DO NOTHING
+         RETURNING id`,
+        [refund.payment_id, refundAmount, refund.id],
+      )) as Array<{ id: number }>;
+      if (!inserted.length) return { received: true, duplicate: true };
+      const totals = (await manager.query(
+        `SELECT COALESCE(SUM(amount_paise), 0)::bigint AS refunded
+         FROM payment_refunds
+         WHERE payment_source = 'candidate'
+           AND payment_reference = $1
+           AND status = 'processed'`,
+        [refund.payment_id],
+      )) as Array<{ refunded: number | string }>;
+      const refunded = Number(totals[0]?.refunded ?? 0);
+      if (refunded > order.amountPaise)
+        throw new BadRequestException(
+          "The Razorpay refunds exceed the captured candidate payment.",
+        );
+      const capturedAmount = Number(order.amountPaise);
+      const priorRefunded = refunded - refundAmount;
+      const fullyRefunded = refunded === capturedAmount;
+      await manager.query(
+        `UPDATE candidate_premium_orders
+         SET payment_status = $2,
+             fulfillment_status = CASE WHEN $2 = 'refunded' THEN 'cancelled'
+                                       ELSE fulfillment_status END,
+             fulfillment_note = CASE WHEN $2 = 'refunded'
+               THEN 'Payment refunded by the payment provider.'
+               ELSE fulfillment_note END,
+             updated_at = now()
+         WHERE id = $1`,
+        [order.id, fullyRefunded ? "refunded" : "partially_refunded"],
+      );
+      if (order.userId && order.productKey === "profile-boost") {
+        const profiles = manager.getRepository(CandidateProfile);
+        const profile = await profiles.findOne({
+          where: { userId: order.userId },
+          lock: { mode: "pessimistic_write" },
+        });
+        const daysToRevoke =
+          Math.floor((order.fulfillmentDays * refunded) / capturedAmount) -
+          Math.floor((order.fulfillmentDays * priorRefunded) / capturedAmount);
+        if (daysToRevoke > 0 && profile?.premiumBoostUntil) {
+          const revisedEnd = new Date(
+            profile.premiumBoostUntil.getTime() -
+              daysToRevoke * 24 * 60 * 60 * 1000,
+          );
+          profile.premiumBoostUntil =
+            revisedEnd > new Date() ? revisedEnd : null;
+          await profiles.save(profile);
+        }
+      }
+      return {
+        received: true,
+        refundedPaise: refunded,
+        fullyRefunded,
+      };
+    });
   }
 
   async adminProducts() {
@@ -371,11 +533,7 @@ export class CandidatePremiumService {
     return this.publicProduct(saved);
   }
 
-  async disableProduct(
-    key: string,
-    reason: string,
-    actor: AuthenticatedUser,
-  ) {
+  async disableProduct(key: string, reason: string, actor: AuthenticatedUser) {
     const product = await this.products.findOneBy({ key });
     if (!product) throw new NotFoundException("Premium service was not found.");
     if (!product.enabled) return this.publicProduct(product);
@@ -399,26 +557,62 @@ export class CandidatePremiumService {
     });
     return orders.map((order) => ({
       ...this.publicOrder(order),
-      candidateName: order.user.displayName,
-      candidateEmail: order.user.email,
+      candidateName: order.user?.displayName ?? "Deleted candidate",
+      candidateEmail: order.user?.email ?? null,
       candidateId: order.userId,
     }));
   }
 
+  async candidateInvoiceUrl(user: AuthenticatedUser, orderId: number) {
+    const order = await this.orders.findOneBy({ id: orderId, userId: user.id });
+    if (!order?.invoiceId)
+      throw new NotFoundException(
+        "An invoice is not available for this order.",
+      );
+    const response = await this.razorpayRequest(
+      `/invoices/${encodeURIComponent(order.invoiceId)}`,
+      { method: "GET" },
+    );
+    const invoice = await this.readProviderResponse(response);
+    if (invoice.id !== order.invoiceId || typeof invoice.short_url !== "string")
+      throw new ServiceUnavailableException(
+        "The payment provider did not return this invoice.",
+      );
+    const invoiceUrl = this.trustedInvoiceUrl(invoice.short_url);
+    await this.audit.record({
+      actorUserId: user.id,
+      action: "candidate.premium_invoice_accessed",
+      targetType: "candidate_premium_order",
+      targetId: order.id,
+      details: { invoiceId: order.invoiceId },
+    });
+    return { invoiceUrl };
+  }
+
   async adminRevenue() {
     const paidCondition =
-      "order.paymentStatus = 'paid' AND order.paidAt IS NOT NULL";
+      "order.paymentStatus IN ('paid', 'partially_refunded', 'refunded') AND order.paidAt IS NOT NULL";
+    const refundedAmountExpression =
+      `COALESCE((SELECT SUM(refund.amount_paise) FROM payment_refunds refund ` +
+      `WHERE refund.payment_source = 'candidate' ` +
+      `AND refund.payment_reference = "order"."razorpay_payment_id" ` +
+      `AND refund.status = 'processed'), 0)`;
     const monthExpression =
       "to_char(date_trunc('month', order.paidAt AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM')";
     const totalsQuery = this.orders
       .createQueryBuilder("order")
-      .select(
-        `COUNT(*) FILTER (WHERE ${paidCondition})::text`,
-        "paidOrders",
-      )
+      .select(`COUNT(*) FILTER (WHERE ${paidCondition})::text`, "paidOrders")
       .addSelect(
         `ROUND(COALESCE(SUM(order.amountPaise) FILTER (WHERE ${paidCondition}), 0)::numeric / 100, 2)::text`,
         "grossPaidInr",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(${refundedAmountExpression}) FILTER (WHERE ${paidCondition}), 0)::numeric / 100, 2)::text`,
+        "refundedInr",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(order.amountPaise - ${refundedAmountExpression}) FILTER (WHERE ${paidCondition}), 0)::numeric / 100, 2)::text`,
+        "netPaidInr",
       )
       .addSelect(
         "COUNT(*) FILTER (WHERE order.paymentStatus = 'pending')::text",
@@ -433,6 +627,14 @@ export class CandidatePremiumService {
         "ROUND(COALESCE(SUM(order.amountPaise), 0)::numeric / 100, 2)::text",
         "grossPaidInr",
       )
+      .addSelect(
+        `ROUND(COALESCE(SUM(${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "refundedInr",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(order.amountPaise - ${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "netPaidInr",
+      )
       .where(paidCondition)
       .groupBy("order.productKey")
       .addGroupBy("order.productName")
@@ -444,6 +646,14 @@ export class CandidatePremiumService {
       .addSelect(
         "ROUND(COALESCE(SUM(order.amountPaise), 0)::numeric / 100, 2)::text",
         "grossPaidInr",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "refundedInr",
+      )
+      .addSelect(
+        `ROUND(COALESCE(SUM(order.amountPaise - ${refundedAmountExpression}), 0)::numeric / 100, 2)::text`,
+        "netPaidInr",
       )
       .where(paidCondition)
       .andWhere(
@@ -457,17 +667,23 @@ export class CandidatePremiumService {
         paidOrders?: string;
         pendingOrders?: string;
         grossPaidInr?: string;
+        refundedInr?: string;
+        netPaidInr?: string;
       }>(),
       productsQuery.getRawMany<{
         productKey: string;
         productName: string;
         paidOrders: string;
         grossPaidInr: string;
+        refundedInr: string;
+        netPaidInr: string;
       }>(),
       monthlyQuery.getRawMany<{
         month: string;
         paidOrders: string;
         grossPaidInr: string;
+        refundedInr: string;
+        netPaidInr: string;
       }>(),
     ]);
 
@@ -482,9 +698,7 @@ export class CandidatePremiumService {
     const currentMonth =
       Number(indiaParts.find((part) => part.type === "month")?.value) - 1;
     const currentMonthIndex = currentYear * 12 + currentMonth;
-    const monthlyByMonth = new Map(
-      monthly.map((row) => [row.month, row]),
-    );
+    const monthlyByMonth = new Map(monthly.map((row) => [row.month, row]));
 
     return {
       currency: "INR",
@@ -493,6 +707,8 @@ export class CandidatePremiumService {
         paidOrders: totals?.paidOrders ?? "0",
         pendingOrders: totals?.pendingOrders ?? "0",
         grossPaidInr: totals?.grossPaidInr ?? "0",
+        refundedInr: totals?.refundedInr ?? "0",
+        netPaidInr: totals?.netPaidInr ?? "0",
       },
       byProduct: products,
       monthly: Array.from({ length: 12 }, (_, index) => {
@@ -505,6 +721,8 @@ export class CandidatePremiumService {
           month: key,
           paidOrders: row?.paidOrders ?? "0",
           grossPaidInr: row?.grossPaidInr ?? "0",
+          refundedInr: row?.refundedInr ?? "0",
+          netPaidInr: row?.netPaidInr ?? "0",
         };
       }),
     };
@@ -517,7 +735,7 @@ export class CandidatePremiumService {
   ) {
     const order = await this.orders.findOneBy({ id: orderId });
     if (!order) throw new NotFoundException("Premium order was not found.");
-    if (order.paymentStatus !== "paid")
+    if (!["paid", "partially_refunded"].includes(order.paymentStatus))
       throw new BadRequestException("Only paid orders can be fulfilled.");
     if (order.productKey === "profile-boost")
       throw new BadRequestException(
@@ -561,7 +779,31 @@ export class CandidatePremiumService {
     };
   }
 
-  private async markPaid(orderId: number, userId: number, paymentId: string) {
+  private checkoutPayload(
+    keyId: string,
+    orderId: string,
+    amount: number,
+    description: string,
+    user: AuthenticatedUser,
+  ) {
+    return {
+      keyId,
+      orderId,
+      amount,
+      currency: "INR",
+      name: "esllp",
+      description,
+      prefill: { email: user.email, name: user.displayName },
+      theme: { color: "#176b4b" },
+    };
+  }
+
+  private async markPaid(
+    orderId: number,
+    userId: number,
+    paymentId: string,
+    invoiceId: string | null = null,
+  ) {
     const result = await this.dataSource.transaction(async (manager) => {
       const orderRepository = manager.getRepository(CandidatePremiumOrder);
       const lockedOrder = await orderRepository.findOne({
@@ -570,11 +812,15 @@ export class CandidatePremiumService {
       });
       if (!lockedOrder)
         throw new NotFoundException("Payment order was not found.");
-      if (lockedOrder.paymentStatus === "paid") {
+      if (lockedOrder.paymentStatus !== "pending") {
         if (lockedOrder.razorpayPaymentId !== paymentId)
           throw new ConflictException(
             "This order was verified with another payment.",
           );
+        if (!lockedOrder.invoiceId && invoiceId) {
+          lockedOrder.invoiceId = invoiceId;
+          await orderRepository.save(lockedOrder);
+        }
         return { order: lockedOrder, changed: false };
       }
 
@@ -585,6 +831,7 @@ export class CandidatePremiumService {
         throw new NotFoundException("Purchased service was not found.");
       lockedOrder.paymentStatus = "paid";
       lockedOrder.razorpayPaymentId = paymentId;
+      lockedOrder.invoiceId = invoiceId;
       lockedOrder.paidAt = new Date();
       if (product.key === "profile-boost") {
         const profileRepository = manager.getRepository(CandidateProfile);
@@ -642,16 +889,45 @@ export class CandidatePremiumService {
       fulfillmentNote: order.fulfillmentNote,
       paidAt: order.paidAt,
       fulfilledAt: order.fulfilledAt,
+      invoiceAvailable: Boolean(order.invoiceId),
       createdAt: order.createdAt,
     };
+  }
+
+  private providerInvoiceId(value: unknown): string | null {
+    return typeof value === "string" && value.trim().length <= 100
+      ? value.trim() || null
+      : null;
+  }
+
+  private trustedInvoiceUrl(value: string) {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new ServiceUnavailableException(
+        "The payment provider returned an invalid invoice URL.",
+      );
+    }
+    if (
+      url.protocol !== "https:" ||
+      !(
+        url.hostname === "rzp.io" ||
+        url.hostname === "razorpay.com" ||
+        url.hostname.endsWith(".razorpay.com")
+      )
+    )
+      throw new ServiceUnavailableException(
+        "The payment provider returned an untrusted invoice URL.",
+      );
+    return url.toString();
   }
 
   private async razorpayRequest(
     path: string,
     init: RequestInit,
   ): Promise<Response> {
-    const credentials =
-      await this.razorpayConfiguration.credentials();
+    const credentials = await this.razorpayConfiguration.credentials();
     if (!credentials.keyId || !credentials.apiSecret)
       throw new ServiceUnavailableException("Razorpay is not configured.");
     return fetch(`https://api.razorpay.com/v1${path}`, {

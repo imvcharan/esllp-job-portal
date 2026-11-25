@@ -52,6 +52,8 @@ function createService({
             return currentProfile ? [{ resumePath: profile.resumePath }] : [];
           if (sql.includes("SELECT id")) return existing ? [{ id: 1 }] : [];
           if (sql.includes("SELECT COUNT(*)")) return [{ used }];
+          if (sql.includes("INSERT INTO employer_candidate_resume_unlocks"))
+            return [{ id: 1 }];
           return [];
         },
       }),

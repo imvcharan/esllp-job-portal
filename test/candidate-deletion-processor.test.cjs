@@ -4,9 +4,9 @@ const {
   CandidateDeletionProcessor,
 } = require("../dist/users/candidate-deletion-processor.service.js");
 
-function createProcessor({ storageFailure = false } = {}) {
+function createProcessor({ cleanupQueueFailure = false } = {}) {
   const statements = [];
-  const removedFiles = [];
+  const queuedFiles = [];
   const searchRemovals = [];
   const manager = {
     query: async (sql, parameters) => {
@@ -27,9 +27,9 @@ function createProcessor({ storageFailure = false } = {}) {
     transaction: async (callback) => callback(manager),
   };
   const storage = {
-    removeMany: async (paths) => {
-      removedFiles.push(...paths);
-      if (storageFailure) throw new Error("storage unavailable");
+    enqueueCleanup: async (paths) => {
+      if (cleanupQueueFailure) throw new Error("cleanup queue unavailable");
+      queuedFiles.push(...paths);
     },
   };
   const search = {
@@ -41,18 +41,21 @@ function createProcessor({ storageFailure = false } = {}) {
   return {
     processor: new CandidateDeletionProcessor(dataSource, storage, search),
     statements,
-    removedFiles,
+    queuedFiles,
     searchRemovals,
     manager,
   };
 }
 
-test("candidate deletion stays retryable when private-file removal fails", async () => {
+test("candidate deletion stays retryable when private-file cleanup cannot be queued", async () => {
   const { processor, statements, searchRemovals } = createProcessor({
-    storageFailure: true,
+    cleanupQueueFailure: true,
   });
 
-  await assert.rejects(processor.processOneDueRequest(), /storage unavailable/);
+  await assert.rejects(
+    processor.processOneDueRequest(),
+    /cleanup queue unavailable/,
+  );
 
   assert.equal(
     statements.some(({ sql }) => sql.includes("SET status = 'completed'")),
@@ -61,13 +64,13 @@ test("candidate deletion stays retryable when private-file removal fails", async
   assert.deepEqual(searchRemovals, []);
 });
 
-test("candidate deletion anonymizes account data and queues index removal", async () => {
-  const { processor, statements, removedFiles, searchRemovals, manager } =
+test("candidate deletion queues private-file cleanup and removes the search index", async () => {
+  const { processor, statements, queuedFiles, searchRemovals, manager } =
     createProcessor();
 
   await processor.processOneDueRequest();
 
-  assert.deepEqual(removedFiles, ["7/resume/resume.pdf"]);
+  assert.deepEqual(queuedFiles, ["7/resume/resume.pdf"]);
   assert.equal(
     statements.some(({ sql }) => sql.includes("UPDATE candidate_applications")),
     true,

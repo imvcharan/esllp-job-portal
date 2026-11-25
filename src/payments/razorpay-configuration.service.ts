@@ -55,6 +55,7 @@ export class RazorpayConfigurationService {
         enterpriseActiveJobs: true,
         enterpriseSeats: true,
         enterpriseResumeCredits: true,
+        pastDueGraceDays: true,
         updatedAt: true,
       },
     });
@@ -124,6 +125,7 @@ export class RazorpayConfigurationService {
       enterpriseActiveJobs: configuration?.enterpriseActiveJobs ?? 1000,
       enterpriseSeats: configuration?.enterpriseSeats ?? 100,
       enterpriseResumeCredits: configuration?.enterpriseResumeCredits ?? 500,
+      pastDueGraceDays: configuration?.pastDueGraceDays ?? 7,
       candidateWebhookPath: "/api/billing/razorpay/candidate-webhook",
       employerWebhookPath: "/api/billing/razorpay/webhook",
     };
@@ -158,6 +160,7 @@ export class RazorpayConfigurationService {
         enterpriseActiveJobs: true,
         enterpriseSeats: true,
         enterpriseResumeCredits: true,
+        pastDueGraceDays: true,
         updatedAt: true,
       },
     });
@@ -245,6 +248,14 @@ export class RazorpayConfigurationService {
     };
   }
 
+  async billingPolicy() {
+    const configuration = await this.configurations.findOne({
+      where: { id: 1 },
+      select: { id: true, pastDueGraceDays: true },
+    });
+    return { pastDueGraceDays: configuration?.pastDueGraceDays ?? 7 };
+  }
+
   async update(dto: UpdateRazorpayConfigurationDto, actor: AuthenticatedUser) {
     if (
       (dto.apiSecret !== undefined || dto.webhookSecret !== undefined) &&
@@ -282,6 +293,7 @@ export class RazorpayConfigurationService {
         enterpriseActiveJobs: 1000,
         enterpriseSeats: 100,
         enterpriseResumeCredits: 500,
+        pastDueGraceDays: 7,
       });
 
     if (dto.keyId !== undefined)
@@ -345,6 +357,8 @@ export class RazorpayConfigurationService {
       configuration.enterpriseSeats = dto.enterpriseSeats;
     if (dto.enterpriseResumeCredits !== undefined)
       configuration.enterpriseResumeCredits = dto.enterpriseResumeCredits;
+    if (dto.pastDueGraceDays !== undefined)
+      configuration.pastDueGraceDays = dto.pastDueGraceDays;
 
     await this.configurations.save(configuration);
     await this.audit.record({
@@ -381,6 +395,7 @@ export class RazorpayConfigurationService {
           dto.enterpriseSeats,
           dto.enterpriseResumeCredits,
         ].some((value) => value !== undefined),
+        pastDueGraceDays: configuration.pastDueGraceDays,
       },
     });
     return this.adminView();

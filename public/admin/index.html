@@ -561,6 +561,7 @@
         <a class="nav-link superadmin-only" href="#notification-templates" data-view="notification-templates" hidden><span class="nav-icon">✉</span><span class="nav-text">Email templates</span></a>
         <a class="nav-link superadmin-only" href="#audit" data-view="audit" hidden><span class="nav-icon">◷</span><span class="nav-text">Audit log</span></a>
         <a class="nav-link admin-only" href="#activity" data-view="activity" hidden><span class="nav-icon">◷</span><span class="nav-text">Recent activity</span></a>
+        <a class="nav-link admin-only" href="#background-jobs" data-view="background-jobs" hidden><span class="nav-icon">⚙</span><span class="nav-text">Background jobs</span></a>
         <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Account security</span></a>
         <a class="nav-link" href="mailto:hello@esllp.in?subject=esllp%20portal%20support"><span class="nav-icon">?</span><span class="nav-text">Help center</span></a>
       </nav>
@@ -627,7 +628,7 @@
           </div>
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>All listings</h2><button class="button" type="button" data-export>↓&nbsp; Export CSV</button></div>
-            <div class="table-toolbar"><input class="table-search page-filter" type="search" placeholder="⌕  Search jobs…" aria-label="Search jobs"><select class="select" id="jobs-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="draft">Draft</option><option value="pending_review">Pending review</option><option value="rejected">Rejected</option><option value="paused">Paused</option><option value="closed">Closed</option></select><select class="select" id="jobs-company-filter"><option value="all">All companies</option></select></div>
+            <div class="table-toolbar"><input class="table-search page-filter" type="search" placeholder="⌕  Search jobs…" aria-label="Search jobs"><select class="select" id="jobs-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="expired">Expired</option><option value="draft">Draft</option><option value="pending_review">Pending review</option><option value="rejected">Rejected</option><option value="paused">Paused</option><option value="closed">Closed</option></select><select class="select" id="jobs-company-filter"><option value="all">All companies</option></select></div>
             <div class="table-wrap"><table class="jobs-table"><thead><tr><th>Job title</th><th>Company</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applications</th><th>Status</th><th>Posted</th><th>Actions</th></tr></thead><tbody class="filterable" id="jobs-table-body"></tbody></table></div>
             <p class="operation-feedback" id="jobs-action-feedback" role="status" aria-live="polite" hidden></p>
           </article>
@@ -721,24 +722,24 @@
             <div class="panel-title-row"><h2>Candidate-service collections</h2></div>
             <p class="demo-note">Gross INR amounts recorded as paid for candidate services; employer subscription charges are reported separately below. Refunds/chargebacks, gateway fees, and taxes are not modeled.</p>
             <div class="stats-grid">
-              <article class="stat-card"><div class="stat-top">Gross paid <span class="stat-icon">₹</span></div><div class="stat-value" id="candidate-premium-revenue-total">—</div><div class="stat-note">Verified paid orders with a payment timestamp</div></article>
+              <article class="stat-card"><div class="stat-top">Net paid <span class="stat-icon">₹</span></div><div class="stat-value" id="candidate-premium-revenue-total">—</div><div class="stat-note">Gross captured receipts less processed refunds</div></article>
               <article class="stat-card"><div class="stat-top">Paid orders <span class="stat-icon">✓</span></div><div class="stat-value" id="candidate-premium-revenue-paid-count">—</div><div class="stat-note">Candidate services only</div></article>
               <article class="stat-card"><div class="stat-top">Pending orders <span class="stat-icon">◷</span></div><div class="stat-value" id="candidate-premium-revenue-pending-count">—</div><div class="stat-note">Not included in gross paid</div></article>
             </div>
-            <div class="panel-title-row"><h3>Paid by service</h3></div>
-            <div class="table-wrap"><table><thead><tr><th>Service</th><th>Paid orders</th><th>Gross paid (INR)</th></tr></thead><tbody id="candidate-premium-revenue-products-body"></tbody></table></div>
-            <div class="panel-title-row"><h3>Monthly gross paid · last 12 months</h3></div>
-            <div class="table-wrap"><table><thead><tr><th>Month (IST)</th><th>Paid orders</th><th>Gross paid (INR)</th></tr></thead><tbody id="candidate-premium-revenue-months-body"></tbody></table></div>
+            <div class="panel-title-row"><h3>Net paid by service</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Service</th><th>Paid orders</th><th>Net paid (INR)</th></tr></thead><tbody id="candidate-premium-revenue-products-body"></tbody></table></div>
+            <div class="panel-title-row"><h3>Monthly net paid · last 12 months</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Month (IST)</th><th>Paid orders</th><th>Net paid (INR)</th></tr></thead><tbody id="candidate-premium-revenue-months-body"></tbody></table></div>
           </article>
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>Employer subscription charges</h2></div>
-            <p class="demo-note">Gross captured charges from verified Razorpay subscription events, grouped by currency. Refunds/chargebacks, gateway fees, and taxes are not modeled. Only charges received after the transaction ledger migration are included; earlier subscription receipts are not backfilled.</p>
+            <p class="demo-note">Net captured charges from verified Razorpay subscription events, less processed refunds and excluding gateway fees and taxes. Only charges received after the transaction ledger migration are included; earlier subscription receipts are not backfilled.</p>
             <div class="panel-title-row"><h3>Captured by plan and currency</h3></div>
-            <div class="table-wrap"><table><thead><tr><th>Plan</th><th>Currency</th><th>Captured charges</th><th>Gross amount</th></tr></thead><tbody id="employer-revenue-plans-body"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Plan</th><th>Currency</th><th>Captured charges</th><th>Net amount</th></tr></thead><tbody id="employer-revenue-plans-body"></tbody></table></div>
             <div class="panel-title-row"><h3>All-time totals</h3></div>
-            <div class="table-wrap"><table><thead><tr><th>Currency</th><th>Captured charges</th><th>Gross amount</th></tr></thead><tbody id="employer-revenue-totals-body"></tbody></table></div>
-            <div class="panel-title-row"><h3>Monthly gross charges · last 12 months</h3></div>
-            <div class="table-wrap"><table><thead><tr><th>Month (IST)</th><th>Currency</th><th>Captured charges</th><th>Gross amount</th></tr></thead><tbody id="employer-revenue-months-body"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Currency</th><th>Captured charges</th><th>Net amount</th></tr></thead><tbody id="employer-revenue-totals-body"></tbody></table></div>
+            <div class="panel-title-row"><h3>Monthly net charges · last 12 months</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Month (IST)</th><th>Currency</th><th>Captured charges</th><th>Net amount</th></tr></thead><tbody id="employer-revenue-months-body"></tbody></table></div>
           </article>
           <article class="panel table-panel" style="margin-top:15px">
             <div class="panel-title-row"><h2>Payment reconciliation</h2><button class="button" type="button" data-export-payment-reconciliation>Export latest 500 CSV</button></div>
@@ -781,6 +782,12 @@
                 </label>
               </div>
               <div class="workspace-panel-head"><div><h3>Employer subscription plans</h3><p>Plan IDs must refer to monthly INR plans in the same Razorpay account as the API key.</p></div></div>
+              <div class="razorpay-fields">
+                <label class="razorpay-field" for="razorpay-past-due-grace">Past-due grace period (days)
+                  <input id="razorpay-past-due-grace" name="pastDueGraceDays" type="number" min="0" max="30" step="1">
+                  <small>Paid entitlements remain available through the configured period after the paid billing period ends.</small>
+                </label>
+              </div>
               <div class="razorpay-fields">
                 <label class="razorpay-field" for="razorpay-starter-plan">Starter Razorpay plan ID
                   <input id="razorpay-starter-plan" name="starterPlanId" type="text" maxlength="100">
@@ -870,7 +877,21 @@
 
         <section class="view" id="view-companies" data-title="Companies">
           <div class="page-heading"><div><div class="page-eyebrow">Employer network</div><h1>Companies</h1><p>Real employer organizations and current hiring activity.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-companies>↻&nbsp; Refresh</button></div></div>
-          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Company</th><th>Industry</th><th>Plan</th><th>Open jobs</th><th>Team</th><th>Joined</th></tr></thead><tbody id="companies-table-body"></tbody></table></div></article>
+          <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Company</th><th>Industry</th><th>Verification</th><th>Plan</th><th>Open jobs</th><th>Team</th><th>Joined</th></tr></thead><tbody id="companies-table-body"></tbody></table></div></article>
+          <article class="panel table-panel" style="margin-top:15px"><div class="panel-title-row"><h2>Company verification requests</h2></div><div class="table-wrap"><table><thead><tr><th>Company</th><th>Website</th><th>Registration and public evidence</th><th>Requested</th><th>Actions</th></tr></thead><tbody id="company-verification-body"></tbody></table></div><p class="operation-feedback" id="company-verification-feedback" role="status" aria-live="polite" hidden></p></article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Featured job placements</h2></div>
+            <form id="featured-placement-form" class="employer-form">
+              <label>Published job<select class="select" name="jobId" required><option value="">Choose a published job</option></select></label>
+              <label>Placement<select class="select" name="placementType"><option value="homepage">Homepage</option><option value="search">Search results</option><option value="email">Opted-in job alerts</option></select></label>
+              <label>Starts at<input name="startsAt" type="datetime-local" required></label>
+              <label>Ends at<input name="endsAt" type="datetime-local" required></label>
+              <label>Verified payment reference (optional)<input name="paymentReference" maxlength="100"><small>This form does not collect payment; record a captured payment or authorized complimentary placement.</small></label>
+              <div class="form-feedback" role="status" aria-live="polite"></div>
+              <div class="modal-actions"><button class="button button-primary" type="submit">Schedule placement</button></div>
+            </form>
+            <div class="table-wrap"><table><thead><tr><th>Job</th><th>Company</th><th>Placement</th><th>Window</th><th>Status</th><th>Payment reference</th><th>Actions</th></tr></thead><tbody id="featured-placement-body"></tbody></table></div>
+          </article>
           <div class="demo-note" id="companies-data-note" hidden></div>
         </section>
 
@@ -994,6 +1015,55 @@
         <section class="view" id="view-activity" data-title="Recent activity">
           <div class="page-heading"><div><div class="page-eyebrow">Platform activity</div><h1>Recent activity</h1><p>Recent job, account, and employer workflow events. Sensitive audit details are shown only in the superadmin audit log.</p></div><div class="heading-actions"><button class="button" type="button" data-refresh-activity>↻&nbsp; Refresh</button></div></div>
           <article class="panel"><div class="activity-list" id="activity-list"><p>Loading recent activity…</p></div></article>
+        </section>
+
+        <section class="view" id="view-background-jobs" data-title="Background jobs">
+          <div class="page-heading"><div><div class="page-eyebrow">System operations</div><h1>Background jobs</h1><p>Indexing, queue, cache, delivery, and payment reconciliation status. Search and delivery continue through PostgreSQL-backed fallbacks when optional services are unavailable.</p></div><div class="heading-actions"><button class="button" type="button" data-reconcile-subscriptions>↻&nbsp; Reconcile billing</button><button class="button" type="button" data-refresh-background-jobs>↻&nbsp; Refresh</button></div></div>
+          <p class="demo-note error" id="background-jobs-error" role="alert" hidden></p>
+          <div class="stats-grid">
+            <article class="stat-card"><div class="stat-top">Redis cache <span class="stat-icon">◈</span></div><div class="stat-value" id="background-cache-status">Loading</div><div class="stat-note" id="background-cache-note">Checking integration</div></article>
+            <article class="stat-card"><div class="stat-top">Job index <span class="stat-icon">⌕</span></div><div class="stat-value" id="background-job-index-status">Loading</div><div class="stat-note" id="background-job-index-note">Checking indexing backlog</div></article>
+            <article class="stat-card"><div class="stat-top">Candidate index <span class="stat-icon">♙</span></div><div class="stat-value" id="background-candidate-index-status">Loading</div><div class="stat-note" id="background-candidate-index-note">Checking indexing backlog</div></article>
+            <article class="stat-card"><div class="stat-top">Active worker processes <span class="stat-icon">⚙</span></div><div class="stat-value" id="background-worker-count">—</div><div class="stat-note" id="background-worker-note">Heartbeat status</div></article>
+          </div>
+          <div class="stats-grid" style="margin-top:15px">
+            <article class="stat-card"><div class="stat-top">Private file storage <span class="stat-icon">▣</span></div><div class="stat-value" id="background-file-storage-status">Loading</div><div class="stat-note" id="background-file-storage-note">Checking storage</div></article>
+            <article class="stat-card"><div class="stat-top">Malware scanner <span class="stat-icon">⌕</span></div><div class="stat-value" id="background-file-scanner-status">Loading</div><div class="stat-note" id="background-file-scanner-note">Checking ClamAV</div></article>
+            <article class="stat-card"><div class="stat-top">Files awaiting scan <span class="stat-icon">◷</span></div><div class="stat-value" id="background-file-scan-pending">—</div><div class="stat-note" id="background-file-scan-note">Pending and infected files</div></article>
+            <article class="stat-card"><div class="stat-top">Object cleanup queue <span class="stat-icon">⌫</span></div><div class="stat-value" id="background-file-cleanup-pending">—</div><div class="stat-note" id="background-file-cleanup-note">Pending cleanup tasks</div></article>
+          </div>
+          <div class="analytics-grid">
+            <article class="panel table-panel">
+              <div class="panel-title-row"><h2>Search indexing backlog</h2></div>
+              <div class="table-wrap"><table><thead><tr><th>Index</th><th>Status</th><th>Pending</th><th>Due</th><th>Needs attention</th><th>Oldest pending</th></tr></thead><tbody id="background-indexing-body"></tbody></table></div>
+            </article>
+            <article class="panel table-panel">
+              <div class="panel-title-row"><h2>Email outbox</h2></div>
+              <div class="table-wrap"><table><thead><tr><th>Status</th><th>Count</th></tr></thead><tbody id="background-email-body"></tbody></table></div>
+              <p class="operation-feedback" id="background-email-due" role="status" aria-live="polite"></p>
+            </article>
+          </div>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Failed email deliveries</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Record</th><th>Attempts</th><th>Latest error</th><th>Failed at</th><th>Action</th></tr></thead><tbody id="background-email-failures-body"></tbody></table></div>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Job alert generation</h2><span id="background-job-alert-summary"></span></div>
+            <div class="table-wrap"><table><thead><tr><th>Job</th><th>Attempts</th><th>Latest error</th><th>Updated</th><th>Action</th></tr></thead><tbody id="background-job-alert-failures-body"></tbody></table></div>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>WhatsApp interview reminders</h2><span id="background-whatsapp-summary"></span></div>
+            <div class="table-wrap"><table><thead><tr><th>Record</th><th>Attempts</th><th>Latest error</th><th>Updated</th><th>Action</th></tr></thead><tbody id="background-whatsapp-failures-body"></tbody></table></div>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>Indexing records needing attention</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Entity</th><th>ID</th><th>Attempts</th><th>Latest error</th><th>Next retry</th><th>Action</th></tr></thead><tbody id="background-index-failures-body"></tbody></table></div>
+          </article>
+          <article class="panel table-panel" style="margin-top:15px">
+            <div class="panel-title-row"><h2>BullMQ queues</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Queue</th><th>Waiting</th><th>Active</th><th>Delayed</th><th>Failed</th></tr></thead><tbody id="background-queues-body"></tbody></table></div>
+            <p class="demo-note" id="background-queues-note"></p>
+          </article>
         </section>
 
         <section class="view" id="view-users" data-title="User accounts">
@@ -1260,7 +1330,7 @@
       const applicationCounts = new Map((adminInsights?.applicationsByJob || []).map((item) => [item.jobId, item.count]));
       jobs.forEach((job) => {
         const row = document.createElement("tr");
-        row.dataset.status = job.isActive ? "active" : (job.moderationStatus || "draft");
+        row.dataset.status = job.expired ? "expired" : job.isActive ? "active" : (job.moderationStatus || "draft");
         row.dataset.company = job.company;
         const salary = job.salaryMin == null && job.salaryMax == null
           ? "Not provided"
@@ -1274,7 +1344,7 @@
         const statusCell = document.createElement("td");
         const status = document.createElement("span");
         status.className = `status${job.isActive ? "" : " closed"}`;
-        status.textContent = job.isActive ? "Active" : (job.moderationStatus || "Draft").replaceAll("_", " ");
+        status.textContent = job.expired ? "Expired" : job.isActive ? "Active" : (job.moderationStatus || "Draft").replaceAll("_", " ");
         statusCell.append(status);
         const posted = document.createElement("td");
         posted.textContent = formatDate(job.createdAt);
@@ -2467,8 +2537,12 @@
     }
 
     async function loadAdminCompanies() {
-      const companies = await authRequest("/api/admin/companies");
+      const [companies, verificationRequests] = await Promise.all([
+        authRequest("/api/admin/companies"),
+        authRequest("/api/admin/employers/organizations/verification"),
+      ]);
       if (!Array.isArray(companies)) throw new Error("The companies API returned an unexpected response.");
+      if (!Array.isArray(verificationRequests)) throw new Error("The company-verification API returned an unexpected response.");
       const body = document.querySelector("#companies-table-body");
       body.replaceChildren();
       companies.forEach((company) => {
@@ -2476,6 +2550,7 @@
         [
           company.name,
           company.industry || "—",
+          company.verificationStatus || "unsubmitted",
           `${company.planKey} · ${company.subscriptionStatus.replaceAll("_", " ")}`,
           `${company.activeJobs} / ${company.jobs}`,
           `${company.activeMembers} active · ${company.invitedMembers} invited`,
@@ -2487,9 +2562,136 @@
         });
         body.append(row);
       });
+      const verificationBody = document.querySelector("#company-verification-body");
+      verificationBody.replaceChildren();
+      verificationRequests.forEach((company) => {
+        const row = document.createElement("tr");
+        const values = [
+          company.name,
+          company.website || "—",
+          company.verificationDetails || "No details provided.",
+          formatDate(company.verificationRequestedAt),
+        ];
+        values.forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        const actions = document.createElement("td");
+        for (const [status, label] of [["verified", "Verify"], ["rejected", "Reject"]]) {
+          const button = document.createElement("button");
+          button.className = "button";
+          button.type = "button";
+          button.textContent = label;
+          button.addEventListener("click", async () => {
+            const reason = promptAdminActionReason(`${label.toLowerCase()} ${company.name}`);
+            if (!reason) return;
+            button.disabled = true;
+            try {
+              await authRequest(`/api/admin/employers/organizations/${company.id}/verification`, {
+                method: "PATCH",
+                body: JSON.stringify({ status, reason }),
+              });
+              setInlineFeedback("#company-verification-feedback", `${company.name} was ${status}.`, "success");
+              showOperationToast(`Company ${status}.`);
+              await loadAdminCompanies();
+              await loadAuditLogs(1);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "Unable to update company verification.";
+              setInlineFeedback("#company-verification-feedback", message, "error");
+              showOperationToast(message, "error");
+              button.disabled = false;
+            }
+          });
+          actions.append(button);
+        }
+        row.append(actions);
+        verificationBody.append(row);
+      });
+      if (!verificationRequests.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = "No company verification requests are waiting for review.";
+        row.append(cell);
+        verificationBody.append(row);
+      }
       const note = document.querySelector("#companies-data-note");
       note.hidden = companies.length > 0;
       note.textContent = companies.length ? "" : "No employer organizations are registered yet.";
+      await loadFeaturedPlacements();
+    }
+
+    async function loadFeaturedPlacements() {
+      const [jobs, placements] = await Promise.all([
+        authRequest("/api/admin/jobs"),
+        authRequest("/api/admin/jobs/featured-placements"),
+      ]);
+      if (!Array.isArray(jobs) || !Array.isArray(placements)) {
+        throw new Error("The featured-placement API returned an unexpected response.");
+      }
+      const select = document.querySelector("#featured-placement-form [name='jobId']");
+      const selectedJobId = select.value;
+      select.replaceChildren(new Option("Choose a published job", ""));
+      jobs.filter((job) => job.isActive && job.organizationId).forEach((job) => {
+        select.add(new Option(`${job.title} · ${job.company} (#${job.id})`, String(job.id)));
+      });
+      if ([...select.options].some((option) => option.value === selectedJobId)) {
+        select.value = selectedJobId;
+      }
+      const body = document.querySelector("#featured-placement-body");
+      body.replaceChildren();
+      placements.forEach((placement) => {
+        const row = document.createElement("tr");
+        [
+          placement.jobTitle,
+          placement.organizationName,
+          placement.placementType,
+          `${formatDate(placement.startsAt)} – ${formatDate(placement.endsAt)}`,
+          placement.status,
+          placement.paymentReference || "—",
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        });
+        const actions = document.createElement("td");
+        if (["scheduled", "active"].includes(placement.status)) {
+          const cancel = document.createElement("button");
+          cancel.className = "button";
+          cancel.type = "button";
+          cancel.textContent = "Cancel";
+          cancel.addEventListener("click", async () => {
+            if (!window.confirm(`Cancel the ${placement.placementType} placement for ${placement.jobTitle}?`)) return;
+            cancel.disabled = true;
+            try {
+              await authRequest(`/api/admin/jobs/featured-placements/${placement.id}/cancel`, {
+                method: "PATCH",
+                body: JSON.stringify({}),
+              });
+              await loadFeaturedPlacements();
+              showOperationToast("Featured placement cancelled.");
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "Unable to cancel placement.";
+              showOperationToast(message, "error");
+              cancel.disabled = false;
+            }
+          });
+          actions.append(cancel);
+        } else {
+          actions.textContent = "—";
+        }
+        row.append(actions);
+        body.append(row);
+      });
+      if (!placements.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 7;
+        cell.textContent = "No featured placements have been scheduled.";
+        row.append(cell);
+        body.append(row);
+      }
     }
 
     function formatRevenueAmount(value) {
@@ -2523,31 +2725,35 @@
         revenue?.currency !== "INR" || !revenue.totals ||
         !/^\d+$/.test(revenue.totals.paidOrders) ||
         !/^\d+$/.test(revenue.totals.pendingOrders) ||
+        !/^\d+(?:\.\d{1,2})?$/.test(revenue.totals.netPaidInr) ||
         !Array.isArray(revenue.byProduct) ||
         !revenue.byProduct.every((product) =>
           typeof product.productName === "string" &&
-          /^\d+$/.test(product.paidOrders)) ||
+          /^\d+$/.test(product.paidOrders) &&
+          /^\d+(?:\.\d{1,2})?$/.test(product.netPaidInr)) ||
         !Array.isArray(revenue.monthly) ||
         !revenue.monthly.every((month) =>
-          /^\d{4}-\d{2}$/.test(month.month) && /^\d+$/.test(month.paidOrders)) ||
+          /^\d{4}-\d{2}$/.test(month.month) &&
+          /^\d+$/.test(month.paidOrders) &&
+          /^\d+(?:\.\d{1,2})?$/.test(month.netPaidInr)) ||
         employerRevenue?.scope !== "employer_subscription_charges" ||
         !Array.isArray(employerRevenue.totalsByCurrency) ||
         !employerRevenue.totalsByCurrency.every((total) =>
           /^[A-Z]{3}$/.test(total.currency) &&
           /^\d+$/.test(total.paidOrders) &&
-          /^\d+(?:\.\d{1,2})?$/.test(total.grossAmount)) ||
+          /^\d+(?:\.\d{1,2})?$/.test(total.netAmount)) ||
         !Array.isArray(employerRevenue.byPlan) ||
         !employerRevenue.byPlan.every((plan) =>
           (plan.planKey === null || typeof plan.planKey === "string") &&
           /^[A-Z]{3}$/.test(plan.currency) &&
           /^\d+$/.test(plan.paidOrders) &&
-          /^\d+(?:\.\d{1,2})?$/.test(plan.grossAmount)) ||
+          /^\d+(?:\.\d{1,2})?$/.test(plan.netAmount)) ||
         !Array.isArray(employerRevenue.monthly) ||
         !employerRevenue.monthly.every((month) =>
           /^[A-Z]{3}$/.test(month.currency) &&
           /^\d{4}-\d{2}$/.test(month.month) &&
           /^\d+$/.test(month.paidOrders) &&
-          /^\d+(?:\.\d{1,2})?$/.test(month.grossAmount)) ||
+          /^\d+(?:\.\d{1,2})?$/.test(month.netAmount)) ||
         reconciliation?.limit !== 500 ||
         !Array.isArray(reconciliation.items) ||
         !reconciliation.items.every((item) =>
@@ -2557,7 +2763,7 @@
           (item.invoiceId === null || typeof item.invoiceId === "string") &&
           /^\d+\.\d{2}$/.test(item.amount) &&
           /^[A-Z]{3}$/.test(item.currency) &&
-          ["captured", "missing_payment_id"].includes(item.status) &&
+          ["captured", "partially_refunded", "refunded", "missing_payment_id"].includes(item.status) &&
           (item.paidAt === null || !Number.isNaN(Date.parse(item.paidAt))))) {
         throw new Error("The revenue API returned an unexpected response.");
       }
@@ -2599,7 +2805,7 @@
           plan.planKey || "Unknown / legacy",
           plan.currency,
           plan.paidOrders,
-          formatEmployerAmount(plan.grossAmount, plan.currency),
+          formatEmployerAmount(plan.netAmount, plan.currency),
         ].forEach((value) => {
           const cell = document.createElement("td");
           cell.textContent = value;
@@ -2620,7 +2826,7 @@
       employerTotalsBody.replaceChildren();
       employerRevenue.totalsByCurrency.forEach((total) => {
         const row = document.createElement("tr");
-        [total.currency, total.paidOrders, formatEmployerAmount(total.grossAmount, total.currency)]
+        [total.currency, total.paidOrders, formatEmployerAmount(total.netAmount, total.currency)]
           .forEach((value) => {
             const cell = document.createElement("td");
             cell.textContent = value;
@@ -2640,7 +2846,7 @@
       employerMonthsBody.replaceChildren();
       employerRevenue.monthly.forEach((month) => {
         const row = document.createElement("tr");
-        [month.month, month.currency, month.paidOrders, formatEmployerAmount(month.grossAmount, month.currency)]
+        [month.month, month.currency, month.paidOrders, formatEmployerAmount(month.netAmount, month.currency)]
           .forEach((value) => {
             const cell = document.createElement("td");
             cell.textContent = value;
@@ -2658,7 +2864,7 @@
       }
 
       document.querySelector("#candidate-premium-revenue-total").textContent =
-        formatRevenueAmount(revenue.totals.grossPaidInr);
+        formatRevenueAmount(revenue.totals.netPaidInr);
       document.querySelector("#candidate-premium-revenue-paid-count").textContent =
         revenue.totals.paidOrders;
       document.querySelector("#candidate-premium-revenue-pending-count").textContent =
@@ -2667,7 +2873,7 @@
       revenueProductsBody.replaceChildren();
       revenue.byProduct.forEach((product) => {
         const row = document.createElement("tr");
-        [product.productName, product.paidOrders, formatRevenueAmount(product.grossPaidInr)]
+        [product.productName, product.paidOrders, formatRevenueAmount(product.netPaidInr)]
           .forEach((value) => {
             const cell = document.createElement("td");
             cell.textContent = value;
@@ -2687,7 +2893,7 @@
       revenueMonthsBody.replaceChildren();
       revenue.monthly.forEach((month) => {
         const row = document.createElement("tr");
-        [month.month, month.paidOrders, formatRevenueAmount(month.grossPaidInr)]
+        [month.month, month.paidOrders, formatRevenueAmount(month.netPaidInr)]
           .forEach((value) => {
             const cell = document.createElement("td");
             cell.textContent = value;
@@ -2921,6 +3127,8 @@
         configuration.enterpriseSeats;
       document.querySelector("#razorpay-enterprise-resume-credits").value =
         configuration.enterpriseResumeCredits;
+      document.querySelector("#razorpay-past-due-grace").value =
+        configuration.pastDueGraceDays;
       document.querySelector("#razorpay-api-secret").value = "";
       document.querySelector("#razorpay-webhook-secret").value = "";
       document.querySelector("#razorpay-api-secret").placeholder =
@@ -3211,6 +3419,368 @@
       });
       if (!activity.length) list.innerHTML = '<p class="activity-empty">No platform activity has been recorded yet.</p>';
       renderOverviewActivity(activity);
+    }
+
+    async function loadBackgroundJobs() {
+      const [status, emailSummary] = await Promise.all([
+        authRequest("/api/admin/background-jobs", { cache: "no-store" }),
+        authRequest("/api/admin/email-outbox", { cache: "no-store" }),
+      ]);
+      if (
+        !status ||
+        !status.cache ||
+        !status.queues ||
+        !status.indexing ||
+        !status.emailOutbox ||
+        !status.workerHeartbeat ||
+        !status.jobAlerts ||
+        !status.whatsappOutbox ||
+        !status.privateFiles ||
+        !status.privateFiles.storage ||
+        !status.privateFiles.scanner ||
+        !status.privateFiles.counts ||
+        !status.privateFiles.counts.scans ||
+        !status.privateFiles.counts.cleanup ||
+        !emailSummary ||
+        !Array.isArray(emailSummary.failed)
+      ) {
+        throw new Error("The background status API returned an unexpected response.");
+      }
+
+      const cacheState = status.cache.ready
+        ? "Ready"
+        : status.cache.enabled
+          ? "Unavailable"
+          : "Disabled";
+      setText("#background-cache-status", cacheState);
+      setText(
+        "#background-cache-note",
+        status.cache.enabled
+          ? "Public job cache; PostgreSQL remains the fallback."
+          : "Caching is disabled; requests use PostgreSQL.",
+      );
+
+      const renderIndexMetric = (kind, indexStatus) => {
+        const label = indexStatus.ready
+          ? "Ready"
+          : indexStatus.enabled
+            ? "Building / fallback"
+            : "PostgreSQL fallback";
+        setText(`#background-${kind}-index-status`, label);
+        setText(
+          `#background-${kind}-index-note`,
+          `${indexStatus.pending} pending · ${indexStatus.due} due`,
+        );
+      };
+      renderIndexMetric("job", status.indexing.jobs);
+      renderIndexMetric("candidate", status.indexing.candidates);
+
+      setText(
+        "#background-worker-count",
+        status.workerHeartbeat.activeInstances,
+      );
+      setText(
+        "#background-worker-note",
+        `${status.queues.enabled ? (status.queues.ready ? "Redis connected" : "Redis unavailable") : "Redis disabled"} · latest heartbeat ${status.workerHeartbeat.latestHeartbeatAt ? formatDate(status.workerHeartbeat.latestHeartbeatAt, { dateStyle: "medium", timeStyle: "short" }) : "not received"}`,
+      );
+
+      const fileStorage = status.privateFiles.storage;
+      const fileScanner = status.privateFiles.scanner;
+      const fileScans = status.privateFiles.counts.scans;
+      const fileCleanup = status.privateFiles.counts.cleanup;
+      setText(
+        "#background-file-storage-status",
+        fileStorage.ready
+          ? "Ready"
+          : fileStorage.configured
+            ? "Unavailable"
+            : "Not configured",
+      );
+      setText(
+        "#background-file-storage-note",
+        fileStorage.ready
+          ? "Private candidate bucket is reachable."
+          : "Uploads and private links require available storage.",
+      );
+      setText(
+        "#background-file-scanner-status",
+        fileScanner.ready
+          ? "Ready"
+          : fileScanner.configured
+            ? "Unavailable"
+            : "Not configured",
+      );
+      setText(
+        "#background-file-scanner-note",
+        fileScanner.ready
+          ? "ClamAV is responding to health checks."
+          : "Uploads fail closed until malware scanning is available.",
+      );
+      setText("#background-file-scan-pending", fileScans.pending);
+      setText(
+        "#background-file-scan-note",
+        `${fileScans.infected} rejected · ${fileScans.retrying} retrying`,
+      );
+      setText("#background-file-cleanup-pending", fileCleanup.pending);
+      setText(
+        "#background-file-cleanup-note",
+        `${fileCleanup.highAttempts} need attention · ${
+          status.privateFiles.workerEnabled ? "worker enabled" : "worker disabled"
+        }`,
+      );
+
+      const indexingBody = document.querySelector("#background-indexing-body");
+      indexingBody.replaceChildren();
+      for (const [label, indexStatus] of [
+        ["Jobs", status.indexing.jobs],
+        ["Candidates", status.indexing.candidates],
+      ]) {
+        const row = document.createElement("tr");
+        const values = [
+          label,
+          indexStatus.ready
+            ? "Ready"
+            : indexStatus.enabled
+              ? "Building / fallback"
+              : "PostgreSQL fallback",
+          indexStatus.pending,
+          indexStatus.due,
+          indexStatus.highAttempts,
+          indexStatus.oldestPendingAt
+            ? formatDate(indexStatus.oldestPendingAt, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })
+            : "—",
+        ];
+        values.forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = String(value);
+          row.append(cell);
+        });
+        indexingBody.append(row);
+      }
+
+      const failuresBody = document.querySelector(
+        "#background-index-failures-body",
+      );
+      failuresBody.replaceChildren();
+      status.indexing.recentFailures.forEach((failure) => {
+        const row = document.createElement("tr");
+        [
+          failure.entityType,
+          failure.entityId,
+          failure.attempts,
+          failure.lastError || "No error details retained",
+          formatDate(failure.nextAttemptAt, {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = String(value);
+          row.append(cell);
+        });
+        const actionCell = document.createElement("td");
+        const retryButton = document.createElement("button");
+        retryButton.className = "button";
+        retryButton.type = "button";
+        retryButton.textContent = "Retry now";
+        retryButton.dataset.retryIndexRecord = String(failure.id);
+        actionCell.append(retryButton);
+        row.append(actionCell);
+        failuresBody.append(row);
+      });
+      if (!status.indexing.recentFailures.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 6;
+        cell.textContent = "No indexing records need attention.";
+        row.append(cell);
+        failuresBody.append(row);
+      }
+
+      const emailBody = document.querySelector("#background-email-body");
+      emailBody.replaceChildren();
+      const emailCounts = Object.entries(status.emailOutbox.counts || {});
+      emailCounts.forEach(([state, count]) => {
+        const row = document.createElement("tr");
+        const stateCell = document.createElement("td");
+        const countCell = document.createElement("td");
+        stateCell.textContent = state;
+        countCell.textContent = String(count);
+        row.append(stateCell, countCell);
+        emailBody.append(row);
+      });
+      if (!emailCounts.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 2;
+        cell.textContent = "No email outbox records.";
+        row.append(cell);
+        emailBody.append(row);
+      }
+      setText(
+        "#background-email-due",
+        `${status.emailOutbox.due} due now${
+          status.emailOutbox.oldestDueAt
+            ? ` · oldest due ${formatDate(status.emailOutbox.oldestDueAt, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}`
+            : ""
+        }`,
+      );
+
+      const jobAlertCounts = Object.entries(status.jobAlerts.counts || {})
+        .map(([state, count]) => `${count} ${state}`)
+        .join(" · ");
+      setText(
+        "#background-job-alert-summary",
+        `${status.jobAlerts.due} due now${status.jobAlerts.oldestQueuedAt ? ` · oldest ${formatDate(status.jobAlerts.oldestQueuedAt, { dateStyle: "medium", timeStyle: "short" })}` : ""}${jobAlertCounts ? ` · ${jobAlertCounts}` : ""}`,
+      );
+      const jobAlertFailuresBody = document.querySelector(
+        "#background-job-alert-failures-body",
+      );
+      jobAlertFailuresBody.replaceChildren();
+      status.jobAlerts.failed.forEach((failure) => {
+        const row = document.createElement("tr");
+        [
+          `${failure.jobId} · ${failure.title}`,
+          failure.attempts,
+          failure.lastError || "No error details retained",
+          formatDate(failure.updatedAt, { dateStyle: "medium", timeStyle: "short" }),
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = String(value);
+          row.append(cell);
+        });
+        const actionCell = document.createElement("td");
+        const retryButton = document.createElement("button");
+        retryButton.className = "button";
+        retryButton.type = "button";
+        retryButton.textContent = "Retry";
+        retryButton.dataset.retryJobAlert = String(failure.jobId);
+        actionCell.append(retryButton);
+        row.append(actionCell);
+        jobAlertFailuresBody.append(row);
+      });
+      if (!status.jobAlerts.failed.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = "No job alert generation failures.";
+        row.append(cell);
+        jobAlertFailuresBody.append(row);
+      }
+
+      const whatsappCounts = Object.entries(status.whatsappOutbox.counts || {})
+        .map(([state, count]) => `${count} ${state}`)
+        .join(" · ");
+      setText(
+        "#background-whatsapp-summary",
+        `${status.whatsappOutbox.due} due now${status.whatsappOutbox.oldestQueuedAt ? ` · oldest ${formatDate(status.whatsappOutbox.oldestQueuedAt, { dateStyle: "medium", timeStyle: "short" })}` : ""}${whatsappCounts ? ` · ${whatsappCounts}` : ""}`,
+      );
+      const whatsappFailuresBody = document.querySelector(
+        "#background-whatsapp-failures-body",
+      );
+      whatsappFailuresBody.replaceChildren();
+      status.whatsappOutbox.failed.forEach((failure) => {
+        const row = document.createElement("tr");
+        [
+          failure.id,
+          failure.attempts,
+          failure.lastError || "No error details retained",
+          formatDate(failure.updatedAt, { dateStyle: "medium", timeStyle: "short" }),
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = String(value);
+          row.append(cell);
+        });
+        const actionCell = document.createElement("td");
+        const retryButton = document.createElement("button");
+        retryButton.className = "button";
+        retryButton.type = "button";
+        retryButton.textContent = "Retry";
+        retryButton.dataset.retryWhatsAppRecord = String(failure.id);
+        actionCell.append(retryButton);
+        row.append(actionCell);
+        whatsappFailuresBody.append(row);
+      });
+      if (!status.whatsappOutbox.failed.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = "No failed opted-in WhatsApp deliveries.";
+        row.append(cell);
+        whatsappFailuresBody.append(row);
+      }
+
+      const emailFailuresBody = document.querySelector(
+        "#background-email-failures-body",
+      );
+      emailFailuresBody.replaceChildren();
+      emailSummary.failed.forEach((failure) => {
+        const row = document.createElement("tr");
+        [
+          failure.id,
+          failure.attempts,
+          failure.lastError || "No error details retained",
+          formatDate(failure.createdAt, {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        ].forEach((value) => {
+          const cell = document.createElement("td");
+          cell.textContent = String(value);
+          row.append(cell);
+        });
+        const actionCell = document.createElement("td");
+        const retryButton = document.createElement("button");
+        retryButton.className = "button";
+        retryButton.type = "button";
+        retryButton.textContent = "Retry";
+        retryButton.dataset.retryEmailRecord = String(failure.id);
+        actionCell.append(retryButton);
+        row.append(actionCell);
+        emailFailuresBody.append(row);
+      });
+      if (!emailSummary.failed.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = "No failed email deliveries.";
+        row.append(cell);
+        emailFailuresBody.append(row);
+      }
+
+      const queuesBody = document.querySelector("#background-queues-body");
+      queuesBody.replaceChildren();
+      status.queues.queues.forEach((queue) => {
+        const row = document.createElement("tr");
+        [queue.name, queue.waiting, queue.active, queue.delayed, queue.failed]
+          .forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = String(value);
+            row.append(cell);
+          });
+        queuesBody.append(row);
+      });
+      if (!status.queues.queues.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.textContent = status.queues.enabled
+          ? "Redis is unavailable; database polling remains available."
+          : "BullMQ is disabled; database polling remains available.";
+        row.append(cell);
+        queuesBody.append(row);
+      }
+      setText(
+        "#background-queues-note",
+        `BullMQ ${status.queues.enabled ? (status.queues.ready ? "connected" : "configured but unavailable") : "disabled"}. Queue counts are Redis snapshots; database outboxes are authoritative.`,
+      );
+      document.querySelector("#background-jobs-error").hidden = true;
     }
 
     async function refreshOverviewData() {
@@ -3542,6 +4112,10 @@
         showToast("Recent platform activity is available to admins only.");
         name = "overview";
       }
+      if (name === "background-jobs" && currentAdminUser?.role === "staff") {
+        showToast("Background job status is available to admins only.");
+        name = "overview";
+      }
       const view = document.querySelector(`#view-${name}`)
         ?? document.querySelector("#view-overview");
       if ((name === "users" || name === "audit" || name === "privacy" || name === "candidate-premium" || name === "razorpay-config" || name === "twilio-config" || name === "platform-configuration" || name === "notification-templates") && currentAdminUser?.role !== "superadmin") {
@@ -3576,6 +4150,12 @@
       }
       if (view.id === "view-activity" && adminAccessToken) {
         loadAdminActivity().catch((error) => showToast(`Unable to load activity: ${error.message}`));
+      }
+      if (view.id === "view-background-jobs" && adminAccessToken) {
+        loadBackgroundJobs().catch((error) => {
+          setText("#background-jobs-error", `Background job status could not be loaded: ${error.message}`);
+          document.querySelector("#background-jobs-error").hidden = false;
+        });
       }
       if (view.id === "view-users" && adminAccessToken) {
         loadAdminUsers().catch((error) => showToast(`Unable to load user accounts: ${error.message}`));
@@ -3651,6 +4231,42 @@
     });
     document.querySelector("[data-refresh-companies]").addEventListener("click", () => {
       loadAdminCompanies().catch((error) => showToast(`Unable to load companies: ${error.message}`));
+    });
+    document.querySelector("#featured-placement-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const button = form.querySelector('[type="submit"]');
+      const feedback = form.querySelector('[role="status"]');
+      button.disabled = true;
+      feedback.textContent = "";
+      try {
+        const startsAt = new Date(String(data.get("startsAt") || ""));
+        const endsAt = new Date(String(data.get("endsAt") || ""));
+        if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())) {
+          throw new Error("Choose valid placement start and end times.");
+        }
+        await authRequest("/api/admin/jobs/featured-placements", {
+          method: "POST",
+          body: JSON.stringify({
+            jobId: Number(data.get("jobId")),
+            placementType: data.get("placementType"),
+            startsAt: startsAt.toISOString(),
+            endsAt: endsAt.toISOString(),
+            paymentReference: String(data.get("paymentReference") || "").trim() || null,
+          }),
+        });
+        form.reset();
+        feedback.textContent = "Featured placement scheduled.";
+        await loadFeaturedPlacements();
+        showOperationToast("Featured placement scheduled.");
+      } catch (error) {
+        feedback.textContent = error instanceof Error ? error.message : "Unable to schedule placement.";
+        showOperationToast(feedback.textContent, "error");
+      } finally {
+        button.disabled = false;
+      }
     });
     document.querySelector("[data-refresh-candidate-premium]").addEventListener("click", () => {
       loadAdminCandidatePremium().catch((error) => showToast(`Unable to load candidate services: ${error.message}`, "error"));
@@ -4090,6 +4706,7 @@
         enterpriseActiveJobs: Number(data.get("enterpriseActiveJobs")),
         enterpriseSeats: Number(data.get("enterpriseSeats")),
         enterpriseResumeCredits: Number(data.get("enterpriseResumeCredits")),
+        pastDueGraceDays: Number(data.get("pastDueGraceDays")),
       };
       const apiSecret = String(data.get("apiSecret") || "");
       const webhookSecret = String(data.get("webhookSecret") || "");
@@ -4290,6 +4907,138 @@
     document.querySelector("[data-refresh-activity]").addEventListener("click", () => {
       loadAdminActivity().catch((error) => showToast(`Unable to load activity: ${error.message}`));
     });
+    document.querySelector("[data-refresh-background-jobs]").addEventListener("click", () => {
+      loadBackgroundJobs().catch((error) => {
+        setText("#background-jobs-error", `Background job status could not be loaded: ${error.message}`);
+        document.querySelector("#background-jobs-error").hidden = false;
+      });
+    });
+    document.querySelector("[data-reconcile-subscriptions]").addEventListener("click", async (event) => {
+      const reason = window.prompt("Reason for running subscription reconciliation:");
+      if (!reason?.trim()) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const result = await authRequest("/api/admin/background-jobs/subscriptions/reconcile", {
+          method: "POST",
+          body: JSON.stringify({ reason: reason.trim() }),
+        });
+        showToast(`Checked ${result.checked} subscriptions; ${result.discrepancies.length} discrepancy(s), ${result.failures} failure(s).`, result.failures ? "error" : "success");
+        await loadBackgroundJobs();
+      } catch (error) {
+        showToast(`Subscription reconciliation failed: ${error.message}`, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document
+      .querySelector("#background-index-failures-body")
+      .addEventListener("click", async (event) => {
+        if (!(event.target instanceof Element)) return;
+        const button = event.target.closest("[data-retry-index-record]");
+        if (!button) return;
+        const reason = window.prompt(
+          "Reason for retrying this search indexing record:",
+        );
+        if (!reason?.trim()) return;
+        button.disabled = true;
+        try {
+          await authRequest(
+            `/api/admin/background-jobs/indexing/${encodeURIComponent(button.dataset.retryIndexRecord)}/retry`,
+            {
+              method: "POST",
+              body: JSON.stringify({ reason: reason.trim() }),
+            },
+          );
+          await loadBackgroundJobs();
+          showToast("Search index record queued for retry.", "success");
+        } catch (error) {
+          showToast(
+            `Unable to retry search index record: ${error.message}`,
+            "error",
+          );
+        } finally {
+          if (button.isConnected) button.disabled = false;
+        }
+      });
+    document
+      .querySelector("#background-job-alert-failures-body")
+      .addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-retry-job-alert]");
+        if (!button) return;
+        const reason = window.prompt("Why are you retrying this job alert batch?");
+        if (!reason?.trim()) return;
+        button.disabled = true;
+        try {
+          await authRequest(
+            `/api/admin/background-jobs/job-alerts/${encodeURIComponent(button.dataset.retryJobAlert)}/retry`,
+            {
+              method: "POST",
+              body: JSON.stringify({ reason: reason.trim() }),
+            },
+          );
+          await loadBackgroundJobs();
+          showToast("Job alert batch queued for retry.", "success");
+        } catch (error) {
+          showToast(`Unable to retry job alert batch: ${error.message}`, "error");
+        } finally {
+          button.disabled = false;
+        }
+      });
+    document
+      .querySelector("#background-whatsapp-failures-body")
+      .addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-retry-whatsapp-record]");
+        if (!button) return;
+        const reason = window.prompt("Why are you retrying this WhatsApp delivery?");
+        if (!reason?.trim()) return;
+        button.disabled = true;
+        try {
+          await authRequest(
+            `/api/admin/background-jobs/whatsapp/${encodeURIComponent(button.dataset.retryWhatsAppRecord)}/retry`,
+            {
+              method: "POST",
+              body: JSON.stringify({ reason: reason.trim() }),
+            },
+          );
+          await loadBackgroundJobs();
+          showToast("WhatsApp delivery queued for retry.", "success");
+        } catch (error) {
+          showToast(`Unable to retry WhatsApp delivery: ${error.message}`, "error");
+        } finally {
+          button.disabled = false;
+        }
+      });
+    document
+      .querySelector("#background-email-failures-body")
+      .addEventListener("click", async (event) => {
+        if (!(event.target instanceof Element)) return;
+        const button = event.target.closest("[data-retry-email-record]");
+        if (!button) return;
+        const reason = window.prompt(
+          "Reason for retrying this email notification:",
+        );
+        if (!reason?.trim()) return;
+        button.disabled = true;
+        try {
+          await authRequest(
+            `/api/admin/email-outbox/${encodeURIComponent(button.dataset.retryEmailRecord)}/retry`,
+            {
+              method: "POST",
+              body: JSON.stringify({ reason: reason.trim() }),
+            },
+          );
+          await loadBackgroundJobs();
+          showToast("Email notification queued for retry.", "success");
+        } catch (error) {
+          showToast(
+            `Unable to retry email notification: ${error.message}`,
+            "error",
+          );
+        } finally {
+          if (button.isConnected) button.disabled = false;
+        }
+      });
 
     const globalSearch = document.querySelector("#global-search");
     function applySearch(value) {

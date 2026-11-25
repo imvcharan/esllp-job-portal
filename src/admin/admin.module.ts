@@ -36,7 +36,7 @@ import { AdminEmailOutboxController } from "./admin-email-outbox.controller";
 import { EmailNotificationOutbox } from "../notifications/email-notification-outbox.entity";
 import { CandidateApplicationDocument } from "../users/candidate-application-document.entity";
 import { CandidateResumeVersion } from "../users/candidate-resume-version.entity";
-import { CandidateFileStorageService } from "../users/candidate-file-storage.service";
+import { CandidateStorageModule } from "../users/candidate-storage.module";
 import { EmployerSubscriptionPayment } from "../employers/employer-subscription-payment.entity";
 import { AdminPlatformConfigurationController } from "./admin-platform-configuration.controller";
 import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
@@ -45,6 +45,9 @@ import { AdminNotificationTemplatesController } from "./admin-notification-templ
 import { AdminTwilioConfigurationController } from "../providers/admin-twilio-configuration.controller";
 import { TwilioConfigurationModule } from "../providers/twilio-configuration.module";
 import { InfrastructureModule } from "../infrastructure/infrastructure.module";
+import { AdminBackgroundJobsController } from "./admin-background-jobs.controller";
+import { EmployersModule } from "../employers/employers.module";
+import { JobsModule } from "../jobs/jobs.module";
 
 @Module({
   imports: [
@@ -81,6 +84,9 @@ import { InfrastructureModule } from "../infrastructure/infrastructure.module";
     NotificationsModule,
     TwilioConfigurationModule,
     InfrastructureModule,
+    CandidateStorageModule,
+    EmployersModule,
+    JobsModule,
   ],
   controllers: [
     AdminUsersController,
@@ -90,15 +96,11 @@ import { InfrastructureModule } from "../infrastructure/infrastructure.module";
     AdminCandidatePremiumController,
     AdminRazorpayConfigurationController,
     AdminEmailOutboxController,
+    AdminBackgroundJobsController,
     AdminPlatformConfigurationController,
     AdminNotificationTemplatesController,
     AdminTwilioConfigurationController,
   ],
-  providers: [
-    AdminUsersService,
-    AdminInsightsService,
-    CandidatePremiumService,
-    CandidateFileStorageService,
-  ],
+  providers: [AdminUsersService, AdminInsightsService, CandidatePremiumService],
 })
 export class AdminModule {}

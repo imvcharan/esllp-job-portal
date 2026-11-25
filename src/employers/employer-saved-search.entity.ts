@@ -45,6 +45,9 @@ export class EmployerSavedSearch {
   @Column({ type: "varchar", length: 500 })
   query!: string;
 
+  @Column({ name: "is_shared", type: "boolean", default: false })
+  isShared!: boolean;
+
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
 }

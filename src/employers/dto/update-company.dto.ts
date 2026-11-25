@@ -16,6 +16,12 @@ export class UpdateCompanyDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
+  @IsUrl({ protocols: ["https"], require_protocol: true })
+  logoUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(500)
   @IsUrl({ protocols: ["http", "https"], require_protocol: true })
   website?: string | null;

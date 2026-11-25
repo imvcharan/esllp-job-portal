@@ -161,3 +161,9 @@ export class BulkCreateEmployerJobsDto {
   @Type(() => CreateEmployerJobDto)
   jobs!: CreateEmployerJobDto[];
 }
+
+export class BulkValidateEmployerJobsDto {
+  @IsArray()
+  @ArrayMaxSize(50)
+  jobs!: unknown[];
+}

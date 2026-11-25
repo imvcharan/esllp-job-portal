@@ -7,6 +7,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      APP_PROCESS_ROLE: web
       PORT: 3000
       TRUST_PROXY_HOPS: 1
       POSTGRES_HOST: postgres
@@ -36,6 +37,36 @@ services:
       timeout: 5s
       retries: 5
       start_period: 90s
+
+  worker:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      APP_PROCESS_ROLE: worker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_SSL: "false"
+      REDIS_URL: redis://redis:6379
+      OPENSEARCH_URL: http://opensearch:9200
+      OPENSEARCH_TLS_VERIFY: "false"
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+    command: ["node", "dist/commands/workers.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
+      clamav:
+        condition: service_started
+      app:
+        condition: service_healthy
 
   postgres:
     image: postgres:16-alpine

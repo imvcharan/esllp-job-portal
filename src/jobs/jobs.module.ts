@@ -18,6 +18,10 @@ import { Report } from "../reports/report.entity";
 import { ContentEntry } from "../content/content-entry.entity";
 import { PlatformConfigurationModule } from "../platform-config/platform-configuration.module";
 import { InfrastructureModule } from "../infrastructure/infrastructure.module";
+import { CandidateStorageModule } from "../users/candidate-storage.module";
+import { EmployerOrganization } from "../employers/organization.entity";
+import { PaymentsModule } from "../payments/payments.module";
+import { FeaturedJobPlacement } from "../employers/featured-job-placement.entity";
 
 @Module({
   imports: [
@@ -26,6 +30,8 @@ import { InfrastructureModule } from "../infrastructure/infrastructure.module";
       User,
       CandidateProfile,
       EmployerOrganizationMember,
+      EmployerOrganization,
+      FeaturedJobPlacement,
       CandidateSavedSearch,
       CandidateApplication,
       CandidateSavedJob,
@@ -36,6 +42,8 @@ import { InfrastructureModule } from "../infrastructure/infrastructure.module";
     AuditModule,
     PlatformConfigurationModule,
     InfrastructureModule,
+    CandidateStorageModule,
+    PaymentsModule,
   ],
   controllers: [JobsController, AdminJobsController, PublicJobPagesController],
   providers: [JobsService, CandidateSavedSearchesService],

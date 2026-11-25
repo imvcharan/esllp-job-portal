@@ -13,7 +13,7 @@ function createSearchService(search) {
   return service;
 }
 
-test("OpenSearch returns job IDs in relevance order", async () => {
+test("OpenSearch returns job IDs in newest-first order", async () => {
   let request;
   const service = createSearchService(async (value) => {
     request = value;
@@ -29,10 +29,40 @@ test("OpenSearch returns job IDs in relevance order", async () => {
 
   assert.deepEqual(await service.searchIds({ query: "designer" }), [42, 7]);
   assert.equal(request.body.size, 10_000);
-  assert.deepEqual(request.body.sort, [
-    { _score: "desc" },
-    { createdAt: "desc" },
-  ]);
+  assert.deepEqual(request.body.sort, [{ createdAt: "desc" }]);
+});
+
+test("job search requires all query terms and treats location as a phrase", async () => {
+  let request;
+  const service = createSearchService(async (value) => {
+    request = value;
+    return {
+      body: {
+        hits: {
+          total: { value: 1 },
+          hits: [{ _id: "42" }],
+        },
+      },
+    };
+  });
+
+  assert.deepEqual(
+    await service.searchIds({
+      query: "senior engineer",
+      location: "San Francisco",
+    }),
+    [42],
+  );
+  const must = request.body.query.bool.must;
+  assert.deepEqual(must[1].multi_match, {
+    query: "senior engineer",
+    fields: ["title^3", "company^2", "skills^2", "description", "location"],
+    type: "cross_fields",
+    operator: "and",
+  });
+  assert.deepEqual(must[2], {
+    match_phrase: { location: "San Francisco" },
+  });
 });
 
 test("OpenSearch falls back to PostgreSQL for incomplete result windows", async () => {
@@ -92,6 +122,12 @@ test("candidate search only prefilters discoverable text fields", async () => {
     "headline",
     "location",
     "skills",
+    "summary",
+    "experience",
+    "education",
+    "certifications",
+    "desiredJobTitles",
+    "resumeText",
   ]);
 });
 
@@ -157,4 +193,103 @@ test("existing indexes are reused and index updates are durably enqueued", async
   });
   assert.ok(transactionalQuery.sql.includes("search_index_outbox"));
   assert.deepEqual(transactionalQuery.params, ["candidate", 43, "upsert"]);
+});
+
+test("search outbox is claimed briefly, bulk-indexed, and acknowledges missing deletes", async () => {
+  const statements = [];
+  let bulkRequest;
+  const service = Object.create(OpenSearchService.prototype);
+  service.client = {
+    bulk: async (request) => {
+      bulkRequest = request;
+      return {
+        body: {
+          items: [{ delete: { status: 404 } }, { delete: { status: 200 } }],
+        },
+      };
+    },
+  };
+  service.index = "esllp-jobs";
+  service.candidateIndex = "esllp-candidates";
+  service.initialized = true;
+  service.indexReady = true;
+  service.candidateIndexReady = true;
+  service.processingOutbox = false;
+  service.logger = { warn() {} };
+  service.dataSource = {
+    async query(sql, params) {
+      statements.push({ sql, params });
+      if (sql.includes("WITH due AS")) {
+        return [
+          {
+            id: 11,
+            entityType: "job",
+            entityId: 7,
+            operation: "delete",
+            attempts: 0,
+          },
+          {
+            id: 12,
+            entityType: "candidate",
+            entityId: 8,
+            operation: "delete",
+            attempts: 0,
+          },
+        ];
+      }
+      if (sql.includes("SELECT backfill.entity_type")) {
+        return [
+          { entityType: "job", completedAt: new Date(), hasPending: false },
+          {
+            entityType: "candidate",
+            completedAt: new Date(),
+            hasPending: false,
+          },
+        ];
+      }
+      return [];
+    },
+    transaction: async () => {
+      throw new Error("OpenSearch I/O must not run inside a transaction.");
+    },
+  };
+
+  await service.processOutbox();
+
+  assert.match(statements[0].sql, /claimed_until < now\(\)/);
+  assert.equal(bulkRequest.refresh, "wait_for");
+  assert.equal(bulkRequest.body.length, 2);
+  assert.ok(
+    statements.some(
+      ({ sql, params }) =>
+        sql.includes("DELETE FROM search_index_outbox") &&
+        params[0].length === 2,
+    ),
+  );
+});
+
+test("operator retry resets an indexing record and its backfill readiness", async () => {
+  const statements = [];
+  const service = Object.create(OpenSearchService.prototype);
+  service.index = "esllp-jobs";
+  service.candidateIndex = "esllp-candidates";
+  service.dataSource = {
+    async transaction(callback) {
+      return callback({
+        async query(sql, params) {
+          statements.push({ sql, params });
+          return sql.includes("RETURNING entity_type")
+            ? [{ entityType: "candidate" }]
+            : [];
+        },
+      });
+    },
+  };
+
+  assert.deepEqual(await service.retryIndexingRecord(42), {
+    entityType: "candidate",
+  });
+  assert.match(statements[0].sql, /claim_token = NULL/);
+  assert.match(statements[0].sql, /next_attempt_at = now\(\)/);
+  assert.deepEqual(statements[1].params, ["candidate", "esllp-candidates"]);
 });

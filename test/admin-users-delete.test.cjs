@@ -62,11 +62,11 @@ function createService({
   missingUser = false,
   applicationDocuments = [],
   resumeVersions = [],
-  storageError,
+  cleanupQueueError,
 } = {}) {
   const audits = [];
   const removedIds = [];
-  const removedFiles = [];
+  const queuedFiles = [];
   const targetUser = user || {
     id: 8,
     email: "new-admin@example.com",
@@ -79,6 +79,10 @@ function createService({
     delete: async (id) => removedIds.push(id),
   };
   const manager = {
+    query: async () => [
+      ...applicationDocuments.map(({ filePath }) => ({ path: filePath })),
+      ...resumeVersions.map(({ storagePath }) => ({ path: storagePath })),
+    ],
     getRepository(entity) {
       if (entity === User) return userRepository;
       if (entity === CandidateApplicationDocument) {
@@ -104,13 +108,13 @@ function createService({
       record: async (entry) => audits.push(entry),
     },
     {
-      removeMany: async (paths) => {
-        if (storageError) throw storageError;
-        removedFiles.push(...paths);
+      enqueueCleanup: async (paths) => {
+        if (cleanupQueueError) throw cleanupQueueError;
+        queuedFiles.push(...paths);
       },
     },
   );
-  return { service, audits, removedIds, removedFiles };
+  return { service, audits, removedIds, queuedFiles };
 }
 
 test("permanently deletes an unlinked account and retains an audit event", async () => {
@@ -142,12 +146,18 @@ test("blocks permanent deletion when business records are linked", async () => {
       },
     });
 
-    await assert.rejects(service.remove(8, 3, "Candidate request"), ConflictException);
+    await assert.rejects(
+      service.remove(8, 3, "Candidate request"),
+      ConflictException,
+    );
     assert.deepEqual(removedIds, []);
     assert.deepEqual(audits, []);
   });
 
-  await assert.rejects(service.remove(8, 3, "Candidate request"), ConflictException);
+  await assert.rejects(
+    service.remove(8, 3, "Candidate request"),
+    ConflictException,
+  );
   assert.deepEqual(removedIds, []);
   assert.deepEqual(audits, []);
 });
@@ -155,7 +165,10 @@ test("blocks permanent deletion when business records are linked", async () => {
 test("prevents deleting the signed-in account", async () => {
   const { service, removedIds } = createService();
 
-  await assert.rejects(service.remove(8, 8, "Own account"), BadRequestException);
+  await assert.rejects(
+    service.remove(8, 8, "Own account"),
+    BadRequestException,
+  );
   assert.deepEqual(removedIds, []);
 });
 
@@ -169,20 +182,26 @@ test("prevents deleting the last active superadmin", async () => {
     },
     activeSuperadmins: 1,
   });
-  await assert.rejects(service.remove(8, 3, "Remove superadmin"), BadRequestException);
+  await assert.rejects(
+    service.remove(8, 3, "Remove superadmin"),
+    BadRequestException,
+  );
   assert.deepEqual(removedIds, []);
 });
 
 test("reports a missing account without creating an audit event", async () => {
   const { service, audits, removedIds } = createService({ missingUser: true });
 
-  await assert.rejects(service.remove(404, 3, "Invalid account"), NotFoundException);
+  await assert.rejects(
+    service.remove(404, 3, "Invalid account"),
+    NotFoundException,
+  );
   assert.deepEqual(removedIds, []);
   assert.deepEqual(audits, []);
 });
 
-test("purges candidate files from external storage before account deletion", async () => {
-  const { service, removedFiles, removedIds } = createService({
+test("queues candidate files for cleanup before account deletion", async () => {
+  const { service, queuedFiles, removedIds } = createService({
     user: {
       id: 8,
       email: "candidate@example.com",
@@ -198,7 +217,7 @@ test("purges candidate files from external storage before account deletion", asy
 
   await service.remove(8, 3, "Candidate requested deletion");
 
-  assert.deepEqual(removedFiles.sort(), [
+  assert.deepEqual(queuedFiles.sort(), [
     "8/application/other.docx",
     "8/application/portfolio.pdf",
     "8/resume/version.pdf",
@@ -206,7 +225,7 @@ test("purges candidate files from external storage before account deletion", asy
   assert.deepEqual(removedIds, [8]);
 });
 
-test("does not delete a candidate account when external file purging fails", async () => {
+test("does not delete a candidate account when file cleanup cannot be queued", async () => {
   const { service, removedIds, audits } = createService({
     user: {
       id: 8,
@@ -215,12 +234,12 @@ test("does not delete a candidate account when external file purging fails", asy
       isActive: true,
     },
     applicationDocuments: [{ filePath: "8/application/portfolio.pdf" }],
-    storageError: new Error("storage unavailable"),
+    cleanupQueueError: new Error("cleanup queue unavailable"),
   });
 
   await assert.rejects(
     service.remove(8, 3, "Candidate requested deletion"),
-    /storage unavailable/,
+    /cleanup queue unavailable/,
   );
   assert.deepEqual(removedIds, []);
   assert.deepEqual(audits, []);

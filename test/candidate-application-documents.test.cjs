@@ -14,6 +14,7 @@ test("candidate document upload is scoped to the signed-in user and requested jo
   const audits = [];
   const repository = {
     create: (document) => document,
+    find: async () => [],
     save: async (document) => {
       saved.push(document);
       return {
@@ -41,12 +42,17 @@ test("candidate document upload is scoped to the signed-in user and requested jo
     upload: async (...args) => uploads.push(args),
     remove: async () =>
       assert.fail("successful database write should not clean up"),
+    markClean: async () => undefined,
+    enqueueCleanup: async () => undefined,
   };
   service.dataSource = {
-    getRepository: (entity) => {
-      assert.equal(entity, CandidateApplicationDocument);
-      return repository;
-    },
+    transaction: async (callback) =>
+      callback({
+        getRepository: (entity) => {
+          assert.equal(entity, CandidateApplicationDocument);
+          return repository;
+        },
+      }),
   };
   service.auditService = {
     record: async (event) => audits.push(event),

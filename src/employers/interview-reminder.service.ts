@@ -9,6 +9,7 @@ import { DataSource } from "typeorm";
 import { EmailDeliveryService } from "../auth/email-delivery.service";
 import { WhatsAppDeliveryService } from "../providers/whatsapp-delivery.service";
 import { JobQueueService } from "../infrastructure/job-queue.service";
+import { backgroundWorkersEnabled } from "../infrastructure/process-role";
 
 interface UpcomingInterviewReminder {
   id: number;
@@ -39,16 +40,26 @@ export class InterviewReminderService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
+    if (!backgroundWorkersEnabled()) return;
     if (this.queues?.enabled) {
-      this.queues.registerWorker("interview-reminders", async () =>
-        this.enqueueUpcomingReminders(),
+      this.queues.registerWorker(
+        "interview-reminders",
+        async () => this.enqueueUpcomingReminders(),
+        1,
       );
-      void this.queues?.add("interview-reminders", "scan-upcoming", {});
+      void this.queues?.add(
+        "interview-reminders",
+        "scan-upcoming",
+        {},
+        0,
+        `scan-upcoming-${Math.floor(Date.now() / 60_000)}`,
+      );
     }
     this.worker = setInterval(() => {
       if (this.queues?.ready) {
+        const jobId = `scan-upcoming-${Math.floor(Date.now() / 60_000)}`;
         void this.queues
-          .add("interview-reminders", "scan-upcoming", {})
+          .add("interview-reminders", "scan-upcoming", {}, 0, jobId)
           .then((queued) => {
             if (!queued) return this.enqueueUpcomingReminders();
             return undefined;
@@ -183,6 +194,10 @@ export class InterviewReminderService implements OnModuleInit, OnModuleDestroy {
                   ? ` Location: ${reminder.location}`
                   : "",
               },
+              {
+                userId: reminder.userId,
+                category: "interview_reminder",
+              },
             );
             queued += 1;
           } catch (error) {
@@ -243,7 +258,80 @@ export class InterviewReminderService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async whatsappOutboxOperationalStatus() {
+    const [rows, failed] = await Promise.all([
+      this.dataSource.query(`
+        SELECT status, COUNT(*)::int AS count,
+               COUNT(*) FILTER (
+                 WHERE status = 'queued' AND next_attempt_at <= now()
+               )::int AS due,
+               MIN(created_at) FILTER (WHERE status = 'queued') AS "oldestQueuedAt"
+        FROM whatsapp_notification_outbox
+        GROUP BY status
+      `) as Promise<
+        Array<{
+          status: string;
+          count: number | string;
+          due: number | string;
+          oldestQueuedAt: Date | null;
+        }>
+      >,
+      this.dataSource.query(`
+        SELECT id, attempt_count AS attempts, last_error AS "lastError",
+               updated_at AS "updatedAt"
+        FROM whatsapp_notification_outbox
+        WHERE status = 'failed' AND to_number IS NOT NULL
+          AND template_variables IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT 50
+      `) as Promise<
+        Array<{
+          id: number;
+          attempts: number;
+          lastError: string | null;
+          updatedAt: Date;
+        }>
+      >,
+    ]);
+    return {
+      counts: Object.fromEntries(
+        rows.map(({ status, count }) => [status, Number(count)]),
+      ),
+      due: rows.reduce((total, row) => total + Number(row.due), 0),
+      oldestQueuedAt:
+        rows.find((row) => row.oldestQueuedAt)?.oldestQueuedAt?.toISOString() ??
+        null,
+      failed,
+    };
+  }
+
+  async retryFailedWhatsAppNotification(id: number) {
+    const result = (await this.dataSource.query(
+      `UPDATE whatsapp_notification_outbox outbox
+       SET status = 'queued', attempt_count = 0, next_attempt_at = now(),
+           last_error = NULL, updated_at = now()
+       FROM users candidate
+       INNER JOIN candidate_profiles profile ON profile.user_id = candidate.id
+       WHERE outbox.id = $1 AND outbox.user_id = candidate.id
+         AND outbox.status = 'failed'
+         AND outbox.to_number = candidate.phone_e164
+         AND candidate.is_active = true
+         AND candidate.phone_verified = true
+         AND profile.whatsapp_interview_reminders = true
+         AND outbox.template_variables IS NOT NULL
+       RETURNING outbox.id`,
+      [id],
+    )) as Array<{ id: number }>;
+    return result.length > 0;
+  }
+
   private async deliverWhatsAppOutbox(): Promise<number> {
+    await this.dataSource.query(`
+      DELETE FROM whatsapp_notification_outbox
+      WHERE (status = 'sent' AND sent_at < now() - INTERVAL '90 days')
+         OR (status = 'failed' AND updated_at < now() - INTERVAL '90 days')
+         OR (status = 'cancelled' AND updated_at < now() - INTERVAL '30 days')
+    `);
     await this.dataSource.query(`
       UPDATE whatsapp_notification_outbox
       SET status = 'failed', to_number = NULL,
@@ -326,10 +414,6 @@ export class InterviewReminderService implements OnModuleInit, OnModuleDestroy {
         await this.dataSource.query(
           `UPDATE whatsapp_notification_outbox
            SET status = $2,
-               to_number = CASE WHEN $2 = 'failed' THEN NULL ELSE to_number END,
-               template_variables = CASE
-                 WHEN $2 = 'failed' THEN NULL ELSE template_variables
-               END,
                next_attempt_at = $3, last_error = $4, updated_at = now()
            WHERE id = $1 AND status = 'sending'`,
           [reminder.id, terminal ? "failed" : "queued", retryAt, lastError],

@@ -14,8 +14,10 @@ const { Report } = require("../dist/reports/report.entity.js");
 function createService({ linkedEntity } = {}) {
   const audits = [];
   const removedIds = [];
+  const queuedFiles = [];
   const job = { id: 12, title: "Designer" };
   const manager = {
+    query: async () => [],
     getRepository(entity) {
       if (entity === Job) {
         return {
@@ -36,21 +38,30 @@ function createService({ linkedEntity } = {}) {
     {},
     {},
     {},
+    {},
     { record: async (entry) => audits.push(entry) },
     {},
     {},
     { assertTaxonomyValue: async () => {}, jobOptions: async () => ({}) },
+    {
+      billingPolicy: async () => ({ pastDueGraceDays: 0 }),
+      employerPlans: async () => ({}),
+    },
+    { deleteByPrefix: async () => undefined },
+    { removeJob: async () => undefined },
+    { enqueueCleanup: async (paths) => queuedFiles.push(...paths) },
   );
-  return { service, audits, removedIds };
+  return { service, audits, removedIds, queuedFiles };
 }
 
 test("permanently deletes an unlinked job and records an audit event", async () => {
-  const { service, audits, removedIds } = createService();
+  const { service, audits, removedIds, queuedFiles } = createService();
 
   const result = await service.permanentlyDelete(12, { id: 3 }, "127.0.0.1");
 
   assert.deepEqual(result, { success: true });
   assert.deepEqual(removedIds, [12]);
+  assert.deepEqual(queuedFiles, []);
   assert.equal(audits[0].action, "job.permanently_deleted");
   assert.equal(audits[0].details.title, "Designer");
 });

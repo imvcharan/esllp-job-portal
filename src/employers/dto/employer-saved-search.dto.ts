@@ -1,4 +1,10 @@
-import { IsString, MaxLength, MinLength } from "class-validator";
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from "class-validator";
 
 export class CreateEmployerSavedSearchDto {
   @IsString()
@@ -10,4 +16,8 @@ export class CreateEmployerSavedSearchDto {
   @MinLength(1)
   @MaxLength(500)
   query!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  shareWithTeam?: boolean;
 }

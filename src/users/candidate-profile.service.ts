@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import mammoth from "mammoth";
 import pdfParse from "pdf-parse";
-import { DataSource, Repository } from "typeorm";
+import { DataSource, In, Repository } from "typeorm";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { User } from "./user.entity";
 import { CandidateProfile } from "./candidate-profile.entity";
@@ -51,22 +51,30 @@ export class CandidateProfileService {
       throw new NotFoundException("Candidate account was not found");
     }
 
-    const [photoUrl, resumeUrl, resumeVersions, activeResumeVersion] =
-      await Promise.all([
-        profile?.photoPath
-          ? this.fileStorage.createSignedUrl(profile.photoPath)
-          : null,
-        profile?.resumePath
-          ? this.fileStorage.createSignedUrl(profile.resumePath)
-          : null,
-        profile ? this.listResumeVersions(user) : [],
-        profile?.resumePath
-          ? this.resumeVersionsRepository.findOneBy({
-              userId: user.id,
-              storagePath: profile.resumePath,
-            })
-          : null,
-      ]);
+    const [
+      photoScanStatus,
+      resumeScanStatus,
+      resumeVersions,
+      activeResumeVersion,
+    ] = await Promise.all([
+      profile?.photoPath
+        ? this.fileStorage.scanStatus(profile.photoPath)
+        : null,
+      profile?.resumePath
+        ? this.fileStorage.scanStatus(profile.resumePath)
+        : null,
+      profile ? this.listResumeVersions(user) : [],
+      profile?.resumePath
+        ? this.resumeVersionsRepository.findOneBy({
+            userId: user.id,
+            storagePath: profile.resumePath,
+          })
+        : null,
+    ]);
+    const photoUrl =
+      profile?.photoPath && photoScanStatus === "clean"
+        ? await this.fileStorage.createSignedUrl(profile.photoPath)
+        : null;
     const parsedResumeText = activeResumeVersion?.parsedText ?? "";
 
     return {
@@ -105,7 +113,9 @@ export class CandidateProfileService {
       },
       photoUrl,
       hasPhoto: Boolean(profile?.photoPath),
-      resumeUrl,
+      photoScanStatus,
+      hasResume: Boolean(profile?.resumePath),
+      resumeScanStatus,
       resumeFileName: profile?.resumeFileName ?? null,
       shareProfileOnApplication: profile?.shareProfileOnApplication ?? false,
       applicationEmailUpdates: profile?.applicationEmailUpdates ?? true,
@@ -260,6 +270,27 @@ export class CandidateProfileService {
       }
       await profiles.save(profile);
       await this.search?.indexCandidate(user.id, manager);
+      if (
+        dto.applicationEmailUpdates === false ||
+        dto.jobAlertEmails === false
+      ) {
+        const categories = [
+          ...(dto.applicationEmailUpdates === false
+            ? ["application_update", "interview_reminder"]
+            : []),
+          ...(dto.jobAlertEmails === false ? ["job_alert"] : []),
+        ];
+        await manager.query(
+          `UPDATE email_notification_outbox
+           SET status = 'cancelled', recipient_email = NULL,
+               subject = NULL, message = NULL, locked_at = NULL,
+               last_error = NULL
+           WHERE recipient_user_id = $1
+             AND category = ANY($2::varchar[])
+             AND status IN ('queued', 'retrying', 'sending')`,
+          [user.id, categories],
+        );
+      }
       if (dto.whatsappInterviewReminders === false)
         await manager.query(
           `UPDATE whatsapp_notification_outbox
@@ -301,38 +332,52 @@ export class CandidateProfileService {
     const previousPath = profile.photoPath;
     profile.photoPath = path;
     try {
-      await this.profilesRepository.save(profile);
+      await this.dataSource.transaction(async (manager) => {
+        await manager.getRepository(CandidateProfile).save(profile);
+        await this.fileStorage.markClean(
+          path,
+          user.id,
+          "photo",
+          "image/webp",
+          manager,
+        );
+        if (previousPath) {
+          await this.fileStorage.enqueueCleanup([previousPath], manager);
+        }
+      });
     } catch (error) {
       await this.cleanupFailedUpload(path, error);
       throw error;
     }
-    const storageCleanupWarning = previousPath
-      ? await this.removeOldObject(previousPath, "previous profile photo")
-      : null;
     await this.auditService.record({
       actorUserId: user.id,
       action: "candidate.profile_photo_uploaded",
       targetType: "user",
       targetId: user.id,
     });
-    return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
+    return this.get(user);
   }
 
   async removePhoto(user: AuthenticatedUser) {
     const profile = await this.getOrCreateProfile(user);
     const previousPath = profile.photoPath;
-    profile.photoPath = null;
-    await this.profilesRepository.save(profile);
-    const storageCleanupWarning = previousPath
-      ? await this.removeOldObject(previousPath, "profile photo")
-      : null;
-    await this.auditService.record({
-      actorUserId: user.id,
-      action: "candidate.profile_photo_removed",
-      targetType: "user",
-      targetId: user.id,
+    await this.dataSource.transaction(async (manager) => {
+      profile.photoPath = null;
+      await manager.getRepository(CandidateProfile).save(profile);
+      if (previousPath) {
+        await this.fileStorage.enqueueCleanup([previousPath], manager);
+      }
+      await this.auditService.record(
+        {
+          actorUserId: user.id,
+          action: "candidate.profile_photo_removed",
+          targetType: "user",
+          targetId: user.id,
+        },
+        manager,
+      );
     });
-    return this.withCleanupWarning(await this.get(user), storageCleanupWarning);
+    return this.get(user);
   }
 
   async uploadResume(
@@ -362,6 +407,14 @@ export class CandidateProfileService {
           mimeType,
           parsedText,
         });
+        await this.fileStorage.markClean(
+          path,
+          user.id,
+          "resume",
+          mimeType,
+          manager,
+        );
+        await this.search?.indexCandidate(user.id, manager);
       });
     } catch (error) {
       await this.cleanupFailedUpload(path, error);
@@ -394,16 +447,87 @@ export class CandidateProfileService {
       order: { createdAt: "DESC", id: "DESC" },
       take: 20,
     });
-    return Promise.all(
-      versions.map(async (version) => ({
-        id: version.id,
-        fileName: version.fileName,
-        mimeType: version.mimeType,
-        createdAt: version.createdAt,
-        active: profile?.resumePath === version.storagePath,
-        url: await this.fileStorage.createSignedUrl(version.storagePath),
-      })),
+    const scanStatuses = await this.fileStorage.scanStatuses(
+      versions.map((version) => version.storagePath),
     );
+    return versions.map((version) => ({
+      id: version.id,
+      fileName: version.fileName,
+      mimeType: version.mimeType,
+      createdAt: version.createdAt,
+      active: profile?.resumePath === version.storagePath,
+      scanStatus: scanStatuses.get(version.storagePath) ?? "pending",
+    }));
+  }
+
+  async createResumeUrl(user: AuthenticatedUser): Promise<{ url: string }> {
+    const profile = await this.profilesRepository.findOneBy({
+      userId: user.id,
+    });
+    if (!profile?.resumePath) {
+      throw new NotFoundException("No current resume was found.");
+    }
+    return { url: await this.fileStorage.createSignedUrl(profile.resumePath) };
+  }
+
+  async createResumeVersionUrl(
+    user: AuthenticatedUser,
+    versionId: number,
+  ): Promise<{ url: string }> {
+    const version = await this.resumeVersionsRepository.findOneBy({
+      id: versionId,
+      userId: user.id,
+    });
+    if (!version) throw new NotFoundException("Resume version was not found.");
+    return { url: await this.fileStorage.createSignedUrl(version.storagePath) };
+  }
+
+  async deleteResumeHistory(user: AuthenticatedUser) {
+    await this.dataSource.transaction(async (manager) => {
+      const profile = await manager.getRepository(CandidateProfile).findOne({
+        where: { userId: user.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      const versions = await manager
+        .getRepository(CandidateResumeVersion)
+        .find({
+          where: { userId: user.id },
+        });
+      const history = versions.filter(
+        (version) => version.storagePath !== profile?.resumePath,
+      );
+      if (!history.length) return;
+
+      const paths = history.map((version) => version.storagePath);
+      const applicationPaths = (await manager.query(
+        `SELECT DISTINCT resume_path AS path
+         FROM candidate_applications
+         WHERE resume_path = ANY($1::text[])`,
+        [paths],
+      )) as Array<{ path: string }>;
+      const retainedForApplications = new Set(
+        applicationPaths.map(({ path }) => path),
+      );
+      await this.fileStorage.enqueueCleanup(
+        paths.filter((path) => !retainedForApplications.has(path)),
+        manager,
+      );
+      await manager.getRepository(CandidateResumeVersion).delete({
+        userId: user.id,
+        storagePath: In(paths),
+      });
+      await this.auditService.record(
+        {
+          actorUserId: user.id,
+          action: "candidate.resume_history_deleted",
+          targetType: "user",
+          targetId: user.id,
+          details: { deletedVersionCount: history.length },
+        },
+        manager,
+      );
+    });
+    return this.get(user);
   }
 
   async restoreResumeVersion(user: AuthenticatedUser, versionId: number) {
@@ -413,28 +537,40 @@ export class CandidateProfileService {
     });
     if (!version) throw new NotFoundException("Resume version was not found.");
     const profile = await this.getOrCreateProfile(user);
-    profile.resumePath = version.storagePath;
-    profile.resumeFileName = version.fileName;
-    await this.profilesRepository.save(profile);
-    await this.auditService.record({
-      actorUserId: user.id,
-      action: "candidate.resume_version_restored",
-      targetType: "candidate_resume_version",
-      targetId: version.id,
+    await this.dataSource.transaction(async (manager) => {
+      profile.resumePath = version.storagePath;
+      profile.resumeFileName = version.fileName;
+      await manager.getRepository(CandidateProfile).save(profile);
+      await this.search?.indexCandidate(user.id, manager);
+      await this.auditService.record(
+        {
+          actorUserId: user.id,
+          action: "candidate.resume_version_restored",
+          targetType: "candidate_resume_version",
+          targetId: version.id,
+        },
+        manager,
+      );
     });
     return this.get(user);
   }
 
   async removeResume(user: AuthenticatedUser) {
     const profile = await this.getOrCreateProfile(user);
-    profile.resumePath = null;
-    profile.resumeFileName = null;
-    await this.profilesRepository.save(profile);
-    await this.auditService.record({
-      actorUserId: user.id,
-      action: "candidate.resume_removed",
-      targetType: "user",
-      targetId: user.id,
+    await this.dataSource.transaction(async (manager) => {
+      profile.resumePath = null;
+      profile.resumeFileName = null;
+      await manager.getRepository(CandidateProfile).save(profile);
+      await this.search?.indexCandidate(user.id, manager);
+      await this.auditService.record(
+        {
+          actorUserId: user.id,
+          action: "candidate.resume_removed",
+          targetType: "user",
+          targetId: user.id,
+        },
+        manager,
+      );
     });
     return this.get(user);
   }
@@ -551,44 +687,29 @@ export class CandidateProfileService {
     try {
       await this.fileStorage.remove(path);
     } catch (cleanupError) {
-      this.logger.error(
-        `Profile database save failed and uploaded object ${path} could not be cleaned up: ${
-          cleanupError instanceof Error
-            ? cleanupError.message
-            : "unknown storage cleanup error"
-        }; original error: ${
-          saveError instanceof Error
-            ? saveError.message
-            : "unknown database error"
-        }`,
-      );
+      try {
+        await this.fileStorage.enqueueCleanup([path]);
+        this.logger.warn(
+          "A failed profile upload was queued for private-storage cleanup.",
+        );
+      } catch (queueError) {
+        this.logger.error(
+          `Profile database save failed and uploaded object could not be cleaned up or queued: ${
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : "unknown storage cleanup error"
+          }; original error: ${
+            saveError instanceof Error
+              ? saveError.message
+              : "unknown database error"
+          }; cleanup queue error: ${
+            queueError instanceof Error
+              ? queueError.message
+              : "unknown database error"
+          }`,
+        );
+      }
     }
-  }
-
-  private async removeOldObject(
-    path: string,
-    description: string,
-  ): Promise<string | null> {
-    try {
-      await this.fileStorage.remove(path);
-      return null;
-    } catch (error) {
-      this.logger.error(
-        `Candidate ${description} ${path} could not be removed: ${
-          error instanceof Error ? error.message : "unknown storage error"
-        }`,
-      );
-      return `Your profile was updated, but the ${description} could not be removed from private storage. Contact support if you need it deleted.`;
-    }
-  }
-
-  private withCleanupWarning<T>(
-    profile: T,
-    storageCleanupWarning: string | null,
-  ): T | (T & { storageCleanupWarning: string }) {
-    return storageCleanupWarning
-      ? { ...profile, storageCleanupWarning }
-      : profile;
   }
 
   private async getOrCreateProfile(

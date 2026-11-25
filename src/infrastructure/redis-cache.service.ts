@@ -44,6 +44,10 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
     return this.client?.status === "ready";
   }
 
+  get enabled(): boolean {
+    return this.client !== null;
+  }
+
   async get(key: string): Promise<string | null> {
     if (!this.ready) return null;
     try {

@@ -107,6 +107,9 @@ export class RazorpayConfiguration {
   @Column({ name: "enterprise_resume_credits", type: "integer", default: 500 })
   enterpriseResumeCredits!: number;
 
+  @Column({ name: "past_due_grace_days", type: "integer", default: 7 })
+  pastDueGraceDays!: number;
+
   @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
   updatedAt!: Date;
 }

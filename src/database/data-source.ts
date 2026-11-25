@@ -95,6 +95,14 @@ import { SeedDefaultFaqAndBlogContent1729000000051 } from "./migrations/17290000
 import { CommercialControlsAndRetention1729000000052 } from "./migrations/1729000000052-CommercialControlsAndRetention";
 import { SearchIndexOutbox1729000000053 } from "./migrations/1729000000053-SearchIndexOutbox";
 import { EmployerPlanAndDeletionIndexes1729000000054 } from "./migrations/1729000000054-EmployerPlanAndDeletionIndexes";
+import { SearchIndexOutboxClaims1729000000055 } from "./migrations/1729000000055-SearchIndexOutboxClaims";
+import { CandidatePrivateFileLifecycle1729000000056 } from "./migrations/1729000000056-CandidatePrivateFileLifecycle";
+import { BillingNotificationOperations1729000000057 } from "./migrations/1729000000057-BillingNotificationOperations";
+import { EmployerJobLifecycleAndTrust1729000000058 } from "./migrations/1729000000058-EmployerJobLifecycleAndTrust";
+import { ApplicantInboxAndResumeSearch1729000000059 } from "./migrations/1729000000059-ApplicantInboxAndResumeSearch";
+import { InterviewLifecycleAndFeedback1729000000060 } from "./migrations/1729000000060-InterviewLifecycleAndFeedback";
+import { EmployerInterviewFeedback } from "../employers/employer-interview-feedback.entity";
+import { EmployerBillingProfile1729000000061 } from "./migrations/1729000000061-EmployerBillingProfile";
 
 export const AppDataSource = new DataSource({
   ...getDatabaseConfig(),
@@ -115,6 +123,7 @@ export const AppDataSource = new DataSource({
     EmployerApplicationNote,
     EmployerApplicationTag,
     EmployerInterview,
+    EmployerInterviewFeedback,
     UserNotification,
     RazorpayWebhookEvent,
     CandidateSavedSearch,
@@ -193,6 +202,13 @@ export const AppDataSource = new DataSource({
     CommercialControlsAndRetention1729000000052,
     SearchIndexOutbox1729000000053,
     EmployerPlanAndDeletionIndexes1729000000054,
+    SearchIndexOutboxClaims1729000000055,
+    CandidatePrivateFileLifecycle1729000000056,
+    BillingNotificationOperations1729000000057,
+    EmployerJobLifecycleAndTrust1729000000058,
+    ApplicantInboxAndResumeSearch1729000000059,
+    InterviewLifecycleAndFeedback1729000000060,
+    EmployerBillingProfile1729000000061,
   ],
   synchronize: false,
 });

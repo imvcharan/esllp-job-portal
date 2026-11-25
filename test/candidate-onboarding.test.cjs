@@ -66,7 +66,11 @@ function createServiceFixture() {
             entity === User ? userRepository : profileRepository,
         }),
     },
-    { createSignedUrl: async () => "https://files.example.test/signed" },
+    {
+      createSignedUrl: async () => "https://files.example.test/signed",
+      scanStatus: async () => null,
+      scanStatuses: async () => new Map(),
+    },
     userRepository,
     profileRepository,
     resumeVersionsRepository,

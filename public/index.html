@@ -5400,6 +5400,13 @@
         );
       }
 
+      function parseIstDateTime(value) {
+        const normalized = String(value || "").trim();
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized))
+          return new Date(Number.NaN);
+        return new Date(`${normalized}:00+05:30`);
+      }
+
       function savedJobIds() {
         try {
           const saved = JSON.parse(localStorage.getItem(savedJobsKey) || "[]");
@@ -5672,6 +5679,7 @@
           <div class="result-card-copy">
             <h2><a class="result-open" href="${detailHash}">${escapeHtml(job.title)}</a></h2>
             <p class="result-company">${job.organizationId ? `<a href="/companies/id/${encodeURIComponent(job.organizationId)}">${escapeHtml(job.company)}</a>` : escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
+            ${job.featuredPlacementTypes?.some((type) => type === "homepage" || type === "search") ? '<span class="preview-badge">Featured</span>' : ""}
             <div class="result-meta">${meta}</div>
           </div>
         </div>
@@ -5693,6 +5701,7 @@
         <article class="job-card">
           <div class="job-card-top"><span class="company-icon ${companyColor(job)}" aria-hidden="true">${job.mark ? escapeHtml(job.mark) : companyMark(job.company)}</span>
             ${job.isPreview ? '<span class="preview-badge">Preview</span>' : ""}
+            ${job.featuredPlacementTypes?.includes("homepage") ? '<span class="preview-badge">Featured</span>' : ""}
             <button class="save-button${savedJobIds().includes(String(job.id)) ? " saved" : ""}" type="button" data-save-job="${escapeHtml(job.id)}" aria-label="Save ${escapeHtml(job.title)}" aria-pressed="${savedJobIds().includes(String(job.id))}">${savedJobIds().includes(String(job.id)) ? "♥" : "♡"}</button></div>
           <h3><a class="result-open" href="#job/${encodeURIComponent(job.id)}">${escapeHtml(job.title)}</a></h3>
           <p class="job-company">${job.organizationId ? `<a href="/companies/id/${encodeURIComponent(job.organizationId)}">${escapeHtml(job.company)}</a>` : escapeHtml(job.company)} · ${escapeHtml(job.location)}</p>
@@ -7907,6 +7916,31 @@
         return response;
       }
 
+      async function openPrivateFile(endpoint, button) {
+        const popup = window.open("about:blank", "_blank");
+        if (!popup) {
+          showToast("Allow pop-ups to open this private file.", "error");
+          return;
+        }
+        if (button) button.disabled = true;
+        try {
+          const response = endpoint.startsWith("/api/employer/")
+            ? await employerRequest(endpoint, { cache: "no-store" })
+            : await authenticatedFetch(endpoint, { cache: "no-store" });
+          const payload = await readAuthResponse(response);
+          const url = new URL(payload.url);
+          if (url.protocol !== "https:" && url.hostname !== "localhost") {
+            throw new Error("The file service returned an unsafe temporary link.");
+          }
+          popup.location.replace(url.toString());
+        } catch (error) {
+          popup.close();
+          showToast(`Unable to open private file: ${displayAuthError(error)}`, "error");
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
+
       function authenticatedUpload(url, formData, onProgress) {
         return new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
@@ -7919,7 +7953,10 @@
           );
           xhr.upload.addEventListener("progress", (event) => {
             if (event.lengthComputable) {
-              onProgress(Math.round((event.loaded / event.total) * 100));
+              const percentage = Math.round(
+                (event.loaded / event.total) * 100,
+              );
+              onProgress(percentage);
             }
           });
           xhr.addEventListener("error", () => {
@@ -8064,23 +8101,26 @@
                 ${profile.hasPhoto ? '<button class="button button-light" type="button" data-remove-photo>Remove photo</button>' : ""}
                 <input id="profile-photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
               </div><small>JPEG, PNG, or WebP; up to 6 MB. Stored privately.</small></div>
+              ${profile.hasPhoto && profile.photoScanStatus !== "clean" ? `<small role="status">Your stored photo is temporarily hidden while its security scan completes.</small>` : ""}
             </div>
           </div>
           <div class="profile-resource-card">
             <div class="profile-section-heading"><div><h2>Resume</h2><p>Upload a PDF or DOCX. We extract selectable text and keep private versions so you can restore an earlier file.</p></div></div>
             <div class="profile-resource-line">
               ${
-                profile.resumeUrl
-                  ? `<a href="${escapeHtml(profile.resumeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(profile.resumeFileName || "View current resume")}</a>`
-                  : '<span class="workspace-notice">No resume uploaded.</span>'
+                profile.hasResume && profile.resumeScanStatus === "clean"
+                  ? `<a href="#" data-open-private-file="/api/candidate/profile/resume/url">${escapeHtml(profile.resumeFileName || "Open current resume")} · private link</a>`
+                  : profile.hasResume
+                    ? `<span class="workspace-notice" role="status">${profile.resumeScanStatus === "infected" ? "This file is unavailable after a security scan." : "Your resume is temporarily unavailable while its security scan completes."}</span>`
+                    : '<span class="workspace-notice">No resume uploaded.</span>'
               }
               <div class="profile-photo-actions">
-                <button class="button button-light" type="button" data-open-resume>${profile.resumeUrl ? "Upload a new version" : "Upload resume"}</button>
-                ${profile.resumeUrl ? '<button class="button button-light" type="button" data-remove-resume>Remove</button>' : ""}
+                <button class="button button-light" type="button" data-open-resume>${profile.hasResume ? "Upload a new version" : "Upload resume"}</button>
+                ${profile.hasResume ? '<button class="button button-light" type="button" data-remove-resume>Remove from profile</button>' : ""}
                 <input id="profile-resume-input" type="file" accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx" hidden>
               </div>
             </div>
-            <small>PDF or DOCX, up to 8 MB. Files stay private; choose separately whether to include a resume in each application.</small>
+            <small>PDF or DOCX, up to 8 MB. Files stay private; choose separately whether to include a resume in each application. Temporary links expire after five minutes. Removing a resume unlinks it from your profile but preserves version history; files already attached to applications remain with those applications.</small>
             ${renderResumeSuggestions(profile)}
             <div id="resume-upload-feedback" hidden>
               <label for="resume-upload-progress">Resume upload</label>
@@ -8089,7 +8129,7 @@
               <button class="button button-light" id="resume-upload-retry" type="button" hidden>Retry upload</button>
             </div>
             ${profile.parsedResumeText ? `<details><summary>View extracted resume text</summary><pre class="resume-text-preview">${escapeHtml(profile.parsedResumeText)}</pre></details>` : ""}
-            ${profile.resumeVersions?.length ? `<div class="profile-collection"><strong>Resume versions</strong>${profile.resumeVersions.map((version) => `<article class="profile-entry"><div class="profile-entry-top"><span>${escapeHtml(version.fileName)}${version.active ? " · Current" : ""}</span>${version.active ? "" : `<button class="button button-light" type="button" data-restore-resume="${version.id}">Make current</button>`}</div><small>${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(version.mimeType === "application/pdf" ? "PDF" : "DOCX")}</small><p><a href="${escapeHtml(version.url)}" target="_blank" rel="noopener noreferrer">Open private file</a></p></article>`).join("")}</div>` : ""}
+            ${profile.resumeVersions?.length ? `<div class="profile-collection"><strong>Resume versions</strong>${profile.resumeVersions.map((version) => `<article class="profile-entry"><div class="profile-entry-top"><span>${escapeHtml(version.fileName)}${version.active ? " · Current" : ""}</span>${version.active ? "" : `<button class="button button-light" type="button" data-restore-resume="${version.id}">Make current</button>`}</div><small>${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(version.mimeType === "application/pdf" ? "PDF" : "DOCX")}</small><p>${version.scanStatus === "clean" ? `<a href="#" data-open-private-file="/api/candidate/profile/resume-versions/${version.id}/url">Open private file</a>` : `<span role="status">${version.scanStatus === "infected" ? "Unavailable after security scan" : "Security scan pending"}</span>`}</p></article>`).join("")}${profile.resumeVersions.some((version) => !version.active) ? '<button class="button button-light" type="button" data-delete-resume-history>Delete older resume versions</button>' : ""}</div>` : ""}
           </div>
         </section>
         <section class="profile-resource-card">
@@ -8505,7 +8545,10 @@
             formData,
             (percentage) => {
               progress.value = percentage;
-              status.textContent = `Uploading resume: ${percentage}%`;
+              status.textContent =
+                percentage >= 100
+                  ? "Upload received; scanning and saving your resume…"
+                  : `Uploading resume: ${percentage}%`;
             },
           );
           const profile = await readAuthResponse(response);
@@ -8540,7 +8583,7 @@
           authState.notice =
             kind === "photo"
               ? "Your profile photo was removed."
-              : "Your resume was removed.";
+              : "Your resume was removed from your profile. Older versions are still in your history.";
           authState.noticeType = "";
           renderProfileForm(profile);
           if (profile.storageCleanupWarning)
@@ -8554,6 +8597,15 @@
 
       profileContent.addEventListener("click", async (event) => {
         const target = event.target;
+        const privateFileLink = target.closest("[data-open-private-file]");
+        if (privateFileLink) {
+          event.preventDefault();
+          await openPrivateFile(
+            privateFileLink.dataset.openPrivateFile,
+            privateFileLink,
+          );
+          return;
+        }
         if (target.closest("[data-preview-profile]")) {
           profileContent
             .querySelector("#candidate-profile-preview")
@@ -8653,6 +8705,34 @@
           } catch (error) {
             profileInputError(displayAuthError(error));
             restoreResumeButton.disabled = false;
+          }
+          return;
+        }
+        const deleteResumeHistoryButton = target.closest(
+          "[data-delete-resume-history]",
+        );
+        if (deleteResumeHistoryButton) {
+          if (
+            !window.confirm(
+              "Permanently delete older resume versions? Your current resume and files already attached to applications will be kept.",
+            )
+          ) {
+            return;
+          }
+          deleteResumeHistoryButton.disabled = true;
+          try {
+            const response = await authenticatedFetch(
+              "/api/candidate/profile/resume-versions",
+              { method: "DELETE" },
+            );
+            const profile = await readAuthResponse(response);
+            authState.notice =
+              "Older resume versions were deleted. Files attached to applications remain available with those applications.";
+            authState.noticeType = "";
+            renderProfileForm(profile);
+          } catch (error) {
+            profileInputError(displayAuthError(error));
+            deleteResumeHistoryButton.disabled = false;
           }
           return;
         }
@@ -8942,7 +9022,7 @@
         }
         select.disabled = true;
         try {
-          await readAuthResponse(
+          const result = await readAuthResponse(
             await employerRequest(
               `/api/employer/team/${encodeURIComponent(select.dataset.teamMember)}`,
               {
@@ -9189,6 +9269,12 @@
               href: "#dashboard/interviews",
             },
             {
+              key: "hiring-reports",
+              label: "Hiring reports",
+              icon: "▥",
+              href: "#dashboard/hiring-reports",
+            },
+            {
               key: "team",
               label: "Team & access",
               icon: "♧",
@@ -9216,7 +9302,7 @@
           const membershipRole = currentEmployerMemberRole();
           const roleItems = items.filter((item) => {
             if (
-              ["applicants", "candidates"].includes(item.key) &&
+              ["applicants", "candidates", "hiring-reports"].includes(item.key) &&
               !employerCanManageApplications()
             )
               return false;
@@ -9323,6 +9409,7 @@
             company: "Company profile",
             applicants: "Applicants",
             interviews: "Interviews",
+            "hiring-reports": "Hiring reports",
             team: "Team & access",
             notifications: "Notifications",
             reports: "My reports",
@@ -9386,7 +9473,7 @@
             profile.links.portfolio ||
             profile.links.github,
           ),
-          Boolean(profile.resumeUrl),
+          Boolean(profile.hasResume),
           profile.certifications.length > 0,
           Boolean(profile.salaryPreferences?.minimum),
         ].filter(Boolean).length;
@@ -9445,9 +9532,10 @@
           if (!canManageCompany) {
             profileContent.innerHTML = `${pendingEmployer ? pendingEmployerNotice("This company profile is visible for review but cannot be edited until your employer account is approved.") : '<div class="workspace-notice">Your company role can view this profile but cannot edit company settings.</div>'}
             ${workspaceHeading("Read-only preview", "Company profile", "Review your organization’s current details.")}
-            <section class="workspace-panel"><div class="workspace-action-list">
+            <section class="workspace-panel">${company.logoUrl ? `<img src="${escapeHtml(company.logoUrl)}" alt="${escapeHtml(company.name)} logo" referrerpolicy="no-referrer" loading="lazy" style="max-width:180px;max-height:90px;object-fit:contain">` : ""}<div class="workspace-action-list">
               <div class="workspace-action"><span>Company name</span><strong>${escapeHtml(company.name)}</strong></div>
               <div class="workspace-action"><span>Website</span><strong>${escapeHtml(company.website || "Not provided")}</strong></div>
+              <div class="workspace-action"><span>Company verification</span><strong>${escapeHtml(company.verificationStatus || "unsubmitted")}</strong></div>
               <div class="workspace-action"><span>Industry</span><strong>${escapeHtml(company.industry || "Not provided")}</strong></div>
               <div class="workspace-action"><span>Company size</span><strong>${escapeHtml(company.companySize || "Not provided")}</strong></div>
               <div class="workspace-action"><span>About</span><strong>${escapeHtml(company.description || "Not provided")}</strong></div>
@@ -9458,11 +9546,16 @@
           <section class="workspace-panel"><form id="employer-company-form" class="employer-form">
             <label>Company name<input name="name" value="${escapeHtml(company.name)}" minlength="2" maxlength="160" required></label>
             <label>Website<input name="website" type="url" value="${escapeHtml(company.website || "")}" maxlength="500" placeholder="https://example.com"></label>
+            <label>Company logo URL<input name="logoUrl" type="url" value="${escapeHtml(company.logoUrl || "")}" maxlength="1000" placeholder="https://example.com/logo.png"><span>Use an HTTPS image URL. The public page will not send referrer details.</span></label>
             <label>Industry<select name="industry"><option value="">Select an industry</option>${state.jobTaxonomies.industries.map((industry) => `<option value="${escapeHtml(industry)}"${company.industry === industry ? " selected" : ""}>${escapeHtml(industry)}</option>`).join("")}${company.industry && !state.jobTaxonomies.industries.includes(company.industry) ? `<option value="${escapeHtml(company.industry)}" selected>${escapeHtml(company.industry)} · inactive</option>` : ""}</select></label>
             <label>Company size<select name="companySize"><option value="">Select size</option>${["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"].map((size) => `<option value="${size}"${company.companySize === size ? " selected" : ""}>${size} employees</option>`).join("")}</select></label>
             <label class="full">About your company<textarea name="description" maxlength="5000" placeholder="What does your company do?">${escapeHtml(company.description || "")}</textarea></label>
             <div class="employer-form-actions full"><button class="button button-dark" type="submit">Save company profile</button><span id="company-form-status" role="status"></span></div>
           </form></section>`;
+          profileContent.insertAdjacentHTML("beforeend", `${workspaceHeading("Trust & identity", "Company verification", "Submit public registration details for an administrator to review. Account approval is separate from company verification.")}
+          <section class="workspace-panel"><p>Verification status: <strong>${escapeHtml(company.verificationStatus || "unsubmitted")}</strong>${company.verificationNote ? `<br>${escapeHtml(company.verificationNote)}` : ""}</p>
+            ${company.verificationStatus === "pending" ? '<p class="workspace-notice">Your request is waiting for administrator review.</p>' : company.verificationStatus === "verified" ? '<p class="workspace-notice">This company has been verified by the platform.</p>' : `<form id="employer-company-verification-form" class="employer-form"><label class="full">Company registration and public evidence<textarea name="details" minlength="30" maxlength="2000" required placeholder="Describe the legal registration and provide public evidence such as a government registry URL. Do not include passwords or sensitive personal data.">${escapeHtml(company.verificationDetails || "")}</textarea></label><div class="employer-form-actions full"><button class="button button-dark" type="submit">Request company verification</button><span role="status"></span></div></form>`}
+          </section>`);
         } catch (error) {
           profileContent.innerHTML = `<div class="workspace-notice error">${escapeHtml(displayAuthError(error))}</div>`;
         }
@@ -9541,13 +9634,13 @@
             <p><a class="button" download="job-import-template.csv" href="data:text/csv;charset=utf-8,title%2Clocation%2Ccategory%2Cindustry%2CworkplaceType%2CemploymentType%2CsalaryMin%2CsalaryMax%2CsalaryCurrency%2CsalaryPeriod%2CapplicationDeadline%2CnumberOfOpenings%2Cexperience%2Cskills%2Cdescription%0A">Download CSV template</a> Skills use a pipe (|) separator.</p>
             <form id="employer-job-import-form" class="employer-form">
               <label class="full">CSV file (maximum 1 MB)<input id="employer-job-csv-file" name="csvFile" type="file" accept=".csv,text/csv" required></label>
-              <div id="employer-job-import-preview" class="full" role="status"></div>
+              <div id="employer-job-import-preview" class="full" role="status" aria-live="polite"></div>
               <div class="employer-form-actions full"><button class="button button-dark" type="submit" disabled>Import as drafts</button><span id="employer-job-import-status" role="status"></span></div>
             </form>
           </section>`
           }
           <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Your listings</h2><p>${result.total} job(s) owned by this company.</p></div></div>
-            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applicants</th><th>Status</th><th>Created</th>${canManageJobs ? "<th>Actions</th>" : ""}</tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.salaryMin == null && job.salaryMax == null ? "Not provided" : `${escapeHtml(job.salaryCurrency)} ${job.salaryMin ?? ""}${job.salaryMin != null && job.salaryMax != null ? "–" : ""}${job.salaryMax ?? ""} / ${escapeHtml(job.salaryPeriod)}`}</td><td>${job.numberOfOpenings ?? 1}</td><td>${escapeHtml(job.applicationDeadline || "—")}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.isActive ? "published" : escapeHtml(job.moderationStatus || "draft")}</span>${job.moderationNote ? `<small>${escapeHtml(job.moderationNote)}</small>` : ""}</td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td>${canManageJobs ? `<td><button class="button" type="button" data-edit-employer-job="${job.id}">Edit</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">${job.moderationStatus === "approved" ? "Publish" : "Submit for review"}</button>`}</td>` : ""}</tr>`).join("")}</tbody></table></div>${result.total > result.limit ? `<div class="employer-form-actions"><span>Page ${result.page} of ${Math.ceil(result.total / result.limit)} · ${result.total} jobs</span><button class="button" type="button" data-employer-jobs-page="${result.page - 1}"${result.page <= 1 ? " disabled" : ""}>← Previous</button><button class="button" type="button" data-employer-jobs-page="${result.page + 1}"${result.page * result.limit >= result.total ? " disabled" : ""}>Next →</button></div>` : ""}` : `<div class="empty-state"><h2>No job listings yet</h2><p>${pendingEmployer ? "Job creation will be available after administrator approval." : canManageJobs ? "Create your first draft above. You stay in control of when it goes live." : "No job listings are available to review yet."}</p></div>`}
+            ${result.items.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Role</th><th>Location</th><th>Salary</th><th>Openings</th><th>Deadline</th><th>Applicants</th><th>Status</th><th>Created</th>${canManageJobs ? "<th>Actions</th>" : ""}</tr></thead><tbody>${result.items.map((job) => `<tr><td>${escapeHtml(job.title)}</td><td>${escapeHtml(job.location)}</td><td>${job.salaryMin == null && job.salaryMax == null ? "Not provided" : `${escapeHtml(job.salaryCurrency)} ${job.salaryMin ?? ""}${job.salaryMin != null && job.salaryMax != null ? "–" : ""}${job.salaryMax ?? ""} / ${escapeHtml(job.salaryPeriod)}`}</td><td>${job.numberOfOpenings ?? 1}</td><td>${escapeHtml(job.applicationDeadline || "—")}</td><td>${job.applicationCount}</td><td><span class="employer-pill">${job.expired ? "expired" : job.isActive ? "published" : escapeHtml(job.moderationStatus || "draft")}</span>${job.moderationNote ? `<small>${escapeHtml(job.moderationNote)}</small>` : ""}</td><td>${escapeHtml(new Date(job.createdAt).toLocaleDateString())}</td>${canManageJobs ? `<td><button class="button" type="button" data-edit-employer-job="${job.id}">${job.expired ? "Edit to renew" : "Edit"}</button> ${job.isActive ? `<button class="button" type="button" data-close-employer-job="${job.id}">Close</button>` : `<button class="button button-dark" type="button" data-publish-employer-job="${job.id}">${job.moderationStatus === "approved" ? "Publish" : job.expired ? "Renew & submit" : "Submit for review"}</button>`}</td>` : ""}</tr>`).join("")}</tbody></table></div>${result.total > result.limit ? `<div class="employer-form-actions"><span>Page ${result.page} of ${Math.ceil(result.total / result.limit)} · ${result.total} jobs</span><button class="button" type="button" data-employer-jobs-page="${result.page - 1}"${result.page <= 1 ? " disabled" : ""}>← Previous</button><button class="button" type="button" data-employer-jobs-page="${result.page + 1}"${result.page * result.limit >= result.total ? " disabled" : ""}>Next →</button></div>` : ""}` : `<div class="empty-state"><h2>No job listings yet</h2><p>${pendingEmployer ? "Job creation will be available after administrator approval." : canManageJobs ? "Create your first draft above. You stay in control of when it goes live." : "No job listings are available to review yet."}</p></div>`}
           </section>`;
           if (canManageJobs) {
             const form = profileContent.querySelector("#employer-job-form");
@@ -9583,24 +9676,90 @@
             ${["owner", "admin"].includes(role) ? `<form id="employer-team-invite-form" class="employer-form"><label>Work email<input name="email" type="email" maxlength="254" required></label><label>Company role<select name="role"><option value="recruiter">Recruiter — manage jobs and candidates</option><option value="hiring_manager">Hiring manager — review candidates</option><option value="billing">Billing — manage subscription</option><option value="admin">Admin — manage company and team</option></select></label><div class="employer-form-actions full"><button class="button button-dark" type="submit">Send invitation</button><span id="team-invite-status" role="status"></span></div></form>` : '<p class="workspace-notice">Only company owners and admins can invite or change team access.</p>'}
           </section>
           <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Members</h2><p>${team.filter((member) => member.status === "active").length} active · ${team.filter((member) => member.status === "invited").length} invited</p></div></div>
-            ${team.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Member</th><th>Role</th><th>Status</th><th>Access</th></tr></thead><tbody>${team.map((member) => `<tr><td>${escapeHtml(member.displayName || member.email)}<br><small>${escapeHtml(member.email)}</small></td><td>${escapeHtml(member.role.replace(/_/g, " "))}</td><td><span class="employer-pill">${escapeHtml(member.status)}</span></td><td>${role === "owner" || role === "admin" ? (member.role === "owner" ? "Owner" : member.status === "invited" || member.status === "expired" ? `<button class="button" type="button" data-resend-team-invite="${member.id}">Resend invitation</button>` : member.status === "active" ? `<select class="team-member-role" data-team-member="${member.id}"><option value="recruiter"${member.role === "recruiter" ? " selected" : ""}>Recruiter</option><option value="hiring_manager"${member.role === "hiring_manager" ? " selected" : ""}>Hiring manager</option><option value="billing"${member.role === "billing" ? " selected" : ""}>Billing</option><option value="admin"${member.role === "admin" ? " selected" : ""}>Admin</option><option value="removed">Remove access</option></select>` : "Removed") : "View only"}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state"><p>No team members yet.</p></div>'}
+            ${team.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Member</th><th>Role</th><th>Status</th><th>Access</th></tr></thead><tbody>${team.map((member) => `<tr><td>${escapeHtml(member.displayName || member.email)}<br><small>${escapeHtml(member.email)}</small></td><td>${escapeHtml(member.role.replace(/_/g, " "))}</td><td><span class="employer-pill">${escapeHtml(member.status)}</span></td><td>${role === "owner" || role === "admin" ? (member.role === "owner" ? "Owner" : member.status === "invited" || member.status === "expired" ? `<button class="button" type="button" data-resend-team-invite="${member.id}">Resend invitation</button>` : member.status === "active" ? `<select class="team-member-role" data-team-member="${member.id}"><option value="recruiter"${member.role === "recruiter" ? " selected" : ""}>Recruiter</option><option value="hiring_manager"${member.role === "hiring_manager" ? " selected" : ""}>Hiring manager</option><option value="billing"${member.role === "billing" ? " selected" : ""}>Billing</option><option value="admin"${member.role === "admin" ? " selected" : ""}>Admin</option><option value="removed">Remove access</option></select>` : "Removed") : "View only"}${role === "owner" && member.status === "active" && member.role !== "owner" ? ` <button class="button" type="button" data-transfer-team-ownership="${member.id}">Transfer ownership</button>` : ""}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state"><p>No team members yet.</p></div>'}
           </section>`;
         } catch (error) {
           profileContent.innerHTML = `<div class="workspace-notice error">${escapeHtml(displayAuthError(error))}</div>`;
         }
       }
 
-      async function loadEmployerInterviews() {
+      async function loadEmployerInterviews(page = 1) {
         profileContent.innerHTML =
           '<div class="workspace-panel">Loading interviews…</div>';
+        let interviews = [];
         try {
-          const response = await employerRequest("/api/employer/interviews");
-          const interviews = await readAuthResponse(response);
-          profileContent.innerHTML = `${workspaceHeading("Hiring calendar", "Interviews", "Upcoming interviews arranged with candidates across your company.")}
-          <section class="workspace-panel">${interviews.length ? `<div class="workspace-action-list">${interviews.map((item) => `<article class="workspace-action"><span><strong>${escapeHtml(item.candidateName)}</strong><br><small>${escapeHtml(item.jobTitle)} · ${escapeHtml(new Date(item.startsAt).toLocaleString())} · ${item.durationMinutes} minutes</small>${item.meetingUrl ? `<br><a class="text-link" href="${escapeHtml(item.meetingUrl)}" target="_blank" rel="noopener noreferrer">Meeting link</a>` : ""}${item.location ? `<br>${escapeHtml(item.location)}` : ""}</span><span><span class="employer-pill">${escapeHtml(item.status)}</span>${item.status === "scheduled" ? `<br><button class="button" type="button" data-cancel-interview="${item.id}">Cancel</button>` : ""}</span></article>`).join("")}</div>` : '<div class="empty-state"><h2>No interviews scheduled</h2><p>Schedule an interview from an applicant’s profile to see it here.</p></div>'}</section>`;
+          const response = await employerRequest(
+            `/api/employer/interviews?page=${page}&limit=25`,
+          );
+          const result = await readAuthResponse(response);
+          interviews = Array.isArray(result.items) ? result.items : [];
+          const members = await readAuthResponse(
+            await employerRequest("/api/employer/team"),
+          );
+          const interviewers = members.filter(
+            (member) =>
+              member.status === "active" &&
+              member.userId &&
+              ["owner", "admin", "recruiter", "hiring_manager"].includes(
+                member.role,
+              ),
+          );
+          profileContent.innerHTML = `${workspaceHeading("Hiring calendar", "Upcoming interviews", "Times are shown in India Standard Time. Candidates can accept, decline or request a new time.")}
+          <section class="workspace-panel">${interviews.length ? `<div class="workspace-action-list">${interviews.map((item) => `<article class="workspace-action"><span><strong>${escapeHtml(item.candidateName)}</strong><br><small>${escapeHtml(item.jobTitle)} · ${escapeHtml(new Date(item.startsAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }))} IST · ${item.durationMinutes} minutes</small><br><small>Interviewer: ${escapeHtml(item.interviewerName || "Not assigned")} · Candidate: ${escapeHtml((item.candidateResponse || "pending").replace(/_/g, " "))}</small>${item.meetingUrl ? `<br><a class="text-link" href="${escapeHtml(item.meetingUrl)}" target="_blank" rel="noopener noreferrer">Meeting link</a>` : ""}${item.location ? `<br>${escapeHtml(item.location)}` : ""}<details><summary>Reschedule</summary><form class="employer-interview-reschedule-form employer-inline-form" data-interview-id="${item.id}"><label>New time<input name="startsAt" type="datetime-local" required></label><label>Duration<select name="durationMinutes"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></label><label>Interviewer<select name="interviewerUserId">${interviewers.map((member) => `<option value="${member.userId}"${String(member.userId) === String(item.interviewerUserId) ? " selected" : ""}>${escapeHtml(member.displayName || member.email)}</option>`).join("")}</select></label><label>Meeting link<input name="meetingUrl" type="url" maxlength="1000" value="${escapeHtml(item.meetingUrl || "")}"></label><label>Location<input name="location" maxlength="500" value="${escapeHtml(item.location || "")}"></label><button class="button" type="submit">Save new time</button></form></details></span><span><button class="button button-dark" type="button" data-complete-interview="${item.id}">Mark complete</button><br><button class="button" type="button" data-cancel-interview="${item.id}">Cancel</button></span></article>`).join("")}</div>${result.total > result.limit ? `<div class="employer-form-actions"><button class="button" type="button" data-employer-interviews-page="${result.page - 1}"${result.page <= 1 ? " disabled" : ""}>← Previous</button><span>Page ${result.page} of ${Math.ceil(result.total / result.limit)}</span><button class="button" type="button" data-employer-interviews-page="${result.page + 1}"${result.page * result.limit >= result.total ? " disabled" : ""}>Next →</button></div>` : ""}` : '<div class="empty-state"><h2>No upcoming interviews</h2><p>Schedule an interview from an applicant’s profile to see it here.</p></div>'}</section>`;
         } catch (error) {
           profileContent.innerHTML = `<div class="workspace-notice error">${escapeHtml(displayAuthError(error))}</div>`;
         }
+        for (const button of profileContent.querySelectorAll(
+          "[data-complete-interview]",
+        )) {
+          const interview = interviews.find(
+            (item) =>
+              String(item.id) === String(button.dataset.completeInterview),
+          );
+          if (interview && new Date(interview.startsAt) > new Date()) {
+            button.disabled = true;
+            button.title = "An interview can be completed after its scheduled start.";
+          }
+        }
+        const interviewsHeading = profileContent.querySelector("h1");
+        if (interviewsHeading?.textContent === "Upcoming interviews")
+          interviewsHeading.textContent = "Scheduled interviews";
+        const emptyInterviewsHeading =
+          profileContent.querySelector(".empty-state h2");
+        if (emptyInterviewsHeading?.textContent === "No upcoming interviews")
+          emptyInterviewsHeading.textContent = "No scheduled interviews";
+      }
+
+      async function loadEmployerHiringReports(filters = state.employerHiringFilters) {
+          const today = new Date();
+          const defaultTo = today.toISOString().slice(0, 10);
+          const defaultFrom = new Date(today.getTime() - 29 * 86_400_000)
+            .toISOString()
+            .slice(0, 10);
+          state.employerHiringFilters = {
+            from: filters?.from || defaultFrom,
+            to: filters?.to || defaultTo,
+            jobId: filters?.jobId || "",
+          };
+          filters = state.employerHiringFilters;
+          profileContent.innerHTML =
+            '<div class="workspace-panel" role="status">Loading hiring reports…</div>';
+          try {
+            const params = new URLSearchParams({ from: filters.from, to: filters.to });
+            if (filters.jobId) params.set("jobId", filters.jobId);
+            const [reportResponse, jobsResponse] = await Promise.all([
+              employerRequest(`/api/employer/reports/hiring?${params}`),
+              employerRequest("/api/employer/jobs?limit=100"),
+            ]);
+            const [report, jobResult] = await Promise.all([
+              readAuthResponse(reportResponse),
+              readAuthResponse(jobsResponse),
+            ]);
+            state.employerHiringReport = report;
+            profileContent.innerHTML = `${workspaceHeading("Recruiter reporting", "Hiring performance", "Review funnel progression, time-to-hire, interviewer responses and recruiter workload. All metrics use the selected application-created date range.")}<section class="workspace-panel"><form id="employer-hiring-report-filters" class="workspace-filter"><label>From<input type="date" name="from" value="${escapeHtml(filters.from)}" required></label><label>To<input type="date" name="to" value="${escapeHtml(filters.to)}" required></label><label>Job<select name="jobId"><option value="">All company jobs</option>${jobResult.items.map((job) => `<option value="${job.id}"${String(filters.jobId) === String(job.id) ? " selected" : ""}>${escapeHtml(job.title)}</option>`).join("")}</select></label><button class="button button-dark" type="submit">Update report</button><button class="button" type="button" data-download-hiring-report>Download CSV</button></form><p>${report.conversion.applicants} applicant(s) · generated ${escapeHtml(new Date(report.generatedAt).toLocaleString())}</p><div class="workspace-stats"><article class="workspace-stat"><span class="workspace-stat-label">Reached interview</span><strong class="workspace-stat-value">${report.conversion.interviewRate}%</strong><span class="workspace-stat-note">${report.conversion.reachedInterview} applicant(s)</span></article><article class="workspace-stat"><span class="workspace-stat-label">Hiring rate</span><strong class="workspace-stat-value">${report.conversion.hireRate}%</strong><span class="workspace-stat-note">${report.conversion.hired} recorded hire(s)</span></article><article class="workspace-stat"><span class="workspace-stat-label">Average time to hire</span><strong class="workspace-stat-value">${report.timeToHire.averageDays == null ? "—" : `${report.timeToHire.averageDays} days`}</strong><span class="workspace-stat-note">Median: ${report.timeToHire.medianDays == null ? "—" : `${report.timeToHire.medianDays} days`}</span></article></div></section><section class="workspace-panel"><h2>Funnel stages</h2>${report.funnel.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Stage</th><th>Applicants reaching stage</th><th>Share of applicants</th></tr></thead><tbody>${report.funnel.map((item) => `<tr><td>${escapeHtml(applicationStatusLabel(item.status))}</td><td>${item.count}</td><td>${item.percentOfApplicants}%</td></tr>`).join("")}</tbody></table></div>` : '<p>No application activity in this range.</p>'}</section><section class="workspace-panel"><h2>Recruiter workload</h2>${report.recruiterWorkload.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Recruiter</th><th>Assigned</th><th>Open</th><th>Hired</th></tr></thead><tbody>${report.recruiterWorkload.map((item) => `<tr><td>${escapeHtml(item.recruiter)}</td><td>${item.assignedCount}</td><td>${item.openCount}</td><td>${item.hiredCount}</td></tr>`).join("")}</tbody></table></div>` : '<p>No recruiter assignments in this range.</p>'}</section><section class="workspace-panel"><h2>Interview outcomes</h2>${report.interviewOutcomes.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Interview status</th><th>Candidate response</th><th>Count</th></tr></thead><tbody>${report.interviewOutcomes.map((item) => `<tr><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.candidateResponse.replace(/_/g, " "))}</td><td>${item.count}</td></tr>`).join("")}</tbody></table></div>` : '<p>No interviews in this range.</p>'}</section>`;
+          } catch (error) {
+            profileContent.innerHTML = `<div class="workspace-notice error" role="alert">Hiring report could not be loaded: ${escapeHtml(displayAuthError(error))}</div>`;
+          }
       }
 
       async function loadEmployerCandidates(
@@ -9614,22 +9773,26 @@
             page: String(page),
             limit: "20",
           });
-          profileContent.innerHTML = `${workspaceHeading("Employer workspace", "Discover candidates", "Search profiles candidates have explicitly made discoverable to approved recruiters.")}<section class="workspace-panel"><form id="employer-candidate-search" class="results-searchbar" role="search"><input name="query" type="search" maxlength="500" placeholder='Boolean search: Python AND ("data engineer" OR analyst)' aria-label="Boolean candidate search" value="${escapeHtml(query)}"><input name="name" type="text" maxlength="100" placeholder="Name this search to save it" aria-label="Saved search name"><button class="button button-dark" type="submit" value="search">Search candidates</button><button class="button" type="submit" value="save">Save search</button></form><p class="workspace-muted">Use AND, OR, NOT and parentheses. Quoted phrases are supported; adjacent terms are combined with AND.</p><div id="employer-saved-searches"><p class="workspace-muted">Loading saved searches…</p></div><div id="employer-candidate-results"><div class="workspace-notice">Loading discoverable profiles…</div></div></section>`;
+          profileContent.innerHTML = `${workspaceHeading("Employer workspace", "Discover candidates", "Search profiles candidates have explicitly made discoverable to approved recruiters.")}<section class="workspace-panel"><form id="employer-candidate-search" class="results-searchbar" role="search"><input name="query" type="search" maxlength="500" placeholder='Boolean search: Python AND ("data engineer" OR analyst)' aria-label="Boolean candidate search" value="${escapeHtml(query)}"><input name="name" type="text" maxlength="100" placeholder="Name this search to save it" aria-label="Saved search name"><label><input name="shareWithTeam" type="checkbox"> Share saved search with my company team</label><button class="button button-dark" type="submit" value="search">Search candidates</button><button class="button" type="submit" value="save">Save search</button><button class="button" type="submit" value="update" hidden>Update saved search</button><button class="button" type="button" data-cancel-candidate-search-edit hidden>Cancel edit</button></form><p class="workspace-muted">Use AND, OR, NOT and parentheses. Quoted phrases and resume text are searchable only when a candidate has enabled recruiter resume access. Adjacent terms are combined with AND.</p><div id="employer-saved-searches"><p class="workspace-muted">Loading saved searches…</p></div><div id="employer-candidate-results"><div class="workspace-notice">Loading discoverable profiles…</div></div></section>`;
+          let savedSearchError = null;
           try {
-            const [response, savedSearchResponse] = await Promise.all([
+            const [response, savedSearches] = await Promise.all([
               employerRequest(`/api/employer/candidates?${params}`),
-              employerRequest("/api/employer/candidate-searches"),
+              employerRequest("/api/employer/candidate-searches")
+                .then(readAuthResponse)
+                .catch((error) => {
+                  savedSearchError = error;
+                  return null;
+                }),
             ]);
-            const [result, savedSearches] = await Promise.all([
-              readAuthResponse(response),
-              readAuthResponse(savedSearchResponse),
-            ]);
+            const result = await readAuthResponse(response);
             const savedSearchContainer = profileContent.querySelector(
               "#employer-saved-searches",
             );
-            savedSearchContainer.innerHTML =
-              Array.isArray(savedSearches) && savedSearches.length
-                ? `<div class="workspace-action-list">${savedSearches.map((search) => `<article class="workspace-action"><span><strong>${escapeHtml(search.name)}</strong><br><small>${escapeHtml(search.query)}</small></span><span><button class="button" type="button" data-run-candidate-search="${escapeHtml(search.query)}">Run</button> <button class="button" type="button" data-delete-candidate-search="${search.id}">Delete</button></span></article>`).join("")}</div>`
+            savedSearchContainer.innerHTML = savedSearchError
+              ? `<p class="workspace-notice error" role="alert">Saved searches are unavailable: ${escapeHtml(displayAuthError(savedSearchError))}</p>`
+              : Array.isArray(savedSearches) && savedSearches.length
+                ? `<div class="workspace-action-list">${savedSearches.map((search) => `<article class="workspace-action"><span><strong>${escapeHtml(search.name)}</strong> ${search.isShared ? '<span class="employer-pill">Team</span>' : ""}<br><small>${escapeHtml(search.query)}</small></span><span><button class="button" type="button" data-run-candidate-search="${escapeHtml(search.query)}">Run</button> ${search.userId === authState.user?.id ? `<button class="button" type="button" data-edit-candidate-search="${search.id}" data-name="${escapeHtml(search.name)}" data-query="${escapeHtml(search.query)}" data-shared="${search.isShared ? "true" : "false"}">Edit</button> <button class="button" type="button" data-delete-candidate-search="${search.id}">Delete</button>` : ""}</span></article>`).join("")}</div>`
                 : '<p class="workspace-muted">No saved searches yet.</p>';
             const items = Array.isArray(result.items) ? result.items : [];
             const pageCount = Math.max(
@@ -9640,7 +9803,7 @@
               "#employer-candidate-results",
             );
             results.innerHTML = items.length
-              ? `<p class="workspace-muted">Monthly resume unlocks: ${result.resumeCredits.used}/${result.resumeCredits.monthlyLimit} used · ${result.resumeCredits.remaining} remaining. Each candidate unlock uses one credit per month and is audited.</p><div class="workspace-action-list">${items.map((candidate) => `<article class="workspace-action"><span><strong>${escapeHtml(candidate.displayName)}</strong>${candidate.profileBoosted ? ' <span class="employer-pill">Profile boost</span>' : ""}${candidate.headline ? `<br><small>${escapeHtml(candidate.headline)}</small>` : ""}<br><small>${escapeHtml(candidate.location || "Location not provided")}</small><p>${escapeHtml(candidate.summary || "")}</p><small>${escapeHtml((candidate.skills || []).join(" · "))}</small>${candidate.certifications?.length ? `<p>${escapeHtml(candidate.certifications.map((certification) => certification.name).join(" · "))}</p>` : ""}<details><summary>Report this profile</summary><form class="employer-inline-form" data-report-target="user" data-report-id="${escapeHtml(candidate.candidateId)}"><label>Reason<select name="reason" required><option value="misleading">Misleading information</option><option value="spam">Spam or abuse</option><option value="discriminatory">Discriminatory conduct</option><option value="inaccurate">Inaccurate profile</option><option value="other">Other concern</option></select></label><label>Additional details <span>(optional)</span><textarea name="details" maxlength="2000" rows="2"></textarea></label><p role="status" aria-live="polite"></p><button class="button" type="submit">Send report</button></form></details></span><span>${candidate.email ? `<a href="mailto:${escapeHtml(candidate.email)}">${escapeHtml(candidate.email)}</a>${candidate.phone ? `<br>${escapeHtml(candidate.phone)}` : ""}` : "Contact not enabled"}<br>${candidate.resumeAccessAvailable ? (candidate.resumeAlreadyUnlocked || result.resumeCredits.remaining > 0 ? `<button class="button" type="button" data-unlock-candidate-resume="${candidate.candidateId}">${candidate.resumeAlreadyUnlocked ? "Open shared resume" : "Unlock resume"}</button>` : "Monthly resume credits used") : "Resume not shared"}</span></article>`).join("")}</div>${pageCount > 1 ? `<div class="employer-form-actions"><button class="button" type="button" data-candidate-directory-page="${page - 1}"${page <= 1 ? " disabled" : ""}>← Previous</button><span>Page ${page} of ${pageCount} · ${result.total} profiles</span><button class="button" type="button" data-candidate-directory-page="${page + 1}"${page >= pageCount ? " disabled" : ""}>Next →</button></div>` : ""}`
+              ? `<p class="workspace-muted">Monthly resume unlocks: ${result.resumeCredits.used}/${result.resumeCredits.monthlyLimit} used · ${result.resumeCredits.remaining} remaining. Each candidate unlock uses one credit per month and is audited.</p><div class="workspace-action-list">${items.map((candidate) => `<article class="workspace-action"><span><strong>${escapeHtml(candidate.displayName)}</strong>${candidate.profileBoosted ? ' <span class="employer-pill">Profile boost</span>' : ""}${candidate.headline ? `<br><small>${escapeHtml(candidate.headline)}</small>` : ""}<br><small>${escapeHtml(candidate.location || "Location not provided")}</small><p>${escapeHtml(candidate.summary || "")}</p><small>${escapeHtml((candidate.skills || []).join(" · "))}</small>${candidate.certifications?.length ? `<p>${escapeHtml(candidate.certifications.map((certification) => certification.name).join(" · "))}</p>` : ""}<details><summary>Report this profile</summary><form class="employer-inline-form" data-report-target="user" data-report-id="${escapeHtml(candidate.candidateId)}"><label>Reason<select name="reason" required><option value="misleading">Misleading information</option><option value="spam">Spam or abuse</option><option value="discriminatory">Discriminatory conduct</option><option value="inaccurate">Inaccurate profile</option><option value="other">Other concern</option></select></label><label>Additional details <span>(optional)</span><textarea name="details" maxlength="2000" rows="2"></textarea></label><p role="status" aria-live="polite"></p><button class="button" type="submit">Send report</button></form></details></span><span>${candidate.email ? `<a href="mailto:${escapeHtml(candidate.email)}">${escapeHtml(candidate.email)}</a>${candidate.phone ? `<br>${escapeHtml(candidate.phone)}` : ""}` : "Contact not enabled"}<br>${candidate.resumeAccessAvailable ? (candidate.resumeAlreadyUnlocked || result.resumeCredits.remaining > 0 ? `<button class="button" type="button" data-unlock-candidate-resume="${candidate.candidateId}">${candidate.resumeAlreadyUnlocked ? "Open shared resume" : "Unlock resume"}</button>` : "Monthly resume credits used") : candidate.resumeScanStatus && candidate.resumeScanStatus !== "clean" ? candidate.resumeScanStatus === "infected" ? "Resume unavailable after security scan" : "Resume scan pending" : "Resume not shared"}</span></article>`).join("")}</div>${pageCount > 1 ? `<div class="employer-form-actions"><button class="button" type="button" data-candidate-directory-page="${page - 1}"${page <= 1 ? " disabled" : ""}>← Previous</button><span>Page ${page} of ${pageCount} · ${result.total} profiles</span><button class="button" type="button" data-candidate-directory-page="${page + 1}"${page >= pageCount ? " disabled" : ""}>Next →</button></div>` : ""}`
               : '<div class="empty-state"><h2>No discoverable candidates found</h2><p>Only candidates who opt in to recruiter visibility appear here. Try a broader search.</p></div>';
           } catch (error) {
             const results = profileContent.querySelector(
@@ -9740,12 +9903,12 @@
         }
       }
 
-      async function loadEmployerBilling() {
+      async function loadEmployerBilling(page = 1) {
         profileContent.innerHTML =
           '<div class="workspace-panel">Loading plans and usage…</div>';
         try {
           const [billingResponse, dashboardResponse] = await Promise.all([
-            employerRequest("/api/employer/billing"),
+            employerRequest(`/api/employer/billing?page=${page}`),
             employerRequest("/api/employer/dashboard"),
           ]);
           const [billing, dashboard] = await Promise.all([
@@ -9754,12 +9917,93 @@
           ]);
           profileContent.innerHTML = `${workspaceHeading("Plans & billing", "Choose the right hiring capacity", "Transparent limits for open jobs and company seats. Paid plans are billed monthly in INR through Razorpay.")}
           <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Current plan: ${escapeHtml(billing.current.planKey)}</h2><p>Status: ${escapeHtml(billing.current.status.replace(/_/g, " "))}${billing.current.currentPeriodEnd ? ` · Renews/ends ${escapeHtml(new Date(billing.current.currentPeriodEnd).toLocaleDateString())}` : ""}</p></div>${billing.current.canManage && billing.current.planKey !== "free" && billing.current.status !== "free" ? '<button class="button" type="button" data-cancel-subscription>Cancel at renewal</button>' : ""}</div>
+            ${billing.current.pendingPlanKey ? `<p class="workspace-notice">Checkout for the ${escapeHtml(billing.current.pendingPlanKey)} plan is pending. Complete that checkout before starting another plan.</p>` : ""}
+            ${billing.current.status === "cancel_pending" ? '<p class="workspace-notice">Cancellation is scheduled at the end of the current billing period. Your paid entitlements remain available until then.</p>' : ""}
             <p>Usage: ${dashboard.metrics.activeJobs}/${dashboard.limits.activeJobs} active job(s), ${dashboard.limits.seats} seat(s) included. Subscription checkout is ${billing.checkoutReady ? "connected to Razorpay" : "not configured on this deployment"}.</p>
             <p class="workspace-muted">If a subscription is halted or cancelled, your account returns to Free limits; excess active jobs are closed automatically and are not republished after an upgrade.</p>
           </section>
           <section class="employer-plan-grid">${billing.plans.map((plan) => `<article class="employer-plan${billing.current.planKey === plan.key ? " current" : ""}"><h3>${escapeHtml(plan.name)}</h3><strong>${plan.key === "free" ? "Free" : plan.amountInr == null ? "Price not set" : `₹${formatter.format(plan.amountInr)} / month`}</strong><p>For teams that need ${plan.activeJobs} active job(s) and ${plan.seats} seat(s).</p><ul><li>${plan.activeJobs} active published roles</li><li>${plan.seats} team seats</li><li>${plan.resumeCredits} resume unlock credits per month</li><li>Company hiring pipeline</li><li>Candidate notes, tags & interviews</li></ul>${plan.key === "free" ? '<span class="employer-pill">Included</span>' : billing.current.planKey === plan.key ? '<span class="employer-pill">Current plan</span>' : `<button class="button button-dark" type="button" data-start-subscription="${plan.key}"${billing.current.canManage && billing.checkoutReady && plan.razorpayPlanId && Number.isFinite(plan.amountInr) && plan.amountInr > 0 ? "" : " disabled"}>Choose ${escapeHtml(plan.name)}</button>`}</article>`).join("")}</section>
           ${!billing.current.canManage ? '<div class="workspace-notice">Only the company owner or billing role can change subscription settings.</div>' : ""}
-          ${!billing.checkoutReady || billing.plans.some((plan) => plan.key !== "free" && !plan.razorpayPlanId) ? '<div class="workspace-notice">For live subscriptions, configure Razorpay API keys, plan IDs, plan prices, and a verified webhook secret on the server. No payment credentials belong in frontend code.</div>' : ""}`;
+          ${!billing.checkoutReady || billing.plans.some((plan) => plan.key !== "free" && !plan.razorpayPlanId) ? '<div class="workspace-notice">Configure Razorpay API credentials, matching monthly INR plan IDs and prices, seller invoice details in Razorpay, and a verified webhook secret before enabling live subscriptions. No payment credentials belong in frontend code.</div>' : ""}
+          ${billing.current.canManage ? `<section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Billing details</h2><p>These details are saved with your company workspace for billing records.</p></div></div><form id="employer-billing-profile" class="employer-inline-form"><label>Legal / invoice name<input name="legalName" maxlength="180" minlength="2" value="${escapeHtml(billing.billingProfile.legalName || "")}"></label><label>Billing email<input name="email" type="email" maxlength="254" value="${escapeHtml(billing.billingProfile.email || "")}"></label><label>Tax ID / GSTIN<input name="taxId" maxlength="30" value="${escapeHtml(billing.billingProfile.taxId || "")}"></label><label>Billing address<textarea name="address" maxlength="4000">${escapeHtml(billing.billingProfile.address || "")}</textarea></label><button class="button button-dark" type="submit">Save billing details</button><span id="billing-profile-status" role="status" aria-live="polite"></span></form></section>
+          <section class="workspace-panel"><div class="workspace-panel-head"><div><h2>Payment history</h2><p>Invoices are provided by Razorpay when available.</p></div></div>${billing.payments.length ? `<div class="table-wrap"><table class="employer-table"><thead><tr><th>Paid</th><th>Plan</th><th>Amount</th><th>Invoice</th></tr></thead><tbody>${billing.payments.map((payment) => `<tr><td>${escapeHtml(new Date(payment.paidAt).toLocaleDateString())}</td><td>${escapeHtml(payment.planKey || "Subscription")}</td><td>${escapeHtml(formatEmployerAmount(payment.amount, payment.currency))}</td><td>${payment.invoiceId ? `<button class="button" type="button" data-view-invoice="${payment.id}">View invoice</button>` : "Not available"}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state"><p>No subscription payments recorded yet.</p></div>'}${billing.paymentHistory.total > billing.paymentHistory.limit ? `<div class="employer-form-actions"><button class="button" type="button" data-employer-billing-page="${billing.paymentHistory.page - 1}"${billing.paymentHistory.page <= 1 ? " disabled" : ""}>← Previous</button><span>Page ${billing.paymentHistory.page} of ${Math.ceil(billing.paymentHistory.total / billing.paymentHistory.limit)} · ${billing.paymentHistory.total} payments</span><button class="button" type="button" data-employer-billing-page="${billing.paymentHistory.page + 1}"${billing.paymentHistory.page * billing.paymentHistory.limit >= billing.paymentHistory.total ? " disabled" : ""}>Next →</button></div>` : ""}<p id="billing-invoice-status" role="status" aria-live="polite"></p></section>` : ""}`;
+          if (billing.current.status === "cancel_pending")
+            profileContent.querySelector("[data-cancel-subscription]")?.remove();
+          if (billing.current.pendingPlanKey || billing.current.hasPaidSubscription) {
+            const message = billing.current.pendingPlanKey
+              ? "A checkout is already pending. Complete it or resume that same plan before choosing another."
+              : "A paid subscription is attached. Cancel it and wait for provider confirmation before changing plans.";
+            const notice = document.createElement("div");
+            notice.className = "workspace-notice";
+            notice.textContent = message;
+            profileContent
+              .querySelector(".employer-plan-grid")
+              ?.before(notice);
+            profileContent
+              .querySelectorAll("[data-start-subscription]")
+              .forEach((button) => {
+                if (
+                  billing.current.hasPaidSubscription ||
+                  button.dataset.startSubscription !==
+                    billing.current.pendingPlanKey
+                ) {
+                  button.disabled = true;
+                  button.title = message;
+                }
+              });
+          }
+          const billingProfileForm = profileContent.querySelector("#employer-billing-profile");
+          billingProfileForm?.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!billingProfileForm.reportValidity()) return;
+            const data = new FormData(billingProfileForm);
+            const submit = billingProfileForm.querySelector('[type="submit"]');
+            const status = profileContent.querySelector("#billing-profile-status");
+            submit.disabled = true;
+            status.textContent = "Saving…";
+            try {
+              await readAuthResponse(await employerRequest("/api/employer/billing/profile", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  legalName: String(data.get("legalName") || "").trim() || null,
+                  email: String(data.get("email") || "").trim() || null,
+                  taxId: String(data.get("taxId") || "").trim() || null,
+                  address: String(data.get("address") || "").trim() || null,
+                }),
+              }));
+              status.textContent = "Billing details saved.";
+              status.className = "workspace-notice success";
+            } catch (error) {
+              status.textContent = `Billing details could not be saved: ${displayAuthError(error)}`;
+              status.className = "workspace-notice error";
+              submit.disabled = false;
+            }
+          });
+          profileContent.querySelectorAll("[data-employer-billing-page]").forEach((button) => {
+            button.addEventListener("click", () => void loadEmployerBilling(Number(button.dataset.employerBillingPage)));
+          });
+          profileContent.querySelectorAll("[data-view-invoice]").forEach((button) => {
+            button.addEventListener("click", async () => {
+              const status = profileContent.querySelector("#billing-invoice-status");
+              button.disabled = true;
+              status.textContent = "Loading invoice…";
+              try {
+                const response = await employerRequest(
+                  `/api/employer/billing/invoices/${button.dataset.viewInvoice}`,
+                );
+                const invoice = await readAuthResponse(response);
+                const invoiceUrl = new URL(invoice.invoiceUrl);
+                if (invoiceUrl.protocol !== "https:")
+                  throw new Error("The invoice link is not secure.");
+                window.location.assign(invoiceUrl.href);
+              } catch (error) {
+                status.textContent = displayAuthError(error);
+                status.className = "workspace-notice error";
+                button.disabled = false;
+              }
+            });
+          });
         } catch (error) {
           profileContent.innerHTML = `<div class="workspace-notice error">${escapeHtml(displayAuthError(error))}</div>`;
         }
@@ -9884,7 +10128,7 @@
             ${summary.premiumBoostUntil && new Date(summary.premiumBoostUntil) > new Date() ? `<div class="workspace-notice">Your recruiter-visible profile is boosted until ${escapeHtml(new Date(summary.premiumBoostUntil).toLocaleDateString())}. Your profile visibility and contact settings still apply.</div>` : ""}
             ${!summary.checkoutReady ? '<div class="workspace-notice">Online checkout is not configured yet. Contact support if you would like to request a service.</div>' : ""}
             ${services.length ? `<div class="workspace-action-list">${services.map((service) => `<article class="workspace-action"><span><strong>${escapeHtml(service.name)}</strong><br><small>${escapeHtml(service.description)}${service.key === "profile-boost" ? ` · ${service.fulfillmentDays} days` : ""}</small></span><span>${formatter.format(service.amountInr)} INR <button class="button button-dark" type="button" data-premium-buy="${escapeHtml(service.key)}"${summary.checkoutReady ? "" : " disabled"}>Choose</button></span></article>`).join("")}</div>` : '<p class="workspace-notice">No services are currently available.</p>'}
-            ${orders.length ? `<h3>My service requests</h3><div class="workspace-action-list">${orders.map((order) => `<div class="workspace-action"><span><strong>${escapeHtml(order.productName)}</strong><br><small>${escapeHtml(order.productDescription)}${order.fulfillmentDays ? ` · ${order.fulfillmentDays} days` : ""}</small><br><small>${escapeHtml(new Date(order.createdAt).toLocaleDateString())} · Payment: ${escapeHtml(order.paymentStatus)} · Service: ${escapeHtml(order.fulfillmentStatus.replaceAll("_", " "))}${order.fulfillmentNote ? ` · ${escapeHtml(order.fulfillmentNote)}` : ""}</small></span><span>${formatter.format(order.amountInr)} INR</span></div>`).join("")}</div>` : ""}`;
+            ${orders.length ? `<h3>My service requests</h3><div class="workspace-action-list">${orders.map((order) => `<div class="workspace-action"><span><strong>${escapeHtml(order.productName)}</strong><br><small>${escapeHtml(order.productDescription)}${order.fulfillmentDays ? ` · ${order.fulfillmentDays} days` : ""}</small><br><small>${escapeHtml(new Date(order.createdAt).toLocaleDateString())} · Payment: ${escapeHtml(order.paymentStatus)} · Service: ${escapeHtml(order.fulfillmentStatus.replaceAll("_", " "))}${order.fulfillmentNote ? ` · ${escapeHtml(order.fulfillmentNote)}` : ""}</small></span><span>${formatter.format(order.amountInr)} INR ${order.invoiceAvailable ? `<button class="button" type="button" data-view-premium-invoice="${order.id}">View invoice</button>` : ""}</span></div>`).join("")}</div><p id="candidate-invoice-status" role="status" aria-live="polite"></p>` : ""}`;
           panel.querySelectorAll("[data-premium-buy]").forEach((button) => {
             button.addEventListener("click", () => {
               button.disabled = true;
@@ -9892,6 +10136,27 @@
                 .catch((error) => showToast(displayAuthError(error)))
                 .finally(() => {
                   button.disabled = false;
+                });
+            });
+            panel.querySelectorAll("[data-view-premium-invoice]").forEach((button) => {
+                button.addEventListener("click", async () => {
+                  const status = panel.querySelector("#candidate-invoice-status");
+                  button.disabled = true;
+                  status.textContent = "Loading invoice…";
+                  try {
+                    const response = await authenticatedFetch(
+                      `/api/candidate/premium/orders/${button.dataset.viewPremiumInvoice}/invoice`,
+                    );
+                    const invoice = await readAuthResponse(response);
+                    const invoiceUrl = new URL(invoice.invoiceUrl);
+                    if (invoiceUrl.protocol !== "https:")
+                      throw new Error("The invoice link is not secure.");
+                    window.location.assign(invoiceUrl.href);
+                  } catch (error) {
+                    status.textContent = displayAuthError(error);
+                    status.className = "workspace-notice error";
+                    button.disabled = false;
+                  }
                 });
             });
           });
@@ -9985,7 +10250,7 @@
           const result = await readAuthResponse(response);
           const items = Array.isArray(result.items) ? result.items : [];
           container.innerHTML = items.length
-            ? `<div class="workspace-action-list">${items.map((interview) => `<article class="workspace-action"><span><strong>${escapeHtml(interview.job.title)}</strong><br><small>${escapeHtml(interview.job.company)} · ${escapeHtml(new Date(interview.startsAt).toLocaleString())} · ${interview.durationMinutes} minutes${interview.location ? ` · ${escapeHtml(interview.location)}` : ""}</small></span><span>${interview.status === "cancelled" ? "Cancelled" : interview.meetingUrl ? `<a href="${escapeHtml(interview.meetingUrl)}" target="_blank" rel="noopener noreferrer">Join meeting →</a>` : escapeHtml(interview.status)}</span></article>`).join("")}</div>`
+            ? `<div class="workspace-action-list">${items.map((interview) => `<article class="workspace-action"><span><strong>${escapeHtml(interview.job.title)}</strong><br><small>${escapeHtml(interview.job.company)} · ${escapeHtml(new Date(interview.startsAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }))} IST · ${interview.durationMinutes} minutes${interview.location ? ` · ${escapeHtml(interview.location)}` : ""}</small></span><span>${interview.status === "cancelled" ? "Cancelled" : interview.status === "scheduled" && interview.candidateResponse === "pending" && new Date(interview.startsAt) > new Date() ? `<button class="button button-dark" type="button" data-candidate-interview-response="${interview.id}" data-response="accepted">Accept</button> <button class="button" type="button" data-candidate-interview-response="${interview.id}" data-response="declined">Decline</button> <button class="button" type="button" data-candidate-interview-response="${interview.id}" data-response="reschedule_requested">Request new time</button>` : escapeHtml((interview.candidateResponse || interview.status).replace(/_/g, " "))}${interview.meetingUrl && interview.status === "scheduled" ? `<br><a href="${escapeHtml(interview.meetingUrl)}" target="_blank" rel="noopener noreferrer">Join meeting →</a>` : ""}</span></article>`).join("")}</div>`
             : '<div class="empty-state"><h2>No interviews scheduled</h2><p>Interview invitations from hiring teams will appear here.</p><a class="button button-dark" href="#dashboard/applications">Track applications</a></div>';
         } catch (error) {
           container.innerHTML = `<div class="workspace-notice error" role="alert">Interview schedule could not be loaded: ${escapeHtml(displayAuthError(error))}</div>`;
@@ -10267,6 +10532,11 @@
           q: filters.q || "",
           status: filters.status || "all",
           jobId: filters.jobId || "",
+          assignee: filters.assignee || "all",
+          tag: filters.tag || "",
+          from: filters.from || "",
+          to: filters.to || "",
+          sort: filters.sort || "newest",
         };
         filters = state.employerApplicantFilters;
         profileContent.innerHTML =
@@ -10279,6 +10549,11 @@
           if (filters.q) params.set("q", filters.q);
           if (filters.status) params.set("status", filters.status);
           if (filters.jobId) params.set("jobId", filters.jobId);
+          if (filters.assignee) params.set("assignee", filters.assignee);
+          if (filters.tag) params.set("tag", filters.tag);
+          if (filters.from) params.set("from", filters.from);
+          if (filters.to) params.set("to", filters.to);
+          if (filters.sort) params.set("sort", filters.sort);
           const [applicationsResponse, jobsResponse, teamResponse] =
             await Promise.all([
             employerRequest(`/api/employer/applications?${params}`),
@@ -10308,6 +10583,11 @@
             <input name="q" type="search" value="${escapeHtml(filters.q || "")}" placeholder="Search candidates or roles" aria-label="Search candidates or roles">
             <select name="status"><option value="all">All pipeline stages</option>${filterStages.map((status) => `<option value="${escapeHtml(status)}"${(filters.status || "all") === status ? " selected" : ""}>${escapeHtml(applicationStatusLabel(status))}</option>`).join("")}</select>
             <select name="jobId"><option value="">All jobs</option>${jobResult.items.map((job) => `<option value="${job.id}"${String(filters.jobId || "") === String(job.id) ? " selected" : ""}>${escapeHtml(job.title)}</option>`).join("")}</select>
+            <select name="assignee"><option value="all"${(filters.assignee || "all") === "all" ? " selected" : ""}>All assignees</option><option value="unassigned"${filters.assignee === "unassigned" ? " selected" : ""}>Unassigned</option>${assignableMembers.map((member) => `<option value="${member.userId}"${String(filters.assignee || "") === String(member.userId) ? " selected" : ""}>${escapeHtml(member.displayName || member.email)}</option>`).join("")}</select>
+            <input name="tag" type="search" maxlength="40" value="${escapeHtml(filters.tag || "")}" placeholder="Filter by tag" aria-label="Filter by application tag">
+            <label>Applied from <input name="from" type="date" value="${escapeHtml(filters.from || "")}"></label>
+            <label>Applied to <input name="to" type="date" value="${escapeHtml(filters.to || "")}"></label>
+            <select name="sort" aria-label="Sort applicants"><option value="newest"${(filters.sort || "newest") === "newest" ? " selected" : ""}>Newest first</option><option value="oldest"${filters.sort === "oldest" ? " selected" : ""}>Oldest first</option><option value="name"${filters.sort === "name" ? " selected" : ""}>Candidate name</option></select>
             <button class="button button-dark" type="submit">Apply filters</button>
           </form><p>${result.total} applicant(s) · page ${result.page} of ${Math.max(1, Math.ceil(result.total / result.limit))}</p>
           ${applications.length ? `<form id="employer-bulk-status-form" class="workspace-filter"><label>Update selected applicants <select name="status" required>${bulkStages.map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(applicationStatusLabel(status))}</option>`).join("")}</select></label><label>Candidate note <input name="note" maxlength="500" placeholder="Optional status update"></label><button class="button button-dark" type="submit" disabled>Update selected</button><span id="bulk-status-selection" role="status">Select applicants on this page.</span></form>` : ""}
@@ -10382,7 +10662,8 @@
                     <button class="button" type="submit">Save scorecard</button>
                   </form>
                 </section>
-                ${application.resumeUrl ? `<p><a class="text-link" href="${escapeHtml(application.resumeUrl)}" target="_blank" rel="noopener noreferrer">View ${escapeHtml(application.resumeFileName || "resume PDF")}</a> · temporary private link</p>` : "<p>No resume attached to this application.</p>"}
+                ${application.resumeAvailable ? `<p><a class="text-link" href="#" data-open-private-file="/api/employer/applications/${application.id}/resume-url">Open ${escapeHtml(application.resumeFileName || "attached resume")}</a> · temporary private link is created when opened</p>` : application.resumeScanStatus ? `<p role="status">${application.resumeScanStatus === "infected" ? "The attached resume is unavailable after a security scan." : "The attached resume is temporarily unavailable while its security scan completes."}</p>` : "<p>No resume attached to this application.</p>"}
+                ${application.documents?.length ? `<section class="application-candidate-profile"><h3>Application documents</h3><ul>${application.documents.map((document) => `<li>${escapeHtml(document.label)} · ${document.scanStatus === "clean" ? `<a href="#" data-open-private-file="/api/employer/applications/${application.id}/documents/${document.id}/url">${escapeHtml(document.fileName)} · open temporary private link</a>` : `<span role="status">${document.scanStatus === "infected" ? "Unavailable after security scan" : "Security scan pending"}</span>`}</li>`).join("")}</ul></section>` : ""}
                 ${offer ? `<section class="application-candidate-profile"><h3>Offer · ${escapeHtml(offer.status)}</h3><p>${escapeHtml(offer.termsSummary)}</p><p>Expires ${escapeHtml(new Date(offer.expiresAt).toLocaleString())}</p></section>` : ""}
                 ${application.status === "offer_accepted" ? `<button class="button button-dark" type="button" data-mark-hired data-application-id="${application.id}">Confirm candidate hired</button>` : ""}
                 ${application.status === "withdrawal_requested" ? `<section class="application-candidate-profile"><h3>Candidate requested withdrawal</h3><p>Confirm or decline this request. A declined request restores the prior pipeline stage.</p><button class="button button-dark" type="button" data-resolve-withdrawal="approve" data-application-id="${application.id}">Confirm withdrawal</button> <button class="button" type="button" data-resolve-withdrawal="decline" data-application-id="${application.id}">Decline request</button></section>` : ""}
@@ -10390,7 +10671,7 @@
                 <div class="employer-tags">${application.tags.map((tag) => `<span>${escapeHtml(tag.label)} <button type="button" aria-label="Remove tag ${escapeHtml(tag.label)}" data-remove-application-tag="${tag.id}" data-application-id="${application.id}">×</button></span>`).join("")}</div>
                 ${application.internalNotes.length ? `<div class="employer-note-list">${application.internalNotes.map((note) => `<p>${escapeHtml(note.note)}<br><small>${escapeHtml(note.author)} · ${escapeHtml(new Date(note.createdAt).toLocaleString())}</small></p>`).join("")}</div>` : ""}
                 <ol class="application-timeline">${application.history.map((item) => `<li><strong>${escapeHtml(applicationStatusLabel(item.toStatus))}</strong><span>${escapeHtml(new Date(item.createdAt).toLocaleString())}</span>${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}</li>`).join("")}</ol>
-                <section class="application-candidate-profile"><h3>Messages with candidate</h3>${application.messages.length ? application.messages.map((message) => `<p><strong>${escapeHtml(message.senderName)}</strong> · ${escapeHtml(new Date(message.createdAt).toLocaleString())}<br>${escapeHtml(message.message)}</p>`).join("") : "<p>No messages yet.</p>"}<form class="employer-application-message-form employer-inline-form" data-application-id="${application.id}"><label>Send a message<textarea name="message" maxlength="5000" required></textarea></label><button class="button" type="submit">Send message</button></form></section>
+                <section class="application-candidate-profile"><h3>In-app messages with candidate</h3><p class="workspace-muted">Messages appear in the candidate’s portal and create an in-app notification; they do not send email.</p>${application.messageCount ? `<p>${application.messageCount} message(s) · <button class="button" type="button" data-load-application-messages="${application.id}" data-page="1">Load latest messages</button></p><div data-application-message-container="${application.id}"><div data-application-message-list></div></div>` : "<p>No messages yet.</p>"}<form class="employer-application-message-form employer-inline-form" data-application-id="${application.id}"><label>Send a message<textarea name="message" maxlength="5000" required></textarea></label><button class="button" type="submit">Send in-app message</button></form></section>
                 <form class="employer-application-status-form employer-inline-form" data-application-id="${application.id}">
                   <label>Status <select name="status" required>${statusOptions.map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(applicationStatusLabel(status))}</option>`).join("")}</select></label>
                   <label>Candidate update note <input name="note" maxlength="500" type="text" placeholder="Optional note included in the status timeline"></label>
@@ -10399,7 +10680,8 @@
                 <form class="employer-note-form employer-inline-form" data-application-id="${application.id}"><label>Internal team note<textarea name="note" maxlength="5000" required placeholder="Private to your company team"></textarea></label><button class="button" type="submit">Add note</button></form>
                 <form class="employer-tag-form employer-inline-form" data-application-id="${application.id}"><label>Add a tag<input name="label" maxlength="40" required placeholder="e.g. strong portfolio"></label><button class="button" type="submit">Add tag</button></form>
                 ${canAdvanceToInterview ? `<form class="employer-offer-form employer-inline-form" data-application-id="${application.id}"><h3>Send offer</h3><p class="workspace-muted">This creates an offer summary for the candidate to accept or decline. It does not generate a contract.</p><label>Offer details<textarea name="termsSummary" maxlength="5000" required placeholder="Summarize role, compensation, and other terms"></textarea></label><label>Response deadline<input name="expiresAt" type="datetime-local" required></label><button class="button button-dark" type="submit">Send offer</button></form>` : ""}
-                ${canAdvanceToInterview ? `<form class="employer-interview-form employer-inline-form" data-application-id="${application.id}"><label>Schedule interview<input name="startsAt" type="datetime-local" required></label><label>Duration<select name="durationMinutes"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></label><label>Meeting link<input name="meetingUrl" type="url" maxlength="1000" placeholder="https://…"></label><label>Location<input name="location" maxlength="500" placeholder="Office or video call"></label><button class="button" type="submit">Send interview invite</button></form>` : ""}
+                ${application.interviews?.length ? `<section class="application-candidate-profile"><h3>Interview rounds</h3>${application.interviews.map((interview) => `<article class="workspace-action"><span><strong>${escapeHtml(new Date(interview.startsAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }))} IST · ${interview.durationMinutes} minutes</strong><br><small>${escapeHtml(interview.status)} · Candidate ${escapeHtml((interview.candidateResponse || "pending").replace(/_/g, " "))} · Interviewer ${escapeHtml(interview.interviewerName || "not assigned")}</small>${interview.feedback?.length ? interview.feedback.map((feedback) => `<p><strong>${escapeHtml(feedback.reviewerName)}</strong> · ${escapeHtml(feedback.recommendation.replace(/_/g, " "))} · ${escapeHtml(Object.entries(feedback.scores).map(([criterion, score]) => `${criterion}: ${score}/5`).join(", "))}${feedback.notes ? `<br>${escapeHtml(feedback.notes)}` : ""}</p>`).join("") : ""}${interview.status === "completed" ? `<form class="employer-interview-feedback-form employer-inline-form" data-interview-id="${interview.id}"><h4>Your evaluator feedback</h4>${["Skills", "Experience", "Communication", "Role fit"].map((criterion) => `<label>${criterion}<select name="score:${criterion}" required><option value="" selected disabled>Choose a rating</option>${[1, 2, 3, 4, 5].map((score) => `<option value="${score}">${score}/5</option>`).join("")}</select></label>`).join("")}<label>Recommendation<select name="recommendation" required><option value="strong_yes">Strong yes</option><option value="yes">Yes</option><option value="maybe" selected>Maybe</option><option value="no">No</option></select></label><label>Feedback notes<textarea name="notes" maxlength="5000"></textarea></label><button class="button" type="submit">Save interview feedback</button></form>` : ""}</span></article>`).join("")}</section>` : ""}
+                ${canAdvanceToInterview ? `<form class="employer-interview-form employer-inline-form" data-application-id="${application.id}"><label>Schedule interview<input name="startsAt" type="datetime-local" required></label><label>Interviewer<select name="interviewerUserId" required><option value="" selected disabled>Select an interviewer</option>${assignableMembers.map((member) => `<option value="${member.userId}">${escapeHtml(member.displayName || member.email)} · ${escapeHtml(member.role.replace(/_/g, " "))}</option>`).join("")}</select></label><label>Duration<select name="durationMinutes"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option></select></label><label>Meeting link<input name="meetingUrl" type="url" maxlength="1000" placeholder="https://…"></label><label>Location<input name="location" maxlength="500" placeholder="Office or video call"></label><button class="button" type="submit">Send interview invite</button></form>` : ""}
               </div>
             </article>`;
                   })
@@ -10408,6 +10690,49 @@
           }</div>
           <div class="employer-form-actions"><button class="button" type="button" data-applicants-page="${Math.max(1, result.page - 1)}"${result.page <= 1 ? " disabled" : ""}>← Previous</button><button class="button" type="button" data-applicants-page="${result.page + 1}"${result.page * result.limit >= result.total ? " disabled" : ""}>Next →</button></div>
           </section>`;
+          const currentEmployerMember = teamMembers.find(
+            (member) =>
+              String(member.userId) === String(authState.user.id),
+          );
+          for (const form of profileContent.querySelectorAll(
+            ".employer-interview-feedback-form",
+          )) {
+            const interview = result.items
+              .flatMap((application) => application.interviews || [])
+              .find(
+                (item) =>
+                  String(item.id) === String(form.dataset.interviewId),
+              );
+            if (
+              interview?.interviewerUserId &&
+              String(interview.interviewerUserId) !==
+                String(authState.user.id) &&
+              !["owner", "admin"].includes(currentEmployerMember?.role)
+            ) {
+              const notice = document.createElement("p");
+              notice.className = "workspace-muted";
+              notice.textContent =
+                "Only the assigned interviewer or a company admin can submit feedback.";
+              form.replaceWith(notice);
+              continue;
+            }
+            const ownFeedback = interview?.feedback?.find(
+              (item) =>
+                String(item.reviewerUserId) === String(authState.user.id),
+            );
+            if (!ownFeedback) continue;
+            for (const select of form.querySelectorAll(
+              'select[name^="score:"]',
+            )) {
+              const criterion = select.name.slice("score:".length);
+              if (ownFeedback.scores?.[criterion] != null)
+                select.value = String(ownFeedback.scores[criterion]);
+            }
+            if (ownFeedback.recommendation)
+              form.elements.recommendation.value =
+                ownFeedback.recommendation;
+            form.elements.notes.value = ownFeedback.notes || "";
+          }
           profileContent.querySelector(
             "#employer-applicant-filter",
           ).dataset.page = "1";
@@ -10614,6 +10939,20 @@
           authState.user.role === "employer"
         ) {
           await loadEmployerInterviews();
+        } else if (
+          page === "hiring-reports" &&
+          authState.user.role === "employer"
+        ) {
+          if (!employerCanManageApplications()) {
+            renderProfileGate(
+              "Hiring reports unavailable",
+              "Your company role does not include access to hiring analytics.",
+              "#dashboard",
+              "Return to overview",
+            );
+          } else {
+            await loadEmployerHiringReports();
+          }
         } else if (page === "team" && authState.user.role === "employer") {
           await loadEmployerTeam();
         } else if (
@@ -10913,6 +11252,18 @@
       });
 
       profileContent.addEventListener("submit", async (event) => {
+        if (event.target.id === "employer-hiring-report-filters") {
+          event.preventDefault();
+          const form = event.target;
+          if (!form.reportValidity()) return;
+          const data = new FormData(form);
+          await loadEmployerHiringReports({
+            from: String(data.get("from") || ""),
+            to: String(data.get("to") || ""),
+            jobId: String(data.get("jobId") || ""),
+          });
+          return;
+        }
         if (event.target.id === "username-form") {
           event.preventDefault();
           const form = event.target;
@@ -11051,7 +11402,9 @@
               state.employerApplicantsPage,
               state.employerApplicantFilters,
             );
-            showToast("Message sent to the candidate.");
+            showToast(
+              "In-app message sent; the candidate has been notified in their workspace.",
+            );
           } catch (error) {
             showToast(`Message could not be sent: ${displayAuthError(error)}`);
             button.disabled = false;
@@ -11144,6 +11497,10 @@
               new FormData(form).get("website") || "",
             ).trim();
             values.website = website || null;
+            const logoUrl = String(
+              new FormData(form).get("logoUrl") || "",
+            ).trim();
+            values.logoUrl = logoUrl || null;
             await readAuthResponse(
               await employerRequest("/api/employer/company", {
                 method: "PATCH",
@@ -11162,6 +11519,30 @@
           }
           return;
         }
+        if (event.target.id === "employer-company-verification-form") {
+          event.preventDefault();
+          const form = event.target;
+          if (!form.reportValidity()) return;
+          const button = form.querySelector('[type="submit"]');
+          const status = form.querySelector('[role="status"]');
+          button.disabled = true;
+          try {
+            const details = String(new FormData(form).get("details") || "").trim();
+            await readAuthResponse(
+              await employerRequest("/api/employer/company/verification", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ details }),
+              }),
+            );
+            await loadEmployerCompany();
+            showToast("Company verification request submitted.");
+          } catch (error) {
+            status.textContent = displayAuthError(error);
+            button.disabled = false;
+          }
+          return;
+        }
         if (event.target.id === "employer-job-import-form") {
           event.preventDefault();
           const form = event.target;
@@ -11171,7 +11552,10 @@
           button.disabled = true;
           status.textContent = "";
           try {
-            const jobs = parseEmployerJobCsv(await file.text());
+            const jobs = state.employerImportJobs || parseEmployerJobCsv(await file.text());
+            if (!state.employerImportValidation?.valid) {
+              throw new Error("Fix the CSV validation errors before importing.");
+            }
             const result = await readAuthResponse(
               await employerRequest("/api/employer/jobs/bulk", {
                 method: "POST",
@@ -11256,8 +11640,14 @@
                 body: JSON.stringify(values),
               },
             );
-            await readAuthResponse(response);
-            showToast(jobId ? "Job draft updated." : "Job draft created.");
+            const result = await readAuthResponse(response);
+            showToast(
+              jobId
+                ? result.reviewRequired
+                  ? "Changes saved. The job was paused and submitted for administrator review."
+                  : "Job changes saved."
+                : "Job draft created.",
+            );
             await loadEmployerJobs();
           } catch (error) {
             status.textContent = displayAuthError(error);
@@ -11317,6 +11707,41 @@
           } catch (error) {
             showToast(`Note was not saved: ${displayAuthError(error)}`);
             button.disabled = false;
+          }
+          if (event.target.matches(".employer-interview-feedback-form")) {
+            event.preventDefault();
+            const form = event.target;
+            if (!form.reportValidity()) return;
+            const data = new FormData(form);
+            const scores = Object.fromEntries(
+              [...data.entries()]
+                .filter(([key]) => key.startsWith("score:"))
+                .map(([key, value]) => [key.slice(6), Number(value)]),
+            );
+            const button = form.querySelector('[type="submit"]');
+            button.disabled = true;
+            try {
+              await readAuthResponse(
+                await employerRequest(
+                  `/api/employer/interviews/${encodeURIComponent(form.dataset.interviewId)}/feedback`,
+                  {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      scores,
+                      recommendation: data.get("recommendation"),
+                      notes: String(data.get("notes") || "").trim(),
+                    }),
+                  },
+                ),
+              );
+              await loadEmployerApplicants();
+              showToast("Interview feedback saved for your company team.");
+            } catch (error) {
+              showToast(`Interview feedback could not be saved: ${displayAuthError(error)}`);
+              button.disabled = false;
+            }
+            return;
           }
           if (event.target.matches(".employer-scorecard-form")) {
             event.preventDefault();
@@ -11383,6 +11808,48 @@
           }
           return;
         }
+        if (event.target.matches(".employer-interview-reschedule-form")) {
+          event.preventDefault();
+          const form = event.target;
+          if (!form.reportValidity()) return;
+          const data = new FormData(form);
+          const button = form.querySelector('[type="submit"]');
+          button.disabled = true;
+          try {
+            const startsAt = parseIstDateTime(data.get("startsAt"));
+            if (!Number.isFinite(startsAt.getTime()))
+              throw new Error("Choose a valid interview time.");
+            await readAuthResponse(
+              await employerRequest(
+                `/api/employer/interviews/${encodeURIComponent(form.dataset.interviewId)}`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    startsAt: startsAt.toISOString(),
+                    durationMinutes: Number(data.get("durationMinutes") || 30),
+                    interviewerUserId: Number(data.get("interviewerUserId")),
+                    meetingUrl: String(data.get("meetingUrl") || "").trim(),
+                    location: String(data.get("location") || "").trim(),
+                  }),
+                },
+              ),
+            );
+            await loadEmployerInterviews();
+            const notices = ["Interview rescheduled. The candidate must respond again."];
+            if (result.notificationStatus === "failed")
+              notices.push("The candidate email could not be queued.");
+            else if (result.notificationStatus === "disabled")
+              notices.push("Candidate email updates are disabled.");
+            if (result.calendarStatus === "failed")
+              notices.push("The Google Calendar event could not be updated.");
+            showToast(notices.join(" "));
+          } catch (error) {
+            showToast(`Interview could not be rescheduled: ${displayAuthError(error)}`);
+            button.disabled = false;
+          }
+          return;
+        }
         if (event.target.matches(".employer-interview-form")) {
           event.preventDefault();
           const form = event.target;
@@ -11391,7 +11858,7 @@
           const button = form.querySelector('[type="submit"]');
           button.disabled = true;
           try {
-            const startsAt = new Date(String(data.get("startsAt") || ""));
+            const startsAt = parseIstDateTime(data.get("startsAt"));
             if (!Number.isFinite(startsAt.getTime()))
               throw new Error("Choose a valid interview time.");
             const interview = await readAuthResponse(
@@ -11403,6 +11870,7 @@
                   body: JSON.stringify({
                     startsAt: startsAt.toISOString(),
                     durationMinutes: Number(data.get("durationMinutes") || 30),
+                    interviewerUserId: Number(data.get("interviewerUserId")),
                     meetingUrl:
                       String(data.get("meetingUrl") || "").trim() || undefined,
                     location:
@@ -11412,13 +11880,18 @@
               ),
             );
             await loadEmployerApplicants();
-            showToast(
+            const notices = [
               interview.notificationStatus === "failed"
-                ? "Interview scheduled, but the invitation could not be queued. Check server email configuration and logs."
+                ? "The invitation email could not be queued."
                 : interview.notificationStatus === "disabled"
-                  ? "Interview scheduled and the application moved to Interview. Candidate email updates are disabled; the in-app notification is available."
-                  : "Interview scheduled and the invitation email was queued for delivery.",
-            );
+                  ? "Candidate email updates are disabled."
+                  : "The invitation email was queued.",
+            ];
+            if (interview.googleCalendarStatus === "failed")
+              notices.push("The Google Calendar event could not be created.");
+            if (interview.inAppNotificationStatus === "failed")
+              notices.push("The candidate's in-app notification could not be created.");
+            showToast(`Interview scheduled. ${notices.join(" ")}`);
           } catch (error) {
             showToast(
               `Interview could not be scheduled: ${displayAuthError(error)}`,
@@ -11434,6 +11907,11 @@
             q: String(values.get("q") || "").trim(),
             status: String(values.get("status") || "all"),
             jobId: String(values.get("jobId") || ""),
+            assignee: String(values.get("assignee") || "all"),
+            tag: String(values.get("tag") || "").trim(),
+            from: String(values.get("from") || ""),
+            to: String(values.get("to") || ""),
+            sort: String(values.get("sort") || "newest"),
           });
           return;
         }
@@ -11635,6 +12113,11 @@
                     q: String(filterData.get("q") || "").trim(),
                     status: String(filterData.get("status") || "all"),
                     jobId: String(filterData.get("jobId") || ""),
+                    assignee: String(filterData.get("assignee") || "all"),
+                    tag: String(filterData.get("tag") || "").trim(),
+                    from: String(filterData.get("from") || ""),
+                    to: String(filterData.get("to") || ""),
+                    sort: String(filterData.get("sort") || "newest"),
                   }
                 : {},
             );
@@ -11703,6 +12186,42 @@
           event.preventDefault();
           const formData = new FormData(event.target);
           const query = String(formData.get("query") || "").trim();
+          if (event.submitter?.value === "update") {
+            const searchId = event.target.dataset.editSearchId;
+            const name = String(formData.get("name") || "").trim();
+            if (!searchId || !name) {
+              event.target.elements.namedItem("name").reportValidity();
+              return;
+            }
+            try {
+              await readAuthResponse(
+                await employerRequest(
+                  `/api/employer/candidate-searches/${encodeURIComponent(searchId)}`,
+                  {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                      name,
+                      query,
+                      shareWithTeam: formData.get("shareWithTeam") === "on",
+                    }),
+                  },
+                ),
+              );
+              delete event.target.dataset.editSearchId;
+              event.target.reset();
+              event.target.querySelector('[value="update"]').hidden = true;
+              event.target.querySelector(
+                "[data-cancel-candidate-search-edit]",
+              ).hidden = true;
+              showToast("Saved candidate search updated.");
+              await loadEmployerCandidates(query, 1);
+            } catch (error) {
+              showToast(
+                `Search could not be updated: ${displayAuthError(error)}`,
+              );
+            }
+            return;
+          }
           if (event.submitter?.value === "save") {
             const name = String(formData.get("name") || "").trim();
             if (!name) {
@@ -11713,7 +12232,11 @@
               await readAuthResponse(
                 await employerRequest("/api/employer/candidate-searches", {
                   method: "POST",
-                  body: JSON.stringify({ name, query }),
+                  body: JSON.stringify({
+                    name,
+                    query,
+                    shareWithTeam: formData.get("shareWithTeam") === "on",
+                  }),
                 }),
               );
               showToast("Candidate search saved.");
@@ -11886,6 +12409,87 @@
       });
 
       profileContent.addEventListener("click", async (event) => {
+        const importErrorsButton = event.target.closest(
+          "[data-download-import-errors]",
+        );
+        if (importErrorsButton) {
+          const validation = state.employerImportValidation;
+          const rows = Array.isArray(validation?.rows) ? validation.rows : [];
+          const csvCell = (value) => `"${String(value).replace(/"/g, '""')}"`;
+          const csv = [
+            ["CSV row", "Job title", "Errors"].map(csvCell).join(","),
+            ...rows
+              .filter((row) => !row.valid)
+              .map((row) =>
+                [
+                  row.row,
+                  state.employerImportJobs?.[row.row - 2]?.title || "",
+                  (row.errors || []).join("; "),
+                ]
+                  .map(csvCell)
+                  .join(","),
+              ),
+          ].join("\r\n");
+          const url = URL.createObjectURL(
+            new Blob([csv], { type: "text/csv;charset=utf-8" }),
+          );
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "job-import-errors.csv";
+          link.click();
+          URL.revokeObjectURL(url);
+          return;
+        }
+        const hiringReportButton = event.target.closest(
+          "[data-download-hiring-report]",
+        );
+        if (hiringReportButton) {
+          const report = state.employerHiringReport;
+          if (!report) return;
+          const csvCell = (value) => `"${String(value).replace(/"/g, '""')}"`;
+          const rows = [
+            ["Hiring report", "Value"],
+            ["From", report.filters.from || "All"],
+            ["To", report.filters.to || "All"],
+            ["Applicants", report.conversion.applicants],
+            ["Interview rate (%)", report.conversion.interviewRate],
+            ["Hire rate (%)", report.conversion.hireRate],
+            ["Average days to hire", report.timeToHire.averageDays ?? ""],
+            ["Median days to hire", report.timeToHire.medianDays ?? ""],
+            [],
+            ["Funnel stage", "Count", "Percent of applicants"],
+            ...report.funnel.map((item) => [
+              item.status,
+              item.count,
+              item.percentOfApplicants,
+            ]),
+            [],
+            ["Recruiter", "Assigned", "Open", "Hired"],
+            ...report.recruiterWorkload.map((item) => [
+              item.recruiter,
+              item.assignedCount,
+              item.openCount,
+              item.hiredCount,
+            ]),
+            [],
+            ["Interview status", "Candidate response", "Count"],
+            ...report.interviewOutcomes.map((item) => [
+              item.status,
+              item.candidateResponse,
+              item.count,
+            ]),
+          ];
+          const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+          const url = URL.createObjectURL(
+            new Blob([csv], { type: "text/csv;charset=utf-8" }),
+          );
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "hiring-report.csv";
+          link.click();
+          URL.revokeObjectURL(url);
+          return;
+        }
         const saveQuickApplyButton = event.target.closest(
           "[data-save-quick-apply]",
         );
@@ -12058,6 +12662,32 @@
           );
           return;
         }
+        const transferOwnership = event.target.closest(
+          "[data-transfer-team-ownership]",
+        );
+        if (transferOwnership) {
+          if (
+            !window.confirm(
+              "Transfer company ownership to this active team member? You will become an admin.",
+            )
+          )
+            return;
+          transferOwnership.disabled = true;
+          try {
+            await readAuthResponse(
+              await employerRequest(
+                `/api/employer/team/${encodeURIComponent(transferOwnership.dataset.transferTeamOwnership)}/transfer-ownership`,
+                { method: "POST" },
+              ),
+            );
+            await loadEmployerTeam();
+            showToast("Company ownership transferred.");
+          } catch (error) {
+            showToast(`Ownership was not transferred: ${displayAuthError(error)}`);
+            transferOwnership.disabled = false;
+          }
+          return;
+        }
         const editEmployerJob = event.target.closest(
           "[data-edit-employer-job]",
         );
@@ -12165,9 +12795,61 @@
                   q: String(values.get("q") || "").trim(),
                   status: String(values.get("status") || "all"),
                   jobId: String(values.get("jobId") || ""),
+                  assignee: String(values.get("assignee") || "all"),
+                  tag: String(values.get("tag") || "").trim(),
+                  from: String(values.get("from") || ""),
+                  to: String(values.get("to") || ""),
+                  sort: String(values.get("sort") || "newest"),
                 }
               : {},
           );
+          return;
+        }
+        const loadApplicationMessages = event.target.closest(
+          "[data-load-application-messages]",
+        );
+        if (loadApplicationMessages) {
+          loadApplicationMessages.disabled = true;
+          const applicationId =
+            loadApplicationMessages.dataset.loadApplicationMessages;
+          const page = Number(loadApplicationMessages.dataset.page || 1);
+          const container = profileContent.querySelector(
+            `[data-application-message-container="${applicationId}"]`,
+          );
+          try {
+            const params = new URLSearchParams({
+              page: String(page),
+              limit: "25",
+            });
+            const result = await readAuthResponse(
+              await employerRequest(
+                `/api/employer/applications/${encodeURIComponent(applicationId)}/messages?${params}`,
+              ),
+            );
+            const messageList = container?.querySelector(
+              "[data-application-message-list]",
+            );
+            const markup = result.items
+              .map(
+                (message) =>
+                  `<p><strong>${escapeHtml(message.senderName)}</strong> · ${escapeHtml(new Date(message.createdAt).toLocaleString())}<br>${escapeHtml(message.message)}</p>`,
+              )
+              .join("");
+            if (page === 1) messageList.innerHTML = markup;
+            else messageList.insertAdjacentHTML("afterbegin", markup);
+            if (result.hasMore) {
+              loadApplicationMessages.dataset.page = String(page + 1);
+              loadApplicationMessages.textContent = "Load older messages";
+              loadApplicationMessages.disabled = false;
+            } else {
+              loadApplicationMessages.remove();
+            }
+          } catch (error) {
+            showToast(
+              `Conversation could not be loaded: ${displayAuthError(error)}`,
+            );
+            loadApplicationMessages.disabled = false;
+          }
           return;
         }
         const candidateDirectoryPage = event.target.closest(
@@ -12213,6 +12895,34 @@
             runCandidateSearch.dataset.runCandidateSearch || "",
             1,
           );
+          return;
+        }
+        const editCandidateSearch = event.target.closest(
+          "[data-edit-candidate-search]",
+        );
+        if (editCandidateSearch) {
+          const form = profileContent.querySelector("#employer-candidate-search");
+          form.elements.namedItem("name").value = editCandidateSearch.dataset.name;
+          form.elements.namedItem("query").value = editCandidateSearch.dataset.query;
+          form.elements.namedItem("shareWithTeam").checked =
+            editCandidateSearch.dataset.shared === "true";
+          form.dataset.editSearchId = editCandidateSearch.dataset.editCandidateSearch;
+          form.querySelector('[value="update"]').hidden = false;
+          form.querySelector("[data-cancel-candidate-search-edit]").hidden =
+            false;
+          form.scrollIntoView({ behavior: "smooth", block: "center" });
+          form.elements.namedItem("name").focus();
+          return;
+        }
+        if (
+          event.target.closest("[data-cancel-candidate-search-edit]")
+        ) {
+          const form = profileContent.querySelector("#employer-candidate-search");
+          delete form.dataset.editSearchId;
+          form.reset();
+          form.querySelector('[value="update"]').hidden = true;
+          form.querySelector("[data-cancel-candidate-search-edit]").hidden =
+            true;
           return;
         }
         const deleteCandidateSearch = event.target.closest(
@@ -12314,6 +13024,69 @@
           }
           return;
         }
+        const interviewPage = event.target.closest(
+          "[data-employer-interviews-page]",
+        );
+        if (interviewPage) {
+          await loadEmployerInterviews(
+            Number(interviewPage.dataset.employerInterviewsPage),
+          );
+          return;
+        }
+        const completeInterview = event.target.closest(
+          "[data-complete-interview]",
+        );
+        if (completeInterview) {
+          completeInterview.disabled = true;
+          try {
+            await readAuthResponse(
+              await employerRequest(
+                `/api/employer/interviews/${encodeURIComponent(completeInterview.dataset.completeInterview)}/complete`,
+                { method: "POST" },
+              ),
+            );
+            await loadEmployerInterviews();
+            showToast("Interview marked complete. Evaluators can now submit feedback.");
+          } catch (error) {
+            showToast(`Interview could not be completed: ${displayAuthError(error)}`);
+            completeInterview.disabled = false;
+          }
+          return;
+        }
+        const candidateInterviewResponse = event.target.closest(
+          "[data-candidate-interview-response]",
+        );
+        if (candidateInterviewResponse) {
+          const response = candidateInterviewResponse.dataset.response;
+          if (
+            response === "declined" &&
+            !window.confirm("Decline this interview invitation?")
+          )
+            return;
+          candidateInterviewResponse.disabled = true;
+          try {
+            await readAuthResponse(
+              await authenticatedFetch(
+                `/api/candidate/interviews/${encodeURIComponent(candidateInterviewResponse.dataset.candidateInterviewResponse)}/response`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ response }),
+                },
+              ),
+            );
+            await loadCandidateInterviews();
+            showToast(
+              response === "reschedule_requested"
+                ? "The hiring team has been asked to suggest a new time."
+                : `Interview ${response}.`,
+            );
+          } catch (error) {
+            showToast(`Your response could not be saved: ${displayAuthError(error)}`);
+            candidateInterviewResponse.disabled = false;
+          }
+          return;
+        }
         const cancelInterview = event.target.closest("[data-cancel-interview]");
         if (cancelInterview) {
           if (
@@ -12329,13 +13102,18 @@
               ),
             );
             await loadEmployerInterviews();
-            showToast(
+            const notices = [
               result.notificationStatus === "failed"
-                ? "Interview cancelled, but the candidate email could not be queued. Check server logs."
+                ? "The candidate email could not be queued."
                 : result.notificationStatus === "disabled"
-                  ? "Interview cancelled and the candidate was notified in the portal. Candidate email updates are disabled."
-                  : "Interview cancelled; candidate email queued for delivery.",
-            );
+                  ? "Candidate email updates are disabled."
+                  : "Candidate email queued for delivery.",
+            ];
+            if (result.calendarStatus === "failed")
+              notices.push("The Google Calendar event could not be removed.");
+            if (result.inAppNotificationStatus === "failed")
+              notices.push("The candidate's in-app notification could not be created.");
+            showToast(`Interview cancelled. ${notices.join(" ")}`);
           } catch (error) {
             showToast(
               `Interview could not be cancelled: ${displayAuthError(error)}`,
@@ -13189,6 +13967,8 @@
           button.disabled = true;
           preview.textContent = "";
           const file = input.files[0];
+          state.employerImportJobs = null;
+          state.employerImportValidation = null;
           if (!file) return;
           if (file.size > 1_000_000) {
             preview.textContent = "Choose a CSV file no larger than 1 MB.";
@@ -13196,14 +13976,26 @@
           }
           try {
             const jobs = parseEmployerJobCsv(await file.text());
-            const titles = jobs
-              .slice(0, 5)
-              .map((job) => job.title)
-              .join(", ");
-            preview.textContent = `${jobs.length} job(s) ready to import as private drafts${titles ? `: ${titles}${jobs.length > 5 ? ", …" : ""}` : ""}.`;
-            button.disabled = false;
+            const validation = await readAuthResponse(
+              await employerRequest("/api/employer/jobs/bulk/validate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jobs }),
+              }),
+            );
+            state.employerImportJobs = jobs;
+            state.employerImportValidation = validation;
+            const rows = validation.rows || [];
+            preview.innerHTML = `<p>${validation.valid ? `${rows.length} row(s) passed server validation and are ready as private drafts.` : `${rows.filter((row) => row.valid).length} of ${rows.length} row(s) are valid. Resolve the errors before importing.`}</p><div class="table-wrap"><table class="employer-table"><thead><tr><th>CSV row</th><th>Job</th><th>Location</th><th>Validation</th></tr></thead><tbody>${rows.map((row, index) => {
+              const job = jobs[index] || {};
+              const errors = Array.isArray(row.errors) ? row.errors : [];
+              return `<tr><td>${row.row}</td><td>${escapeHtml(job.title || "—")}</td><td>${escapeHtml(job.location || "—")}</td><td>${row.valid ? '<span class="employer-pill">Ready</span>' : `<ul>${errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul>`}<details><summary>View row data</summary><dl>${Object.entries(job).map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(Array.isArray(value) ? value.join(" | ") : value)}</dd>`).join("")}</dl></details></td></tr>`;
+            }).join("")}</tbody></table></div>${validation.valid ? "" : '<button class="button" type="button" data-download-import-errors>Download row errors</button>'}`;
+            button.disabled = !validation.valid;
           } catch (error) {
             preview.textContent = displayAuthError(error);
+            state.employerImportJobs = null;
+            state.employerImportValidation = null;
           }
           return;
         }

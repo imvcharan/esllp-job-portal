@@ -40,6 +40,60 @@ export class EmployerOrganization {
   @Column({ type: "text", nullable: true })
   description!: string | null;
 
+  @Column({
+    name: "billing_legal_name",
+    type: "varchar",
+    length: 180,
+    nullable: true,
+  })
+  billingLegalName!: string | null;
+
+  @Column({
+    name: "billing_email",
+    type: "varchar",
+    length: 254,
+    nullable: true,
+  })
+  billingEmail!: string | null;
+
+  @Column({
+    name: "billing_tax_id",
+    type: "varchar",
+    length: 30,
+    nullable: true,
+  })
+  billingTaxId!: string | null;
+
+  @Column({ name: "billing_address", type: "text", nullable: true })
+  billingAddress!: string | null;
+
+  @Column({ name: "logo_url", type: "varchar", length: 1000, nullable: true })
+  logoUrl!: string | null;
+
+  @Column({
+    name: "verification_status",
+    type: "varchar",
+    length: 20,
+    default: "unsubmitted",
+  })
+  verificationStatus!: "unsubmitted" | "pending" | "verified" | "rejected";
+
+  @Column({ name: "verification_details", type: "text", nullable: true })
+  verificationDetails!: string | null;
+
+  @Column({ name: "verification_note", type: "text", nullable: true })
+  verificationNote!: string | null;
+
+  @Column({
+    name: "verification_requested_at",
+    type: "timestamptz",
+    nullable: true,
+  })
+  verificationRequestedAt!: Date | null;
+
+  @Column({ name: "verified_at", type: "timestamptz", nullable: true })
+  verifiedAt!: Date | null;
+
   @Column({ name: "plan_key", type: "varchar", length: 20, default: "free" })
   planKey!: string;
 
@@ -81,6 +135,19 @@ export class EmployerOrganization {
     nullable: true,
   })
   subscriptionCurrentPeriodEnd!: Date | null;
+
+  @Column({ name: "subscription_plan_snapshot", type: "jsonb", nullable: true })
+  subscriptionPlanSnapshot!: {
+    activeJobs: number;
+    seats: number;
+    resumeCredits: number;
+    amountInr: number;
+    currency: string;
+    razorpayPlanId: string;
+  } | null;
+
+  @Column({ name: "past_due_started_at", type: "timestamptz", nullable: true })
+  pastDueStartedAt!: Date | null;
 
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;

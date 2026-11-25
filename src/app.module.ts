@@ -105,12 +105,21 @@ import { WhatsAppInterviewReminders1729000000050 } from "./database/migrations/1
 import { SeedDefaultFaqAndBlogContent1729000000051 } from "./database/migrations/1729000000051-SeedDefaultFaqAndBlogContent";
 import { CommercialControlsAndRetention1729000000052 } from "./database/migrations/1729000000052-CommercialControlsAndRetention";
 import { SearchIndexOutbox1729000000053 } from "./database/migrations/1729000000053-SearchIndexOutbox";
+import { SearchIndexOutboxClaims1729000000055 } from "./database/migrations/1729000000055-SearchIndexOutboxClaims";
+import { CandidatePrivateFileLifecycle1729000000056 } from "./database/migrations/1729000000056-CandidatePrivateFileLifecycle";
+import { BillingNotificationOperations1729000000057 } from "./database/migrations/1729000000057-BillingNotificationOperations";
+import { EmployerJobLifecycleAndTrust1729000000058 } from "./database/migrations/1729000000058-EmployerJobLifecycleAndTrust";
+import { ApplicantInboxAndResumeSearch1729000000059 } from "./database/migrations/1729000000059-ApplicantInboxAndResumeSearch";
+import { InterviewLifecycleAndFeedback1729000000060 } from "./database/migrations/1729000000060-InterviewLifecycleAndFeedback";
+import { EmployerInterviewFeedback } from "./employers/employer-interview-feedback.entity";
 import { EmployerPlanAndDeletionIndexes1729000000054 } from "./database/migrations/1729000000054-EmployerPlanAndDeletionIndexes";
 import { PaymentCoupon } from "./payments/payment-coupon.entity";
 import { PaymentRefund } from "./payments/payment-refund.entity";
 import { PaymentInvoice } from "./payments/payment-invoice.entity";
 import { FeaturedJobPlacement } from "./employers/featured-job-placement.entity";
+import { EmployerBillingProfile1729000000061 } from "./database/migrations/1729000000061-EmployerBillingProfile";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
+import { appProcessRole } from "./infrastructure/process-role";
 
 @Module({
   controllers: [HealthController],
@@ -135,6 +144,7 @@ import { InfrastructureModule } from "./infrastructure/infrastructure.module";
         EmployerApplicationNote,
         EmployerApplicationTag,
         EmployerInterview,
+        EmployerInterviewFeedback,
         UserNotification,
         RazorpayWebhookEvent,
         CandidateSavedSearch,
@@ -217,8 +227,15 @@ import { InfrastructureModule } from "./infrastructure/infrastructure.module";
         CommercialControlsAndRetention1729000000052,
         SearchIndexOutbox1729000000053,
         EmployerPlanAndDeletionIndexes1729000000054,
+        SearchIndexOutboxClaims1729000000055,
+        CandidatePrivateFileLifecycle1729000000056,
+        BillingNotificationOperations1729000000057,
+        EmployerJobLifecycleAndTrust1729000000058,
+        ApplicantInboxAndResumeSearch1729000000059,
+        InterviewLifecycleAndFeedback1729000000060,
+        EmployerBillingProfile1729000000061,
       ],
-      migrationsRun: true,
+      migrationsRun: appProcessRole() !== "worker",
       synchronize: false,
     }),
     AuthModule,

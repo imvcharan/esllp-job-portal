@@ -11,6 +11,7 @@ import { DataSource, EntityManager } from "typeorm";
 import { OpenSearchService } from "../infrastructure/open-search.service";
 import { CandidateFileStorageService } from "./candidate-file-storage.service";
 import { UserRole } from "./user.entity";
+import { backgroundWorkersEnabled } from "../infrastructure/process-role";
 
 interface DueDeletionRequest {
   id: number;
@@ -42,6 +43,7 @@ export class CandidateDeletionProcessor
   ) {}
 
   onModuleInit(): void {
+    if (!backgroundWorkersEnabled()) return;
     this.worker = setInterval(() => this.runScheduledCycle(), 60_000);
     this.worker.unref();
     this.runScheduledCycle();
@@ -166,10 +168,10 @@ export class CandidateDeletionProcessor
       [candidateId],
     )) as StoredFile[];
 
-    const paths = files.map(({ path }) => path);
-    for (let offset = 0; offset < paths.length; offset += 100) {
-      await this.storage.removeMany(paths.slice(offset, offset + 100));
-    }
+    await this.storage.enqueueCleanup(
+      files.map(({ path }) => path),
+      manager,
+    );
   }
 
   private async anonymizeCandidate(
