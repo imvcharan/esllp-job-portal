@@ -19,7 +19,7 @@ export class PaymentInvoice {
   @Column({ name: "payment_reference", length: 100 }) paymentReference!: string;
   @Column({ name: "billing_name", length: 200 }) billingName!: string;
   @Column({ name: "billing_email", length: 320 }) billingEmail!: string;
-  @Column({ length: 15, nullable: true }) gstin!: string | null;
+  @Column({ type: "varchar", length: 15, nullable: true }) gstin!: string | null;
   @Column({ name: "taxable_amount_paise", type: "integer" }) taxableAmountPaise!: number;
   @Column({ name: "tax_rate_basis_points", type: "integer", default: 0 }) taxRateBasisPoints!: number;
   @Column({ name: "tax_amount_paise", type: "integer", default: 0 }) taxAmountPaise!: number;

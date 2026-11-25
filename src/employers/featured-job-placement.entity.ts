@@ -27,7 +27,7 @@ export class FeaturedJobPlacement {
   @Column({ name: "ends_at", type: "timestamptz" }) endsAt!: Date;
   @Column({ length: 20, default: "scheduled" }) status!:
     "scheduled" | "active" | "expired" | "cancelled";
-  @Column({ name: "payment_reference", length: 100, nullable: true })
+  @Column({ name: "payment_reference", type: "varchar", length: 100, nullable: true })
   paymentReference!: string | null;
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
