@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -78,9 +79,14 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     private readonly savedSearchesService: CandidateSavedSearchesService,
     private readonly platformConfiguration: PlatformConfigurationService,
     private readonly razorpayConfiguration: RazorpayConfigurationService,
+    @Optional()
+    @Inject(RedisCacheService)
     private readonly cache: RedisCacheService | null = null,
+    @Optional()
+    @Inject(OpenSearchService)
     private readonly search: OpenSearchService | null = null,
     @Optional()
+    @Inject(CandidateFileStorageService)
     private readonly fileStorage: CandidateFileStorageService | null = null,
   ) {}
 

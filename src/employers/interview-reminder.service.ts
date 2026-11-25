@@ -1,8 +1,10 @@
 import {
   Injectable,
+  Inject,
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
@@ -36,6 +38,8 @@ export class InterviewReminderService implements OnModuleInit, OnModuleDestroy {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly emailDelivery: EmailDeliveryService,
     private readonly whatsappDelivery: WhatsAppDeliveryService,
+    @Optional()
+    @Inject(JobQueueService)
     private readonly queues: JobQueueService | null = null,
   ) {}
 

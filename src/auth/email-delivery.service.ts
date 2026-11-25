@@ -1,8 +1,10 @@
 import {
+  Inject,
   Injectable,
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
@@ -28,6 +30,8 @@ export class EmailDeliveryService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly templates: NotificationTemplatesService,
+    @Optional()
+    @Inject(JobQueueService)
     private readonly queues: JobQueueService | null = null,
   ) {}
 

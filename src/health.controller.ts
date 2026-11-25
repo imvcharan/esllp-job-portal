@@ -2,7 +2,9 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Inject,
   Logger,
+  Optional,
   Req,
   ServiceUnavailableException,
 } from "@nestjs/common";
@@ -22,9 +24,17 @@ export class HealthController {
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
+    @Optional()
+    @Inject(RedisCacheService)
     private readonly redisCache: RedisCacheService | null = null,
+    @Optional()
+    @Inject(JobQueueService)
     private readonly jobQueue: JobQueueService | null = null,
+    @Optional()
+    @Inject(OpenSearchService)
     private readonly openSearch: OpenSearchService | null = null,
+    @Optional()
+    @Inject(WorkerHeartbeatService)
     private readonly workerHeartbeats: WorkerHeartbeatService | null = null,
   ) {}
 

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Header,
+  Inject,
   NotFoundException,
   Optional,
   Param,
@@ -40,10 +41,16 @@ export class AdminBackgroundJobsController {
     private readonly audit: AuditService,
     private readonly privateFiles: CandidatePrivateFileProcessor,
     @Optional()
+    @Inject(WorkerHeartbeatService)
     private readonly workerHeartbeats: WorkerHeartbeatService | null = null,
-    @Optional() private readonly employers: EmployersService | null = null,
-    @Optional() private readonly jobs: JobsService | null = null,
     @Optional()
+    @Inject(EmployersService)
+    private readonly employers: EmployersService | null = null,
+    @Optional()
+    @Inject(JobsService)
+    private readonly jobs: JobsService | null = null,
+    @Optional()
+    @Inject(InterviewReminderService)
     private readonly interviewReminders: InterviewReminderService | null = null,
   ) {}
 

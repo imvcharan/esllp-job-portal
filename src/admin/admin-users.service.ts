@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
   Optional,
@@ -57,7 +58,9 @@ export class AdminUsersService {
     private readonly usersRepository: Repository<User>,
     private readonly auditService: AuditService,
     private readonly candidateFileStorage: CandidateFileStorageService,
-    @Optional() private readonly search: OpenSearchService | null = null,
+    @Optional()
+    @Inject(OpenSearchService)
+    private readonly search: OpenSearchService | null = null,
   ) {}
 
   async list(

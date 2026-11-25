@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -39,7 +40,9 @@ export class CandidateProfileService {
     private readonly resumeVersionsRepository: Repository<CandidateResumeVersion>,
     private readonly auditService: AuditService,
     private readonly platformConfiguration: PlatformConfigurationService,
-    @Optional() private readonly search: OpenSearchService | null = null,
+    @Optional()
+    @Inject(OpenSearchService)
+    private readonly search: OpenSearchService | null = null,
   ) {}
 
   async get(user: AuthenticatedUser) {

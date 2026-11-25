@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -176,7 +177,9 @@ export class EmployersService implements OnModuleInit, OnModuleDestroy {
     private readonly razorpayConfiguration: RazorpayConfigurationService,
     private readonly platformConfiguration: PlatformConfigurationService,
     private readonly googleCalendar: GoogleCalendarService,
-    @Optional() private readonly search: OpenSearchService | null = null,
+    @Optional()
+    @Inject(OpenSearchService)
+    private readonly search: OpenSearchService | null = null,
   ) {}
 
   onModuleInit() {
